@@ -3,6 +3,15 @@ Este guia detalha o processo para implantar a aplicação `access-control` em um
 
 O projeto utiliza Docker para conterizar os serviços e GitHub Actions para automação de CI (Continuous Integration), construindo e publicando as imagens no GitHub Container Registry (GHCR).
 
+## Inb4: Rodando apenas BD
+1. Crie seu arquivo `.env` a partir do `.env.example`
+2. Inicie o contêiner do banco de dados com o seguinte comando:
+
+```
+docker-compose -f docker-compose.local.yml up -d
+```
+3.  Agora, o banco de dados PostgreSQL estará rodando e acessível em `localhost:5432`. Sua aplicação backend, rodando localmente na sua máquina, poderá se conectar a ele para executar migrações e outras operações.
+
 ## 1. Pré-requisitos do Servidor
 Certifique-se de que o seu servidor de produção tenha os seguintes softwares instalados:
 

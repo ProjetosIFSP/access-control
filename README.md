@@ -1,29 +1,34 @@
-# Controle de Acesso - TCC
+# 🔒 Controle de Acesso - TCC
+<p align="center">
+<em>
+Um sistema completo de controle de acesso com fechadura eletrônica (ESP32), comunicação em tempo real (MQTT) e uma interface web moderna para gerenciamento.
+</em>
+</p>
 
-Este repositório visa o armazenamento de códigos de desenvolvimento de um sistema de controle de acesso que utiliza do desenvolvimento de uma fechadura eletrônica com microcontrolador o qual se comunica via MQTT com o servidor e este tem um cliente frontend para visualização e personalização dos dados.
+****
 
-## 🚀 Deploy
-Informações sobre deploy em: `/docs/README.md`
+## ✨ Visão Geral
+Este projeto é um Trabalho de Conclusão de Curso que visa criar um sistema de controle de acesso robusto e moderno. A arquitetura é dividida em três componentes principais:
 
-## Conteúdo
-Tecnologias utilizadas para a construção do deste trabalho de conclusão de curso.
+- **IoT**: Uma fechadura eletrônica desenvolvida com um microcontrolador ESP32.
+- **Comunicação**: Um broker MQTT para comunicação em tempo real, segura e eficiente entre o hardware e o servidor.
+- **Software**: Uma aplicação web para visualização, cadastro de digitais e gerenciamento, com um backend que centraliza a lógica de negócio.
 
-#### IoT
-Esta parte fala da comunicação dos microcontroladores, todos os endpoints de protocolo MQTT estarão por aqui.
+# 📂 Estrutura do Repositório
+O projeto é organizado em um monorepo com os seguintes diretórios principais:
 
->Para mais informações, verifique o README.md dentro de `/iot`
+- `📁 /server`: Contém a API REST em Node.js com Fastify e Drizzle ORM. É o cérebro da aplicação, gerenciando os dados e a lógica de negócio.
 
-#### Web
-É armazenado a base de código **React** que obtêm os dados das fechaduras, cadastra digitais e se comunica diretamente com o usuário.
+- `📁 /web`: Contém a aplicação frontend em React (Vite). É a interface com o usuário para visualizar dados, cadastrar digitais, etc.
 
->Para mais informações, verifique o README.md dentro de `/web`
+- `📁 /iot`: Contém os códigos e documentação relacionados ao microcontrolador (ESP32) e à comunicação via protocolo MQTT.
 
-#### Server
-Utilizado pelo _front-end_, armazena todos os _endpoints_ da aplicação _web_ por meio de uma API REST **Node.js** com **Fastify** e **Drizzle ORM**.
-
->Para mais informações, verifique o README.md dentro de `/server`
-
-## 💻 Figma
+## 🎨 Design
 
 Aqui você pode encontrar informações sobre o protótipo e o guia de estilos.
-[Abrir protótipo no Figma](https://www.figma.com/design/8GcnhoimUUw2dgOL8HUtlE/Controle-de-Acesso?node-id=4003-2094&t=ODmc5wd0JM3k3qeM-1)
+[↗️ Abrir protótipo no Figma](https://www.figma.com/design/8GcnhoimUUw2dgOL8HUtlE/Controle-de-Acesso?node-id=4003-2094&t=ODmc5wd0JM3k3qeM-1)
+
+## ☁️ Deploy
+As instruções detalhadas para realizar o deploy da aplicação em um ambiente de produção estão localizadas na documentação.
+
+➡️ Leia o [Guia de Deploy](/docs/README.md)
