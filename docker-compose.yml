@@ -1,0 +1,70 @@
+name: access-control-server
+
+services:
+  web:
+    build:
+      context: ./web
+      dockerfile: Dockerfile
+    ports:
+      - '3000:80'
+    networks:
+      - access-control-network
+    restart: unless-stopped
+
+  server:
+    build:
+      context: ./server
+      dockerfile: Dockerfile
+    ports:
+      - '3001:3000'
+    environment:
+      DATABASE_HOST: db
+      POSTGRES_USER: docker
+      POSTGRES_PASSWORD: docker
+      POSTGRES_DB: access-control
+    depends_on:
+      - db
+    networks:
+      - access-control-network
+    restart: unless-stopped
+
+  iot:
+    build:
+      context: ./iot
+      dockerfile: Dockerfile.mqtt
+    ports:
+      # MQTT e MQTT over WebSockets
+      - "1883:1883"
+      - "9001:9001"
+    volumes:
+      - mosquitto_data:/mosquitto/data
+      - mosquitto_logs:/mosquitto/log
+    networks:
+      - access-control-network
+    restart: unless-stopped
+
+  db:
+    image: postgres:17.6
+    restart: always
+    ports:
+      - '5432:5432'
+    environment:
+      - POSTGRES_USER=docker
+      - POSTGRES_PASSWORD=docker
+      - POSTGRES_DB=access-control
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - access-control-network
+
+# Define as redes customizadas para a aplicação.
+# Usar uma rede customizada permite que os contêineres se comuniquem uns com os outros
+# usando seus nomes de serviço como hostname (ex: 'server' se conecta a 'db').
+networks:
+  access-control-network:
+    driver: bridge
+
+volumes:
+  postgres_data:
+  mosquitto_data:
+  mosquitto_logs:

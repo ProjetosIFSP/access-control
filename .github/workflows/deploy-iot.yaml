@@ -1,0 +1,36 @@
+name: CI - IoT Service
+
+on:
+  push:
+    branches: [ "main" ]
+    paths:
+      - 'iot/**'
+  workflow_dispatch:
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Log in to the Container registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.repository_owner }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: ./iot
+          file: ./iot/Dockerfile.mqtt
+          push: true
+          tags: |
+            ghcr.io/${{ github.repository_owner }}/meu-app-iot:latest
+            ghcr.io/${{ github.repository_owner }}/meu-app-iot:${{ github.sha }}
