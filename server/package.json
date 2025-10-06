@@ -4,6 +4,7 @@
 	"description": "",
 	"main": "index.js",
 	"scripts": {
+		"build": "tsc -p tsconfig.json",
 		"dev": "tsx watch --env-file .env src/api/server.ts",
 		"seed": "tsx --env-file .env src/db/seed.ts",
 		"db:generate": "npx drizzle-kit generate",

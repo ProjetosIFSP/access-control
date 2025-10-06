@@ -3,10 +3,10 @@ name: access-control-server
 services:
   web:
     build:
-      context: ./web
+      context: ./app
       dockerfile: Dockerfile
     ports:
-      - '3000:80'
+      - "3000:80"
     networks:
       - access-control-network
     restart: unless-stopped
@@ -16,12 +16,9 @@ services:
       context: ./server
       dockerfile: Dockerfile
     ports:
-      - '3001:3000'
+      - "3001:3000"
     environment:
-      DATABASE_HOST: db
-      POSTGRES_USER: docker
-      POSTGRES_PASSWORD: docker
-      POSTGRES_DB: access-control
+      DATABASE_URL: postgres://docker:docker@db:5432/access-control
     depends_on:
       - db
     networks:
@@ -36,9 +33,12 @@ services:
       # MQTT e MQTT over WebSockets
       - "1883:1883"
       - "9001:9001"
-    volumes:
-      - mosquitto_data:/mosquitto/data
-      - mosquitto_logs:/mosquitto/log
+    environment:
+      API_BASE_URL: http://server:3000
+      MQTT_PORT: 1883
+      MQTT_WS_PORT: 9001
+    depends_on:
+      - server
     networks:
       - access-control-network
     restart: unless-stopped
@@ -47,7 +47,7 @@ services:
     image: postgres:17.6
     restart: always
     ports:
-      - '5432:5432'
+      - "5432:5432"
     environment:
       - POSTGRES_USER=docker
       - POSTGRES_PASSWORD=docker
@@ -66,5 +66,3 @@ networks:
 
 volumes:
   postgres_data:
-  mosquitto_data:
-  mosquitto_logs:

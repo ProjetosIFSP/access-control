@@ -51,4 +51,4 @@ EXPOSE 3000
 
 # Comando para iniciar a aplicação.
 # O '-H 0.0.0.0' é crucial para que a aplicação seja acessível de fora do container.
-CMD ["node", "dist/server.js", "-H", "0.0.0.0", "-p", "3000"]
+CMD ["node", "dist/api/server.js"]

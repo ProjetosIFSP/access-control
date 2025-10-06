@@ -1,0 +1,27 @@
+{
+	"name": "iot-broker",
+	"version": "1.0.0",
+	"description": "Broker MQTT integrado ao backend de controle de acesso",
+	"type": "module",
+	"main": "dist/index.js",
+	"scripts": {
+		"dev": "tsx watch --env-file .env src/index.ts",
+		"build": "tsc -p tsconfig.json",
+		"start": "node dist/index.js"
+	},
+	"dependencies": {
+		"aedes": "^0.51.3",
+		"dotenv": "^16.4.5",
+		"pino": "^9.5.0",
+		"undici": "^6.20.0",
+		"websocket-stream": "^5.5.2",
+		"ws": "^8.18.0",
+		"zod": "^3.24.1"
+	},
+	"devDependencies": {
+		"@types/node": "^22.10.1",
+		"@types/ws": "^8.5.12",
+		"tsx": "^4.20.6",
+		"typescript": "^5.9.3"
+	}
+}

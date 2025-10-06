@@ -1,24 +1,25 @@
-# Estágio 1: 'mqtt-broker' - Configuração do Broker Mosquitto
-# Usamos a imagem oficial e leve do Eclipse Mosquitto, que é o padrão da indústria.
-FROM eclipse-mosquitto:2.0 AS mqtt-broker
+# Estágio 1: dependências
+FROM node:24-alpine AS deps
+WORKDIR /app
+COPY package*.json ./
+RUN npm ci
 
-# A imagem oficial já cria e utiliza um usuário 'mosquitto' (uid 1883) por segurança,
-# o que é uma excelente prática para evitar rodar como root.
+# Estágio 2: build TypeScript
+FROM deps AS builder
+COPY . .
+RUN npm run build
 
-# Copia nosso arquivo de configuração customizado para o local esperado pelo Mosquitto.
-# É neste arquivo que definimos como o broker deve se comportar.
-COPY mosquitto.conf /mosquitto/config/
+# Estágio 3: runtime enxuto
+FROM node:24-alpine AS runner
+WORKDIR /app
+ENV NODE_ENV=production
 
-# Garante que o usuário 'mosquitto' tenha permissão para escrever nos diretórios de dados e logs.
-# Embora a imagem base já configure isso, ser explícito garante o comportamento esperado.
-RUN chown -R mosquitto:mosquitto /mosquitto/data /mosquitto/log
+COPY package*.json ./
+RUN npm ci --omit=dev && npm cache clean --force
 
-# Expõe as portas padrão para a comunicação:
-# - 1883: Porta padrão do protocolo MQTT.
-# - 9001: Porta comum para MQTT sobre WebSockets (para clientes em navegadores).
+COPY --from=builder /app/dist ./dist
+
 EXPOSE 1883
 EXPOSE 9001
 
-# O comando de inicialização já está definido na imagem base para carregar o arquivo
-# de configuração que copiamos. Portanto, não precisamos redefini-lo.
-# CMD ["/usr/sbin/mosquitto", "-c", "/mosquitto/config/mosquitto.conf"]
+CMD ["node", "dist/index.js"]
