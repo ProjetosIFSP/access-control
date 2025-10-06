@@ -126,3 +126,18 @@ export async function updateDoorStatus(input: UpdateDoorStatusInput) {
 		return updatedRoom ?? null;
 	});
 }
+
+export async function getDoorControllerById(controllerId: string) {
+	const [controller] = await db
+		.select({
+			id: doorController.id,
+			roomId: doorController.roomId,
+			firmwareVersion: doorController.firmwareVersion,
+			lastSeenAt: doorController.lastSeenAt,
+		})
+		.from(doorController)
+		.where(eq(doorController.id, controllerId))
+		.limit(1);
+
+	return controller ?? null;
+}
