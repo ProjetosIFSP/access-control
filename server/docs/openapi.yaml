@@ -1,0 +1,1454 @@
+openapi: 3.0.3
+info:
+  title: Access Control API
+  description: API REST para gerenciamento de usuários, salas e integrações IoT do
+    sistema de controle de acesso.
+  version: 1.0.0
+components:
+  securitySchemes:
+    sessionCookie:
+      type: apiKey
+      in: cookie
+      name: auth_session
+      description: Sessão de usuário gerenciada pela camada Auth baseada em cookies.
+  schemas: {}
+paths:
+  /auth/auth/{*}:
+    get: &a1
+      summary: Delegar operações de autenticação
+      tags:
+        - auth
+      description: Proxy reverso para o Auth.js, responsável pelos fluxos de login,
+        callback de provedores e sessões baseadas em cookie.
+      parameters:
+        - schema:
+            type: string
+          in: path
+          name: "*"
+          required: true
+      responses:
+        "200":
+          description: Default Response
+    post: *a1
+  /users/:
+    get:
+      summary: Listar usuários
+      tags:
+        - users
+      description: Retorna os usuários cadastrados e indica se possuem credencial
+        física associada.
+      security:
+        - sessionCookie: []
+      responses:
+        "200":
+          description: Default Response
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  result:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id:
+                          type: string
+                          format: uuid
+                          pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+                        name:
+                          type: string
+                        email:
+                          type: string
+                          format: email
+                          pattern: ^(?!\.)(?!.*\.\.)([A-Za-z0-9_'+\-\.]*)[A-Za-z0-9_+-]@([A-Za-z0-9][A-Za-z0-9\-]*\.)+[A-Za-z]{2,}$
+                        image:
+                          nullable: true
+                          type: string
+                        isAdmin:
+                          type: boolean
+                        createdAt:
+                          type: string
+                          format: date-time
+                          pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d(?::[0-5]\d(?:\.\d+)?)?(?:Z))$
+                        updatedAt:
+                          type: string
+                          format: date-time
+                          pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d(?::[0-5]\d(?:\.\d+)?)?(?:Z))$
+                        hasCredentials:
+                          type: boolean
+                      required:
+                        - id
+                        - name
+                        - email
+                        - image
+                        - isAdmin
+                        - createdAt
+                        - updatedAt
+                        - hasCredentials
+                      additionalProperties: false
+                required:
+                  - result
+                additionalProperties: false
+                example:
+                  result:
+                    - id: 7b3cf58e-353f-48de-b2fd-6f203d64d3f8
+                      name: Ana Souza
+                      email: ana.souza@ifsp.edu.br
+                      image: null
+                      isAdmin: true
+                      createdAt: 2025-01-10T13:25:00.000Z
+                      updatedAt: 2025-02-11T09:42:00.000Z
+                      hasCredentials: true
+  /rooms/:
+    get:
+      summary: Listar salas e blocos
+      tags:
+        - rooms
+      description: Retorna as salas cadastradas, incluindo estado atual da porta e
+        informações do bloco.
+      security:
+        - sessionCookie: []
+      responses:
+        "200":
+          description: Default Response
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  result:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        room:
+                          type: object
+                          properties:
+                            id:
+                              type: string
+                              format: uuid
+                              pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+                            name:
+                              type: string
+                            blockId:
+                              type: string
+                              format: uuid
+                              pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+                            isLocked:
+                              nullable: true
+                              type: boolean
+                            doorState:
+                              type: string
+                              enum:
+                                - OPEN
+                                - CLOSED
+                                - UNKNOWN
+                            lastStatusUpdateAt:
+                              nullable: true
+                              type: string
+                              format: date-time
+                              pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d(?::[0-5]\d(?:\.\d+)?)?(?:Z))$
+                            createdAt:
+                              type: string
+                              format: date-time
+                              pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d(?::[0-5]\d(?:\.\d+)?)?(?:Z))$
+                          required:
+                            - id
+                            - name
+                            - blockId
+                            - isLocked
+                            - doorState
+                            - lastStatusUpdateAt
+                            - createdAt
+                          additionalProperties: false
+                        block:
+                          type: object
+                          properties:
+                            id:
+                              type: string
+                              format: uuid
+                              pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+                            name:
+                              type: string
+                          required:
+                            - id
+                            - name
+                          additionalProperties: false
+                      required:
+                        - room
+                        - block
+                      additionalProperties: false
+                required:
+                  - result
+                additionalProperties: false
+                example:
+                  result:
+                    - room:
+                        id: cdea3efb-650d-4c8a-a9c0-8ee97d739f5c
+                        name: Laboratório 101
+                        blockId: 1cf51c96-86a9-4fb3-b8e8-556a745d4423
+                        isLocked: true
+                        doorState: CLOSED
+                        lastStatusUpdateAt: 2025-02-20T14:30:00.000Z
+                        createdAt: 2024-12-15T11:22:00.000Z
+                      block:
+                        id: 1cf51c96-86a9-4fb3-b8e8-556a745d4423
+                        name: Prédio Principal
+  /doors/:
+    get:
+      summary: Listar controladores de porta
+      tags:
+        - doors
+      description: Retorna todos os controladores físicos cadastrados, status atual e
+        último comando enviado.
+      security:
+        - sessionCookie: []
+      responses:
+        "200":
+          description: Default Response
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  controllers:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        controllerId:
+                          type: string
+                        room:
+                          type: object
+                          properties:
+                            id:
+                              type: string
+                              format: uuid
+                              pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+                            name:
+                              type: string
+                            blockName:
+                              type: string
+                            doorState:
+                              type: string
+                              enum:
+                                - OPEN
+                                - CLOSED
+                                - UNKNOWN
+                            isLocked:
+                              nullable: true
+                              type: boolean
+                            lastStatusUpdateAt:
+                              nullable: true
+                              type: string
+                              format: date-time
+                              pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d(?::[0-5]\d(?:\.\d+)?)?(?:Z))$
+                          required:
+                            - id
+                            - name
+                            - blockName
+                            - doorState
+                            - isLocked
+                            - lastStatusUpdateAt
+                          additionalProperties: false
+                        controller:
+                          type: object
+                          properties:
+                            firmwareVersion:
+                              nullable: true
+                              type: string
+                            lastSeenAt:
+                              type: string
+                              format: date-time
+                              pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d(?::[0-5]\d(?:\.\d+)?)?(?:Z))$
+                          required:
+                            - firmwareVersion
+                            - lastSeenAt
+                          additionalProperties: false
+                        lastCommand:
+                          nullable: true
+                          type: object
+                          properties:
+                            id:
+                              type: string
+                              format: uuid
+                              pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+                            type:
+                              type: string
+                              enum:
+                                - UNLOCK
+                                - LOCK
+                                - SYNC_STATE
+                            status:
+                              type: string
+                              enum:
+                                - PENDING
+                                - SENT
+                                - COMPLETED
+                                - FAILED
+                                - EXPIRED
+                            createdAt:
+                              type: string
+                              format: date-time
+                              pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d(?::[0-5]\d(?:\.\d+)?)?(?:Z))$
+                            sentAt:
+                              nullable: true
+                              type: string
+                              format: date-time
+                              pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d(?::[0-5]\d(?:\.\d+)?)?(?:Z))$
+                            processedAt:
+                              nullable: true
+                              type: string
+                              format: date-time
+                              pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d(?::[0-5]\d(?:\.\d+)?)?(?:Z))$
+                          required:
+                            - id
+                            - type
+                            - status
+                            - createdAt
+                            - sentAt
+                            - processedAt
+                          additionalProperties: false
+                      required:
+                        - controllerId
+                        - room
+                        - controller
+                        - lastCommand
+                      additionalProperties: false
+                required:
+                  - controllers
+                additionalProperties: false
+                example:
+                  controllers:
+                    - controllerId: controller-lab-101
+                      room:
+                        id: f05c9cd2-3f5f-40bc-9219-028f8f8aaf75
+                        name: Laboratório 101
+                        blockName: Prédio Principal
+                        doorState: CLOSED
+                        isLocked: true
+                        lastStatusUpdateAt: 2025-02-20T14:30:00.000Z
+                      controller:
+                        firmwareVersion: 1.2.3
+                        lastSeenAt: 2025-02-20T14:31:12.000Z
+                      lastCommand:
+                        id: 6d2dbfb1-9a90-4f49-9af2-6520f9a2c2f5
+                        type: LOCK
+                        status: SENT
+                        createdAt: 2025-02-20T14:29:45.000Z
+                        sentAt: 2025-02-20T14:29:50.000Z
+                        processedAt: null
+  /doors/{controllerId}/commands:
+    get:
+      summary: Histórico de comandos
+      tags:
+        - doors
+      description: Consulta os comandos emitidos para um controlador específico.
+      parameters:
+        - schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+          in: query
+          name: limit
+          required: false
+        - schema:
+            type: string
+            minLength: 1
+          in: path
+          name: controllerId
+          required: true
+      security:
+        - sessionCookie: []
+      responses:
+        "200":
+          description: Default Response
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  commands:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id:
+                          type: string
+                          format: uuid
+                          pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+                        type:
+                          type: string
+                          enum:
+                            - UNLOCK
+                            - LOCK
+                            - SYNC_STATE
+                        status:
+                          type: string
+                          enum:
+                            - PENDING
+                            - SENT
+                            - COMPLETED
+                            - FAILED
+                            - EXPIRED
+                        payload:
+                          type: object
+                          additionalProperties: {}
+                        resultPayload:
+                          nullable: true
+                          type: object
+                          additionalProperties: {}
+                        errorMessage:
+                          nullable: true
+                          type: string
+                        expiresAt:
+                          nullable: true
+                          type: string
+                          format: date-time
+                          pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d(?::[0-5]\d(?:\.\d+)?)?(?:Z))$
+                        sentAt:
+                          nullable: true
+                          type: string
+                          format: date-time
+                          pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d(?::[0-5]\d(?:\.\d+)?)?(?:Z))$
+                        processedAt:
+                          nullable: true
+                          type: string
+                          format: date-time
+                          pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d(?::[0-5]\d(?:\.\d+)?)?(?:Z))$
+                        createdAt:
+                          type: string
+                          format: date-time
+                          pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d(?::[0-5]\d(?:\.\d+)?)?(?:Z))$
+                        updatedAt:
+                          type: string
+                          format: date-time
+                          pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d(?::[0-5]\d(?:\.\d+)?)?(?:Z))$
+                      required:
+                        - id
+                        - type
+                        - status
+                        - payload
+                        - resultPayload
+                        - errorMessage
+                        - expiresAt
+                        - sentAt
+                        - processedAt
+                        - createdAt
+                        - updatedAt
+                      additionalProperties: false
+                required:
+                  - commands
+                additionalProperties: false
+                example:
+                  commands:
+                    - id: 6d2dbfb1-9a90-4f49-9af2-6520f9a2c2f5
+                      type: LOCK
+                      status: SENT
+                      payload:
+                        source: dashboard
+                      resultPayload: null
+                      errorMessage: null
+                      expiresAt: 2025-02-20T14:35:00.000Z
+                      sentAt: 2025-02-20T14:29:50.000Z
+                      processedAt: null
+                      createdAt: 2025-02-20T14:29:45.000Z
+                      updatedAt: 2025-02-20T14:29:50.000Z
+        "404":
+          description: Default Response
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    enum:
+                      - Controller not found
+                  code:
+                    type: string
+                    enum:
+                      - CONTROLLER_NOT_FOUND
+                required:
+                  - error
+                  - code
+                additionalProperties: false
+                example:
+                  error: Controller not found
+                  code: CONTROLLER_NOT_FOUND
+    post:
+      summary: Enviar comando para controlador
+      tags:
+        - doors
+      description: Agenda um novo comando administrativo (trava, destrava,
+        sincronização de estado) para o controlador informado.
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                type:
+                  type: string
+                  enum:
+                    - UNLOCK
+                    - LOCK
+                    - SYNC_STATE
+                payload:
+                  type: object
+                  additionalProperties: {}
+                expiresInSeconds:
+                  type: integer
+                  exclusiveMinimum: true
+                  maximum: 9007199254740991
+              required:
+                - type
+              example:
+                type: UNLOCK
+                payload:
+                  durationSeconds: 30
+                expiresInSeconds: 60
+        required: true
+      parameters:
+        - schema:
+            type: string
+            minLength: 1
+          in: path
+          name: controllerId
+          required: true
+      security:
+        - sessionCookie: []
+      responses:
+        "201":
+          description: Default Response
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  command:
+                    type: object
+                    properties:
+                      id:
+                        type: string
+                        format: uuid
+                        pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+                      type:
+                        type: string
+                        enum:
+                          - UNLOCK
+                          - LOCK
+                          - SYNC_STATE
+                      status:
+                        type: string
+                        enum:
+                          - PENDING
+                          - SENT
+                          - COMPLETED
+                          - FAILED
+                          - EXPIRED
+                      payload:
+                        type: object
+                        additionalProperties: {}
+                      resultPayload:
+                        nullable: true
+                        type: object
+                        additionalProperties: {}
+                      errorMessage:
+                        nullable: true
+                        type: string
+                      expiresAt:
+                        nullable: true
+                        type: string
+                        format: date-time
+                        pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d(?::[0-5]\d(?:\.\d+)?)?(?:Z))$
+                      sentAt:
+                        nullable: true
+                        type: string
+                        format: date-time
+                        pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d(?::[0-5]\d(?:\.\d+)?)?(?:Z))$
+                      processedAt:
+                        nullable: true
+                        type: string
+                        format: date-time
+                        pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d(?::[0-5]\d(?:\.\d+)?)?(?:Z))$
+                      createdAt:
+                        type: string
+                        format: date-time
+                        pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d(?::[0-5]\d(?:\.\d+)?)?(?:Z))$
+                      updatedAt:
+                        type: string
+                        format: date-time
+                        pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d(?::[0-5]\d(?:\.\d+)?)?(?:Z))$
+                    required:
+                      - id
+                      - type
+                      - status
+                      - payload
+                      - resultPayload
+                      - errorMessage
+                      - expiresAt
+                      - sentAt
+                      - processedAt
+                      - createdAt
+                      - updatedAt
+                    additionalProperties: false
+                required:
+                  - command
+                additionalProperties: false
+                example:
+                  command:
+                    id: 4f3b9a8d-4fef-4e57-9f02-d7d2bf6a73c2
+                    type: UNLOCK
+                    status: PENDING
+                    payload:
+                      durationSeconds: 30
+                    resultPayload: null
+                    errorMessage: null
+                    expiresAt: 2025-02-20T15:00:00.000Z
+                    sentAt: null
+                    processedAt: null
+                    createdAt: 2025-02-20T14:58:00.000Z
+                    updatedAt: 2025-02-20T14:58:00.000Z
+        "404":
+          description: Default Response
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    enum:
+                      - Controller not found
+                  code:
+                    type: string
+                    enum:
+                      - CONTROLLER_NOT_FOUND
+                required:
+                  - error
+                  - code
+                additionalProperties: false
+                example:
+                  error: Controller not found
+                  code: CONTROLLER_NOT_FOUND
+  /doors/{controllerId}/access-logs:
+    get:
+      summary: Consultar logs de acesso
+      tags:
+        - doors
+      description: Retorna o histórico recente de tentativas de acesso registradas
+        para a sala vinculada ao controlador.
+      parameters:
+        - schema:
+            type: integer
+            minimum: 1
+            maximum: 200
+          in: query
+          name: limit
+          required: false
+        - schema:
+            type: string
+            minLength: 1
+          in: path
+          name: controllerId
+          required: true
+      security:
+        - sessionCookie: []
+      responses:
+        "200":
+          description: Default Response
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  roomId:
+                    type: string
+                    format: uuid
+                    pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+                  logs:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id:
+                          type: string
+                          format: uuid
+                          pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+                        status:
+                          type: string
+                          enum:
+                            - GRANTED
+                            - DENIED
+                        reason:
+                          nullable: true
+                          type: string
+                        timestamp:
+                          type: string
+                          format: date-time
+                          pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d(?::[0-5]\d(?:\.\d+)?)?(?:Z))$
+                        userId:
+                          nullable: true
+                          type: string
+                          format: uuid
+                          pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+                        credentialId:
+                          nullable: true
+                          type: string
+                          format: uuid
+                          pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+                        credentialValueUsed:
+                          nullable: true
+                          type: string
+                        userName:
+                          nullable: true
+                          type: string
+                      required:
+                        - id
+                        - status
+                        - reason
+                        - timestamp
+                        - userId
+                        - credentialId
+                        - credentialValueUsed
+                        - userName
+                      additionalProperties: false
+                required:
+                  - roomId
+                  - logs
+                additionalProperties: false
+                example:
+                  roomId: f05c9cd2-3f5f-40bc-9219-028f8f8aaf75
+                  logs:
+                    - id: b8a2847c-48c1-4e4e-8f90-b63c7ec5d8f3
+                      status: GRANTED
+                      reason: null
+                      timestamp: 2025-02-20T14:25:10.000Z
+                      userId: 7b3cf58e-353f-48de-b2fd-6f203d64d3f8
+                      credentialId: 9858ab19-c4b0-47aa-867f-2c569c114541
+                      credentialValueUsed: A1:B2:C3:D4
+                      userName: Ana Souza
+                    - id: 66f9f2e8-7d54-4c74-889b-255591f4142f
+                      status: DENIED
+                      reason: NO_PERMISSION
+                      timestamp: 2025-02-20T10:02:36.000Z
+                      userId: null
+                      credentialId: null
+                      credentialValueUsed: FF:EE:DD:CC
+                      userName: null
+        "404":
+          description: Default Response
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    enum:
+                      - Controller not found
+                  code:
+                    type: string
+                    enum:
+                      - CONTROLLER_NOT_FOUND
+                required:
+                  - error
+                  - code
+                additionalProperties: false
+                example:
+                  error: Controller not found
+                  code: CONTROLLER_NOT_FOUND
+  /iot/devices/register:
+    post:
+      summary: Registrar controlador
+      tags:
+        - iot
+      description: Usado pelo dispositivo IoT para criar ou atualizar seu cadastro
+        junto à API.
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                controllerId:
+                  type: string
+                  minLength: 1
+                roomId:
+                  type: string
+                  minLength: 1
+                firmwareVersion:
+                  type: string
+                  minLength: 1
+              required:
+                - controllerId
+                - roomId
+              example:
+                controllerId: controller-lab-101
+                roomId: f05c9cd2-3f5f-40bc-9219-028f8f8aaf75
+                firmwareVersion: 1.2.3
+        required: true
+      responses:
+        "200":
+          description: Default Response
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  controller:
+                    type: object
+                    properties:
+                      id:
+                        type: string
+                      roomId:
+                        type: string
+                        format: uuid
+                        pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+                      firmwareVersion:
+                        nullable: true
+                        type: string
+                      lastSeenAt:
+                        type: string
+                        format: date-time
+                        pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d(?::[0-5]\d(?:\.\d+)?)?(?:Z))$
+                    required:
+                      - id
+                      - roomId
+                      - firmwareVersion
+                      - lastSeenAt
+                    additionalProperties: false
+                required:
+                  - controller
+                additionalProperties: false
+                example:
+                  controller:
+                    id: controller-lab-101
+                    roomId: f05c9cd2-3f5f-40bc-9219-028f8f8aaf75
+                    firmwareVersion: 1.2.3
+                    lastSeenAt: 2025-02-20T14:31:12.000Z
+  /iot/devices/{controllerId}/heartbeat:
+    post:
+      summary: Heartbeat do controlador
+      tags:
+        - iot
+      description: Atualiza o timestamp de últimos sinais de vida do dispositivo e
+        opcionalmente a versão do firmware.
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                firmwareVersion:
+                  type: string
+                  minLength: 1
+              example:
+                firmwareVersion: 1.2.4
+      parameters:
+        - schema:
+            type: string
+            minLength: 1
+          in: path
+          name: controllerId
+          required: true
+      responses:
+        "200":
+          description: Default Response
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  controller:
+                    type: object
+                    properties:
+                      id:
+                        type: string
+                      roomId:
+                        type: string
+                        format: uuid
+                        pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+                      firmwareVersion:
+                        nullable: true
+                        type: string
+                      lastSeenAt:
+                        type: string
+                        format: date-time
+                        pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d(?::[0-5]\d(?:\.\d+)?)?(?:Z))$
+                    required:
+                      - id
+                      - roomId
+                      - firmwareVersion
+                      - lastSeenAt
+                    additionalProperties: false
+                required:
+                  - controller
+                additionalProperties: false
+                example:
+                  controller:
+                    id: controller-lab-101
+                    roomId: f05c9cd2-3f5f-40bc-9219-028f8f8aaf75
+                    firmwareVersion: 1.2.3
+                    lastSeenAt: 2025-02-20T14:31:12.000Z
+        "404":
+          description: Default Response
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    enum:
+                      - Controller not registered
+                  code:
+                    type: string
+                    enum:
+                      - CONTROLLER_NOT_FOUND
+                required:
+                  - error
+                  - code
+                additionalProperties: false
+                example:
+                  error: Controller not registered
+                  code: CONTROLLER_NOT_FOUND
+  /iot/devices/{controllerId}/status:
+    post:
+      summary: Atualizar status da porta
+      tags:
+        - iot
+      description: Persistir o estado atual detectado pelo controlador
+        (fechada/aberta, trancada/destrancada).
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                doorState:
+                  type: string
+                  enum:
+                    - OPEN
+                    - CLOSED
+                    - UNKNOWN
+                isLocked:
+                  type: boolean
+                firmwareVersion:
+                  type: string
+                  minLength: 1
+              required:
+                - doorState
+                - isLocked
+              example:
+                doorState: CLOSED
+                isLocked: true
+                firmwareVersion: 1.2.4
+        required: true
+      parameters:
+        - schema:
+            type: string
+            minLength: 1
+          in: path
+          name: controllerId
+          required: true
+      responses:
+        "200":
+          description: Default Response
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  room:
+                    type: object
+                    properties:
+                      id:
+                        type: string
+                        format: uuid
+                        pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+                      name:
+                        type: string
+                      doorState:
+                        type: string
+                        enum:
+                          - OPEN
+                          - CLOSED
+                          - UNKNOWN
+                      isLocked:
+                        nullable: true
+                        type: boolean
+                      lastStatusUpdateAt:
+                        nullable: true
+                        type: string
+                        format: date-time
+                        pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d(?::[0-5]\d(?:\.\d+)?)?(?:Z))$
+                    required:
+                      - id
+                      - name
+                      - doorState
+                      - isLocked
+                      - lastStatusUpdateAt
+                    additionalProperties: false
+                required:
+                  - room
+                additionalProperties: false
+                example:
+                  room:
+                    id: f05c9cd2-3f5f-40bc-9219-028f8f8aaf75
+                    name: Laboratório 101
+                    doorState: CLOSED
+                    isLocked: true
+                    lastStatusUpdateAt: 2025-02-20T14:30:00.000Z
+        "404":
+          description: Default Response
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    enum:
+                      - Controller not registered
+                  code:
+                    type: string
+                    enum:
+                      - CONTROLLER_NOT_FOUND
+                required:
+                  - error
+                  - code
+                additionalProperties: false
+                example:
+                  error: Controller not registered
+                  code: CONTROLLER_NOT_FOUND
+  /iot/devices/{controllerId}/access-attempt:
+    post:
+      summary: Registrar tentativa de acesso
+      tags:
+        - iot
+      description: Avalia uma credencial apresentada ao controlador e retorna a
+        decisão (permitido ou negado).
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                credentialType:
+                  type: string
+                  enum:
+                    - FINGERPRINT
+                    - NFC_TAG
+                credentialValue:
+                  type: string
+                  minLength: 1
+                requestId:
+                  type: string
+                  minLength: 1
+              required:
+                - credentialType
+                - credentialValue
+              example:
+                credentialType: NFC_TAG
+                credentialValue: AB:CD:EF:12
+                requestId: req-123
+        required: true
+      parameters:
+        - schema:
+            type: string
+            minLength: 1
+          in: path
+          name: controllerId
+          required: true
+      responses:
+        "200":
+          description: Default Response
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    enum:
+                      - GRANTED
+                      - DENIED
+                  reason:
+                    nullable: true
+                    type: string
+                  user:
+                    type: object
+                    properties:
+                      id:
+                        type: string
+                        format: uuid
+                        pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+                      name:
+                        type: string
+                      isAdmin:
+                        type: boolean
+                    required:
+                      - id
+                      - name
+                      - isAdmin
+                    additionalProperties: false
+                  room:
+                    type: object
+                    properties:
+                      id:
+                        type: string
+                        format: uuid
+                        pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+                      name:
+                        type: string
+                    required:
+                      - id
+                      - name
+                    additionalProperties: false
+                  requestId:
+                    type: string
+                required:
+                  - status
+                  - reason
+                additionalProperties: false
+                example:
+                  status: GRANTED
+                  reason: null
+                  user:
+                    id: 7b3cf58e-353f-48de-b2fd-6f203d64d3f8
+                    name: Ana Souza
+                    isAdmin: true
+                  room:
+                    id: f05c9cd2-3f5f-40bc-9219-028f8f8aaf75
+                    name: Laboratório 101
+                  requestId: req-123
+  /iot/devices/{controllerId}/commands:
+    post:
+      summary: Criar comando emergencial
+      tags:
+        - iot
+      description: Permite que o controlador solicite um comando imediato (por
+        exemplo, destravar temporariamente a porta).
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                type:
+                  type: string
+                  enum:
+                    - UNLOCK
+                    - LOCK
+                    - SYNC_STATE
+                payload:
+                  type: object
+                  additionalProperties: {}
+                expiresInSeconds:
+                  type: integer
+                  exclusiveMinimum: true
+                  maximum: 9007199254740991
+              required:
+                - type
+              example:
+                type: UNLOCK
+                payload:
+                  durationSeconds: 30
+                expiresInSeconds: 60
+        required: true
+      parameters:
+        - schema:
+            type: string
+            minLength: 1
+          in: path
+          name: controllerId
+          required: true
+      responses:
+        "201":
+          description: Default Response
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  command:
+                    type: object
+                    properties:
+                      id:
+                        type: string
+                        format: uuid
+                        pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+                      type:
+                        type: string
+                        enum:
+                          - UNLOCK
+                          - LOCK
+                          - SYNC_STATE
+                      status:
+                        type: string
+                        enum:
+                          - PENDING
+                          - SENT
+                          - COMPLETED
+                          - FAILED
+                          - EXPIRED
+                      payload:
+                        type: object
+                        additionalProperties: {}
+                      expiresAt:
+                        nullable: true
+                        type: string
+                        format: date-time
+                        pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d(?::[0-5]\d(?:\.\d+)?)?(?:Z))$
+                      createdAt:
+                        type: string
+                        format: date-time
+                        pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d(?::[0-5]\d(?:\.\d+)?)?(?:Z))$
+                      sentAt:
+                        nullable: true
+                        type: string
+                        format: date-time
+                        pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d(?::[0-5]\d(?:\.\d+)?)?(?:Z))$
+                    required:
+                      - id
+                      - type
+                      - status
+                      - payload
+                      - expiresAt
+                    additionalProperties: false
+                required:
+                  - command
+                additionalProperties: false
+                example:
+                  command:
+                    id: 6d2dbfb1-9a90-4f49-9af2-6520f9a2c2f5
+                    type: UNLOCK
+                    status: PENDING
+                    payload:
+                      durationSeconds: 30
+                    expiresAt: 2025-02-20T15:00:00.000Z
+                    createdAt: 2025-02-20T14:58:00.000Z
+                    sentAt: null
+  /iot/devices/{controllerId}/commands/pull:
+    post:
+      summary: Buscar comandos pendentes
+      tags:
+        - iot
+      description: Entrega ao controlador os comandos na fila que ainda não foram
+        enviados ou expirados.
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                limit:
+                  type: integer
+                  minimum: 1
+                  maximum: 50
+              example:
+                limit: 5
+      parameters:
+        - schema:
+            type: string
+            minLength: 1
+          in: path
+          name: controllerId
+          required: true
+      responses:
+        "200":
+          description: Default Response
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  commands:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id:
+                          type: string
+                          format: uuid
+                          pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+                        type:
+                          type: string
+                          enum:
+                            - UNLOCK
+                            - LOCK
+                            - SYNC_STATE
+                        status:
+                          type: string
+                          enum:
+                            - PENDING
+                            - SENT
+                            - COMPLETED
+                            - FAILED
+                            - EXPIRED
+                        payload:
+                          type: object
+                          additionalProperties: {}
+                        expiresAt:
+                          nullable: true
+                          type: string
+                          format: date-time
+                          pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d(?::[0-5]\d(?:\.\d+)?)?(?:Z))$
+                        createdAt:
+                          type: string
+                          format: date-time
+                          pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d(?::[0-5]\d(?:\.\d+)?)?(?:Z))$
+                        sentAt:
+                          nullable: true
+                          type: string
+                          format: date-time
+                          pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d(?::[0-5]\d(?:\.\d+)?)?(?:Z))$
+                      required:
+                        - id
+                        - type
+                        - status
+                        - payload
+                        - expiresAt
+                      additionalProperties: false
+                required:
+                  - commands
+                additionalProperties: false
+                example:
+                  commands:
+                    - id: 6d2dbfb1-9a90-4f49-9af2-6520f9a2c2f5
+                      type: UNLOCK
+                      status: SENT
+                      payload:
+                        durationSeconds: 30
+                      expiresAt: 2025-02-20T15:00:00.000Z
+                      createdAt: 2025-02-20T14:58:00.000Z
+                      sentAt: 2025-02-20T14:58:05.000Z
+  /iot/devices/{controllerId}/commands/{commandId}/ack:
+    post:
+      summary: Confirmar execução de comando
+      tags:
+        - iot
+      description: Atualiza o status de um comando após processamento pelo
+        controlador, incluindo payload de resultado ou erro.
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                status:
+                  anyOf:
+                    - type: string
+                      enum:
+                        - COMPLETED
+                    - type: string
+                      enum:
+                        - FAILED
+                resultPayload:
+                  nullable: true
+                  type: object
+                  additionalProperties: {}
+                errorMessage:
+                  nullable: true
+                  type: string
+              required:
+                - status
+              example:
+                status: COMPLETED
+                resultPayload:
+                  doorState: UNLOCKED
+                errorMessage: null
+        required: true
+      parameters:
+        - schema:
+            type: string
+            minLength: 1
+          in: path
+          name: controllerId
+          required: true
+        - schema:
+            type: string
+            minLength: 1
+          in: path
+          name: commandId
+          required: true
+      responses:
+        "200":
+          description: Default Response
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  command:
+                    type: object
+                    properties:
+                      id:
+                        type: string
+                        format: uuid
+                        pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+                      status:
+                        anyOf:
+                          - type: string
+                            enum:
+                              - COMPLETED
+                          - type: string
+                            enum:
+                              - FAILED
+                      processedAt:
+                        nullable: true
+                        type: string
+                        format: date-time
+                        pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d(?::[0-5]\d(?:\.\d+)?)?(?:Z))$
+                    required:
+                      - id
+                      - status
+                      - processedAt
+                    additionalProperties: false
+                required:
+                  - command
+                additionalProperties: false
+                example:
+                  command:
+                    id: 6d2dbfb1-9a90-4f49-9af2-6520f9a2c2f5
+                    status: COMPLETED
+                    processedAt: 2025-02-20T14:58:30.000Z
+        "404":
+          description: Default Response
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    enum:
+                      - Command not found
+                  code:
+                    type: string
+                    enum:
+                      - COMMAND_NOT_FOUND
+                required:
+                  - error
+                  - code
+                additionalProperties: false
+                example:
+                  error: Command not found
+                  code: COMMAND_NOT_FOUND
+tags:
+  - name: auth
+    description: Fluxo de autenticação e sessões
+  - name: users
+    description: Gestão de usuários e credenciais
+  - name: rooms
+    description: Inventário de blocos, salas e status
+  - name: doors
+    description: Operações administrativas de controladores físicos (portas) e auditoria
+  - name: iot
+    description: Contrato MQTT/HTTP consumido pelos dispositivos ESP32 instalados nas portas
+externalDocs:
+  description: Repositório do projeto
+  url: https://github.com/ProjetosIFSP/access-control

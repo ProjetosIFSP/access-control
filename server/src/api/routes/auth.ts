@@ -5,6 +5,12 @@ export const authRoute: FastifyPluginAsyncZod = async (app) => {
 	app.route({
 		method: ["GET", "POST"],
 		url: "/auth/*",
+		schema: {
+			tags: ["auth"],
+			summary: "Delegar operações de autenticação",
+			description:
+				"Proxy reverso para o Auth.js, responsável pelos fluxos de login, callback de provedores e sessões baseadas em cookie.",
+		},
 		async handler(request, reply) {
 			try {
 				const url = new URL(request.url, `http://${request.headers.host}`);
