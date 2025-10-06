@@ -6,6 +6,7 @@ import {
 	type ZodTypeProvider,
 } from "fastify-type-provider-zod";
 import { authRoute } from "./routes/auth";
+import { iotRoute } from "./routes/iot";
 import { roomRoute } from "./routes/room";
 import { userRoute } from "./routes/user";
 
@@ -25,6 +26,7 @@ app.register(fastifyCors, {
 app.register(authRoute, { prefix: "/auth" });
 app.register(userRoute, { prefix: "/users" });
 app.register(roomRoute, { prefix: "/rooms" });
+app.register(iotRoute, { prefix: "/iot" });
 
 app.setValidatorCompiler(validatorCompiler);
 app.setSerializerCompiler(serializerCompiler);
