@@ -20,7 +20,7 @@ const logger = pino({
 	level: process.env.LOG_LEVEL ?? "info",
 });
 
-const API_BASE_URL = process.env.API_BASE_URL ?? "http://server:3000";
+const API_BASE_URL = process.env.API_BASE_URL ?? "http://server:3333";
 const MQTT_PORT = parseInt(process.env.MQTT_PORT ?? "1883", 10);
 const WS_PORT = parseInt(process.env.MQTT_WS_PORT ?? "9001", 10);
 const COMMAND_POLL_INTERVAL = parseInt(

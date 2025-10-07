@@ -15,15 +15,12 @@ import { registerDocs } from "./docs";
 const app = fastify({
 	routerOptions: {
 		caseSensitive: false,
-		defaultRoute: (_req, res) => {
-			res.status(404).send({ error: "Not Found" });
-		},
 	},
 }).withTypeProvider<ZodTypeProvider>();
 
 async function bootstrap() {
 	app.register(fastifyCors, {
-		origin: ["http://localhost:5173"],
+		origin: ["http://localhost:5173", "http://localhost:3000"],
 	});
 
 	await registerDocs(app);
@@ -33,15 +30,25 @@ async function bootstrap() {
 	app.register(roomRoute, { prefix: "/rooms" });
 	app.register(doorRoute, { prefix: "/doors" });
 	app.register(iotRoute, { prefix: "/iot" });
+	app.get('/', function (request, reply) {
+		reply.send(
+			{ 
+				hello: 'Bem vindo à API do sistema de controle de acesso',
+				status: 'running',
+				version: '1.0.0',
+				message: 'API do sistema de controle de acesso',
+			 }
+		);
+	})
 
 	app.setValidatorCompiler(validatorCompiler);
 	app.setSerializerCompiler(serializerCompiler);
 
 	await app.listen({
-		port: 3000,
+		port: 3333,
 	});
 
-	console.log("----- Backend rodando em http://localhost:3000 -----");
+	console.log("----- Backend rodando em http://localhost:3333 -----");
 }
 
 bootstrap().catch((error) => {

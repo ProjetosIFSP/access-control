@@ -1,9 +1,9 @@
 import { db } from "@/db";
-import { doorCommand } from "@/db/schema/door";
 import {
 	doorCommandStatusEnum,
 	doorCommandTypeEnum,
 } from "@/db/schema/enums";
+import { doorCommand } from "@/db/schema/room"
 import { and, asc, eq, inArray } from "drizzle-orm";
 
 const COMMAND_TYPES = doorCommandTypeEnum.enumValues;

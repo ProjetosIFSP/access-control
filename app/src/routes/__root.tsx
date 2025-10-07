@@ -15,7 +15,7 @@ interface MyRouterContext {
 export const Route = createRootRouteWithContext<MyRouterContext>()({
   component: () => (
     <>
-      <Header />
+      {/* <Header /> */}
       <Outlet />
       <TanStackDevtools
         config={{
