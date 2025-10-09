@@ -34,17 +34,36 @@ Copie os seguintes arquivos para o diretório que você acabou de criar no servi
 
 - `docker-compose.prod.yml`
 - `deploy.sh`
+- `.env` com as variáveis sensíveis utilizadas pelos serviços
+- `iot/.env` (opcional) caso deseje sobrescrever as variáveis padrão do broker MQTT
 
 ### Passo 3: Criar o Arquivo de Variáveis de Ambiente
 Crie um arquivo chamado `.env` no mesmo diretório. Este arquivo conterá as credenciais do banco de dados. Substitua os valores de exemplo por suas credenciais seguras.
 
-Arquivo `.env`:
+Arquivo `.env` (raiz do deploy):
 
 ```
 # Credenciais do Banco de Dados PostgreSQL
 POSTGRES_USER=user_db
 POSTGRES_PASSWORD=uma_senha_muito_segura_aqui
 POSTGRES_DB=access-control
+```
+
+Arquivo `iot/.env` (opcional):
+
+```
+# URL para comunicação do broker com a API HTTP
+API_BASE_URL=http://server:3333
+
+# Portas expostas pelo broker (correspondem às portas mapeadas no compose)
+MQTT_PORT=1883
+MQTT_WS_PORT=9001
+
+# Intervalo, em milissegundos, do polling de comandos REST
+COMMAND_POLL_INTERVAL=1000
+
+# Nível de log aceito pelo Pino (trace|debug|info|warn|error|fatal|silent)
+LOG_LEVEL=info
 ```
 
 ### Passo 4: Criar o GitHub Personal Access Token (PAT)
@@ -91,6 +110,15 @@ export GHCR_PAT="seu_token_copiado_do_github"
 ```
 
 O script irá autenticar no GHCR, baixar as imagens mais recentes e reiniciar todos os serviços.
+
+### Serviços publicados
+
+| Serviço | Descrição | Portas | Observações |
+| --- | --- | --- | --- |
+| server | API REST Fastify | `3333` | Depende do banco Postgres |
+| web | Interface React / Vite | `3000` | Consome a API `server` |
+| iot | Broker MQTT em Node.js (Aedes) | `1883`, `9001` | Comunica dispositivos via MQTT e integra com a API |
+| db | PostgreSQL | `5432` | Volume persistente `postgres_data` |
 
 **Verificando os Logs**
 Para verificar se os contêineres estão rodando corretamente ou para depurar problemas, use o comando:

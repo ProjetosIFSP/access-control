@@ -21,7 +21,18 @@ O projeto é organizado em um monorepo com os seguintes diretórios principais:
 
 - `📁 /web`: Contém a aplicação frontend em React (Vite). É a interface com o usuário para visualizar dados, cadastrar digitais, etc.
 
-- `📁 /iot`: Contém os códigos e documentação relacionados ao microcontrolador (ESP32) e à comunicação via protocolo MQTT.
+- `📁 /iot`: Contém o broker MQTT customizado (Node.js + Aedes) e a documentação para integração com os dispositivos ESP32.
+
+## 🛠️ Desenvolvimento com Workspaces
+
+Este repositório usa **npm workspaces** para gerenciar as dependências dos pacotes `app`, `server` e `iot` a partir da raiz.
+
+- Instale tudo de uma vez: `npm install --workspaces`
+- Rodar scripts específicos (exemplos):
+	- Frontend: `npm run dev:app`
+	- Backend: `npm run dev:server`
+	- Broker MQTT: `npm run dev:iot`
+- Build completo: `npm run build`
 
 ## 🎨 Design
 
