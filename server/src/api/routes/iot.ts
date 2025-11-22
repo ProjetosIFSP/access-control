@@ -1,3 +1,5 @@
+import type { FastifyPluginAsyncZod } from "fastify-type-provider-zod";
+import type { SchemaWithExamples } from "@/api/openapi";
 import {
 	accessStatusEnum,
 	credentialTypeEnum,
@@ -5,50 +7,46 @@ import {
 	doorCommandTypeEnum,
 	doorStateEnum,
 } from "@/db/schema/enums";
+import { z } from "@/lib/zod";
+import { processAccessAttempt } from "@/services/iot/access";
 import {
 	createDoorCommand,
 	pullPendingCommands,
 	updateDoorCommandStatus,
 } from "@/services/iot/commands";
 import {
-	processAccessAttempt,
-} from "@/services/iot/access";
-import {
 	recordDoorHeartbeat,
 	registerDoorController,
 	updateDoorStatus,
 } from "@/services/iot/door-controller";
-import type { FastifyPluginAsyncZod } from "fastify-type-provider-zod";
-import { z } from "@/lib/zod";
-import type { SchemaWithExamples } from "@/api/openapi";
 
 const doorStateValues = doorStateEnum.enumValues as [
-	typeof doorStateEnum.enumValues[number],
-	...typeof doorStateEnum.enumValues[number][],
+	(typeof doorStateEnum.enumValues)[number],
+	...(typeof doorStateEnum.enumValues)[number][],
 ];
 const doorStateSchema = z.enum(doorStateValues);
 
 const credentialTypeValues = credentialTypeEnum.enumValues as [
-	typeof credentialTypeEnum.enumValues[number],
-	...typeof credentialTypeEnum.enumValues[number][],
+	(typeof credentialTypeEnum.enumValues)[number],
+	...(typeof credentialTypeEnum.enumValues)[number][],
 ];
 const credentialTypeSchema = z.enum(credentialTypeValues);
 
 const commandTypeValues = doorCommandTypeEnum.enumValues as [
-	typeof doorCommandTypeEnum.enumValues[number],
-	...typeof doorCommandTypeEnum.enumValues[number][],
+	(typeof doorCommandTypeEnum.enumValues)[number],
+	...(typeof doorCommandTypeEnum.enumValues)[number][],
 ];
 const commandTypeSchema = z.enum(commandTypeValues);
 
 const commandStatusValues = doorCommandStatusEnum.enumValues as [
-	typeof doorCommandStatusEnum.enumValues[number],
-	...typeof doorCommandStatusEnum.enumValues[number][],
+	(typeof doorCommandStatusEnum.enumValues)[number],
+	...(typeof doorCommandStatusEnum.enumValues)[number][],
 ];
 const commandStatusSchema = z.enum(commandStatusValues);
 
 const accessStatusValues = accessStatusEnum.enumValues as [
-	typeof accessStatusEnum.enumValues[number],
-	...typeof accessStatusEnum.enumValues[number][],
+	(typeof accessStatusEnum.enumValues)[number],
+	...(typeof accessStatusEnum.enumValues)[number][],
 ];
 const accessStatusSchema = z.enum(accessStatusValues);
 
@@ -201,24 +199,28 @@ const ackCommandResponseExample: z.infer<typeof ackCommandResponseSchema> = {
 };
 
 export const iotRoute: FastifyPluginAsyncZod = async (app) => {
-	app.post(
-		"/devices/register",
+	app.put(
+		"/devices/:controllerId",
 		{
 			schema: {
-				body: z.object({
+				params: z.object({
 					controllerId: z.string().min(1),
+				}),
+				body: z.object({
 					roomId: z.string().min(1),
 					firmwareVersion: z.string().min(1).optional(),
 				}),
 				tags: ["iot"],
-				summary: "Registrar controlador",
+				summary: "Registrar ou atualizar controlador",
 				description:
-					"Usado pelo dispositivo IoT para criar ou atualizar seu cadastro junto à API.",
+					"Usado pelo dispositivo IoT para criar ou atualizar seu cadastro junto à API usando PUT idempotente.",
 				response: {
 					200: registerControllerResponseSchema,
 				},
-				bodyExample: {
+				paramsExample: {
 					controllerId: sampleControllerId,
+				},
+				bodyExample: {
 					roomId: sampleRoomId,
 					firmwareVersion: "1.2.3",
 				},
@@ -228,8 +230,13 @@ export const iotRoute: FastifyPluginAsyncZod = async (app) => {
 			} satisfies SchemaWithExamples,
 		},
 		async (request, reply) => {
-			const body = request.body;
-			const result = await registerDoorController(body);
+			const { controllerId } = request.params;
+			const { roomId, firmwareVersion } = request.body;
+			const result = await registerDoorController({
+				controllerId,
+				roomId,
+				firmwareVersion,
+			});
 			const payload: z.infer<typeof registerControllerResponseSchema> = {
 				controller: {
 					id: result.controller.id,
@@ -242,7 +249,7 @@ export const iotRoute: FastifyPluginAsyncZod = async (app) => {
 		},
 	);
 
-	app.post(
+	app.patch(
 		"/devices/:controllerId/heartbeat",
 		{
 			schema: {
@@ -307,7 +314,7 @@ export const iotRoute: FastifyPluginAsyncZod = async (app) => {
 		},
 	);
 
-	app.post(
+	app.put(
 		"/devices/:controllerId/status",
 		{
 			schema: {
@@ -379,7 +386,7 @@ export const iotRoute: FastifyPluginAsyncZod = async (app) => {
 	);
 
 	app.post(
-		"/devices/:controllerId/access-attempt",
+		"/devices/:controllerId/access-attempts",
 		{
 			schema: {
 				params: z.object({
@@ -485,18 +492,16 @@ export const iotRoute: FastifyPluginAsyncZod = async (app) => {
 		},
 	);
 
-	app.post(
-		"/devices/:controllerId/commands/pull",
+	app.get(
+		"/devices/:controllerId/commands",
 		{
 			schema: {
 				params: z.object({
 					controllerId: z.string().min(1),
 				}),
-				body: z
-					.object({
-						limit: z.number().int().min(1).max(50).optional(),
-					})
-					.optional(),
+				querystring: z.object({
+					limit: z.coerce.number().int().min(1).max(50).optional(),
+				}),
 				tags: ["iot"],
 				summary: "Buscar comandos pendentes",
 				description:
@@ -507,7 +512,7 @@ export const iotRoute: FastifyPluginAsyncZod = async (app) => {
 				paramsExample: {
 					controllerId: sampleControllerId,
 				},
-				bodyExample: {
+				querystringExample: {
 					limit: 5,
 				},
 				responseExamples: {
@@ -517,7 +522,7 @@ export const iotRoute: FastifyPluginAsyncZod = async (app) => {
 		},
 		async (request, reply) => {
 			const { controllerId } = request.params;
-			const limit = request.body?.limit;
+			const limit = request.query.limit;
 			const commands = await pullPendingCommands({
 				controllerId,
 				limit,
@@ -537,7 +542,7 @@ export const iotRoute: FastifyPluginAsyncZod = async (app) => {
 		},
 	);
 
-	app.post(
+	app.patch(
 		"/devices/:controllerId/commands/:commandId/ack",
 		{
 			schema: {

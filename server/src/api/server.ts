@@ -5,12 +5,12 @@ import {
 	validatorCompiler,
 	type ZodTypeProvider,
 } from "fastify-type-provider-zod";
+import { registerDocs } from "./docs";
 import { authRoute } from "./routes/auth";
 import { doorRoute } from "./routes/door";
 import { iotRoute } from "./routes/iot";
 import { roomRoute } from "./routes/room";
 import { userRoute } from "./routes/user";
-import { registerDocs } from "./docs";
 
 const app = fastify({
 	routerOptions: {
@@ -30,16 +30,14 @@ async function bootstrap() {
 	app.register(roomRoute, { prefix: "/rooms" });
 	app.register(doorRoute, { prefix: "/doors" });
 	app.register(iotRoute, { prefix: "/iot" });
-	app.get('/', function (request, reply) {
-		reply.send(
-			{ 
-				hello: 'Bem vindo à API do sistema de controle de acesso',
-				status: 'running',
-				version: '1.0.0',
-				message: 'API do sistema de controle de acesso',
-			 }
-		);
-	})
+	app.get("/", (_request, reply) => {
+		reply.send({
+			hello: "Bem vindo à API do sistema de controle de acesso",
+			status: "running",
+			version: "1.0.0",
+			message: "API do sistema de controle de acesso",
+		});
+	});
 
 	app.setValidatorCompiler(validatorCompiler);
 	app.setSerializerCompiler(serializerCompiler);

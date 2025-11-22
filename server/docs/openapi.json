@@ -1069,23 +1069,19 @@
         }
       }
     },
-    "/iot/devices/register": {
-      "post": {
-        "summary": "Registrar controlador",
+    "/iot/devices/{controllerId}": {
+      "put": {
+        "summary": "Registrar ou atualizar controlador",
         "tags": [
           "iot"
         ],
-        "description": "Usado pelo dispositivo IoT para criar ou atualizar seu cadastro junto à API.",
+        "description": "Usado pelo dispositivo IoT para criar ou atualizar seu cadastro junto à API usando PUT idempotente.",
         "requestBody": {
           "content": {
             "application/json": {
               "schema": {
                 "type": "object",
                 "properties": {
-                  "controllerId": {
-                    "type": "string",
-                    "minLength": 1
-                  },
                   "roomId": {
                     "type": "string",
                     "minLength": 1
@@ -1096,11 +1092,9 @@
                   }
                 },
                 "required": [
-                  "controllerId",
                   "roomId"
                 ],
                 "example": {
-                  "controllerId": "controller-lab-101",
                   "roomId": "f05c9cd2-3f5f-40bc-9219-028f8f8aaf75",
                   "firmwareVersion": "1.2.3"
                 }
@@ -1109,6 +1103,17 @@
           },
           "required": true
         },
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            },
+            "in": "path",
+            "name": "controllerId",
+            "required": true
+          }
+        ],
         "responses": {
           "200": {
             "description": "Default Response",
@@ -1167,7 +1172,7 @@
       }
     },
     "/iot/devices/{controllerId}/heartbeat": {
-      "post": {
+      "patch": {
         "summary": "Heartbeat do controlador",
         "tags": [
           "iot"
@@ -1293,7 +1298,7 @@
       }
     },
     "/iot/devices/{controllerId}/status": {
-      "post": {
+      "put": {
         "summary": "Atualizar status da porta",
         "tags": [
           "iot"
@@ -1447,7 +1452,7 @@
         }
       }
     },
-    "/iot/devices/{controllerId}/access-attempt": {
+    "/iot/devices/{controllerId}/access-attempts": {
       "post": {
         "summary": "Registrar tentativa de acesso",
         "tags": [
@@ -1735,35 +1740,24 @@
             }
           }
         }
-      }
-    },
-    "/iot/devices/{controllerId}/commands/pull": {
-      "post": {
+      },
+      "get": {
         "summary": "Buscar comandos pendentes",
         "tags": [
           "iot"
         ],
         "description": "Entrega ao controlador os comandos na fila que ainda não foram enviados ou expirados.",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object",
-                "properties": {
-                  "limit": {
-                    "type": "integer",
-                    "minimum": 1,
-                    "maximum": 50
-                  }
-                },
-                "example": {
-                  "limit": 5
-                }
-              }
-            }
-          }
-        },
         "parameters": [
+          {
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 50
+            },
+            "in": "query",
+            "name": "limit",
+            "required": false
+          },
           {
             "schema": {
               "type": "string",
@@ -1870,7 +1864,7 @@
       }
     },
     "/iot/devices/{controllerId}/commands/{commandId}/ack": {
-      "post": {
+      "patch": {
         "summary": "Confirmar execução de comando",
         "tags": [
           "iot"

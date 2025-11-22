@@ -1,4 +1,4 @@
-import { eq, sql } from "drizzle-orm";
+import { sql } from "drizzle-orm";
 import { db } from "@/db";
 import { accessCredential } from "@/db/schema/access";
 import { user } from "@/db/schema/auth";
@@ -13,14 +13,12 @@ export async function getUsers() {
 			isAdmin: user.isAdmin,
 			createdAt: user.createdAt,
 			updatedAt: user.updatedAt,
-			hasCredentials:
-				sql<boolean> /* sql */`${accessCredential.id} IS NOT NULL`.as(
-					"hasCredentials",
-				),
+			hasCredentials: sql<boolean> /* sql */`EXISTS (
+				SELECT 1 FROM ${accessCredential}
+				WHERE ${accessCredential.userId} = ${user.id}
+			)`.as("hasCredentials"),
 		})
 		.from(user)
-		.leftJoin(accessCredential, eq(accessCredential.userId, user.id))
-		.groupBy(user.id)
 		.orderBy(user.name);
 
 	return { result };
