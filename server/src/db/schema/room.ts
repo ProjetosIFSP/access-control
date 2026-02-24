@@ -25,6 +25,9 @@ export const room = pgTable("room", {
 	lastStatusUpdateAt: timestamp("last_status_update_at", {
 		withTimezone: true,
 	}),
+	// Requisitos multimodais de acesso
+	requiresBiometry: boolean("requires_biometry").default(false),
+	requiresRFID: boolean("requires_rfid").default(false),
 	createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 

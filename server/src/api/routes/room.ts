@@ -3,6 +3,7 @@ import type { SchemaWithExamples } from "@/api/openapi";
 import { z } from "@/lib/zod";
 import { doorStateEnum } from "@/db/schema/enums";
 import { getRooms } from "@/services/room/get-room";
+import { assignProfileToRoom } from "@/services/profile/assign-room";
 
 const doorStateValues = doorStateEnum.enumValues as [
 	typeof doorStateEnum.enumValues[number],

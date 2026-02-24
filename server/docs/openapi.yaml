@@ -12,6 +12,19 @@ components:
       name: auth_session
       description: Sessão de usuário gerenciada pela camada Auth baseada em cookies.
   schemas: {}
+  profiles:
+    Profile:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        description:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
 paths:
   /auth/auth/{*}:
     get: &a1
@@ -198,6 +211,147 @@ paths:
   /doors/:
     get:
       summary: Listar controladores de porta
+
+  /profiles/:
+    get:
+      summary: Listar perfis
+      tags:
+        - profiles
+      responses:
+        '200':
+          description: Lista de perfis
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  result:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Profile'
+    post:
+      summary: Criar perfil
+      tags:
+        - profiles
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                description:
+                  type: string
+      responses:
+        '201':
+          description: Perfil criado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Profile'
+
+  /users/{userId}/profiles:
+    get:
+      summary: Listar perfis de um usuário
+      tags: [profiles]
+      parameters:
+        - in: path
+          name: userId
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Perfis do usuário
+    post:
+      summary: Atribuir perfil ao usuário
+      tags: [profiles]
+      parameters:
+        - in: path
+          name: userId
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                profileId:
+                  type: string
+      responses:
+        '204':
+          description: Perfil atribuído
+
+  /rooms/{roomId}/profiles:
+    get:
+      summary: Listar perfis com acesso à sala
+      tags: [profiles]
+      parameters:
+        - in: path
+          name: roomId
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Perfis listados
+    post:
+      summary: Atribuir perfil à sala
+      tags: [profiles]
+      parameters:
+        - in: path
+          name: roomId
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                profileId:
+                  type: string
+      responses:
+        '204':
+          description: Perfil atribuído à sala
+
+  /access/verify:
+    post:
+      summary: Verificar permissão multimodal (usado por controladores)
+      tags: [access]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                roomId:
+                  type: string
+                credentialValue:
+                  type: string
+                type:
+                  type: string
+                  enum: [BIOMETRY, RFID]
+      responses:
+        '200':
+          description: Resultado da verificação
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  granted:
+                    type: boolean
+                  reason:
+                    type: string
       tags:
         - doors
       description: Retorna todos os controladores físicos cadastrados, status atual e
