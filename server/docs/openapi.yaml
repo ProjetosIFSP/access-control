@@ -11,8 +11,7 @@ components:
       in: cookie
       name: auth_session
       description: Sessão de usuário gerenciada pela camada Auth baseada em cookies.
-  schemas: {}
-  profiles:
+  schemas:
     Profile:
       type: object
       properties:
@@ -211,6 +210,18 @@ paths:
   /doors/:
     get:
       summary: Listar controladores de porta
+      tags:
+        - doors
+      description: Retorna todos os controladores físicos cadastrados, status atual e último comando enviado.
+      security:
+        - sessionCookie: []
+      responses:
+        "200":
+          description: Default Response
+          content:
+            application/json:
+              schema:
+                type: object
 
   /profiles/:
     get:
@@ -352,147 +363,7 @@ paths:
                     type: boolean
                   reason:
                     type: string
-      tags:
-        - doors
-      description: Retorna todos os controladores físicos cadastrados, status atual e
-        último comando enviado.
-      security:
-        - sessionCookie: []
-      responses:
-        "200":
-          description: Default Response
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  controllers:
-                    type: array
-                    items:
-                      type: object
-                      properties:
-                        controllerId:
-                          type: string
-                        room:
-                          type: object
-                          properties:
-                            id:
-                              type: string
-                              format: uuid
-                              pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
-                            name:
-                              type: string
-                            blockName:
-                              type: string
-                            doorState:
-                              type: string
-                              enum:
-                                - OPEN
-                                - CLOSED
-                                - UNKNOWN
-                            isLocked:
-                              nullable: true
-                              type: boolean
-                            lastStatusUpdateAt:
-                              nullable: true
-                              type: string
-                              format: date-time
-                              pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d(?::[0-5]\d(?:\.\d+)?)?(?:Z))$
-                          required:
-                            - id
-                            - name
-                            - blockName
-                            - doorState
-                            - isLocked
-                            - lastStatusUpdateAt
-                          additionalProperties: false
-                        controller:
-                          type: object
-                          properties:
-                            firmwareVersion:
-                              nullable: true
-                              type: string
-                            lastSeenAt:
-                              type: string
-                              format: date-time
-                              pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d(?::[0-5]\d(?:\.\d+)?)?(?:Z))$
-                          required:
-                            - firmwareVersion
-                            - lastSeenAt
-                          additionalProperties: false
-                        lastCommand:
-                          nullable: true
-                          type: object
-                          properties:
-                            id:
-                              type: string
-                              format: uuid
-                              pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
-                            type:
-                              type: string
-                              enum:
-                                - UNLOCK
-                                - LOCK
-                                - SYNC_STATE
-                            status:
-                              type: string
-                              enum:
-                                - PENDING
-                                - SENT
-                                - COMPLETED
-                                - FAILED
-                                - EXPIRED
-                            createdAt:
-                              type: string
-                              format: date-time
-                              pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d(?::[0-5]\d(?:\.\d+)?)?(?:Z))$
-                            sentAt:
-                              nullable: true
-                              type: string
-                              format: date-time
-                              pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d(?::[0-5]\d(?:\.\d+)?)?(?:Z))$
-                            processedAt:
-                              nullable: true
-                              type: string
-                              format: date-time
-                              pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d(?::[0-5]\d(?:\.\d+)?)?(?:Z))$
-                          required:
-                            - id
-                            - type
-                            - status
-                            - createdAt
-                            - sentAt
-                            - processedAt
-                          additionalProperties: false
-                      required:
-                        - controllerId
-                        - room
-                        - controller
-                        - lastCommand
-                      additionalProperties: false
-                required:
-                  - controllers
-                additionalProperties: false
-                example:
-                  controllers:
-                    - controllerId: controller-lab-101
-                      room:
-                        id: f05c9cd2-3f5f-40bc-9219-028f8f8aaf75
-                        name: Laboratório 101
-                        blockName: Prédio Principal
-                        doorState: CLOSED
-                        isLocked: true
-                        lastStatusUpdateAt: 2025-02-20T14:30:00.000Z
-                      controller:
-                        firmwareVersion: 1.2.3
-                        lastSeenAt: 2025-02-20T14:31:12.000Z
-                      lastCommand:
-                        id: 6d2dbfb1-9a90-4f49-9af2-6520f9a2c2f5
-                        type: LOCK
-                        status: SENT
-                        createdAt: 2025-02-20T14:29:45.000Z
-                        sentAt: 2025-02-20T14:29:50.000Z
-                        processedAt: null
+ 
   /doors/{controllerId}/commands:
     get:
       summary: Histórico de comandos

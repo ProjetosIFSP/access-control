@@ -14,5 +14,9 @@
     "build:app": "npm run build --workspace app",
     "build:server": "npm run build --workspace server",
     "build:iot": "npm run build --workspace iot-broker"
+  },
+  "devDependencies": {
+    "orval": "^8.4.2",
+    "yaml": "^2.8.2"
   }
 }
