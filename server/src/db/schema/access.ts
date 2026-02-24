@@ -2,7 +2,7 @@ import { boolean, pgTable, text, timestamp } from "drizzle-orm/pg-core";
 import { v7 as uuidv7 } from "uuid";
 import { user } from "./auth";
 import { accessStatusEnum, credentialTypeEnum } from "./enums";
-import { room } from "./room";
+import { room, roomType } from "./room";
 
 // Tabela de Credenciais de Acesso (Digitais, Tags NFC)
 export const accessCredential = pgTable("access_credential", {
@@ -39,6 +39,17 @@ export const userRoomPermission = pgTable("user_room_permission", {
 	createdAt: timestamp("created_at", { withTimezone: true })
 		.notNull()
 		.defaultNow(),
+});
+
+// Permissão por tipo de sala (usuário tem acesso a todas as salas de um tipo)
+export const userRoomTypePermission = pgTable("user_room_type_permission", {
+	id: text("id")
+ 		.primaryKey()
+ 		.$defaultFn(() => uuidv7()),
+ 	userId: text("user_id").notNull().references(() => user.id, { onDelete: "cascade" }),
+ 	roomTypeId: text("room_type_id").notNull().references(() => roomType.id, { onDelete: "cascade" }),
+ 	expiresAt: timestamp("expires_at", { withTimezone: true }),
+ 	createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
 // Tabela de Log de Acessos

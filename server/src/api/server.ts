@@ -10,6 +10,7 @@ import { authRoute } from "./routes/auth";
 import { doorRoute } from "./routes/door";
 import { iotRoute } from "./routes/iot";
 import { roomRoute } from "./routes/room";
+import { roomTypesRoute } from "./routes/room-types";
 import { userRoute } from "./routes/user";
 
 const app = fastify({
@@ -28,6 +29,7 @@ async function bootstrap() {
 	app.register(authRoute, { prefix: "/auth" });
 	app.register(userRoute, { prefix: "/users" });
 	app.register(roomRoute, { prefix: "/rooms" });
+	app.register(roomTypesRoute, { prefix: "/room-types" });
 	app.register(doorRoute, { prefix: "/doors" });
 	app.register(iotRoute, { prefix: "/iot" });
 	app.get("/", (_request, reply) => {

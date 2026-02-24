@@ -19,7 +19,7 @@ export const permissionsRoute: FastifyPluginAsyncZod = async (app) => {
         credentialValue: string;
         type: "BIOMETRY" | "RFID";
       };
-      const { verifyAccess } = await import('@/services/permissions/verify-access');
+      const { verifyAccess } = await import('../../services/permissions/verify-access.js');
       const res = await verifyAccess({ roomId, credentialValue, type });
       return reply.status(200).send(res);
     },

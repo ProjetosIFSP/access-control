@@ -24,6 +24,18 @@ components:
         createdAt:
           type: string
           format: date-time
+    RoomType:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        description:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
 paths:
   /auth/auth/{*}:
     get: &a1
@@ -363,6 +375,108 @@ paths:
                     type: boolean
                   reason:
                     type: string
+      /room-types/:
+        post:
+          summary: Criar tipo de sala
+          tags: [room-types]
+          requestBody:
+            required: true
+            content:
+              application/json:
+                schema:
+                  type: object
+                  properties:
+                    name:
+                      type: string
+                    description:
+                      type: string
+          responses:
+            '201':
+              description: Tipo criado
+              content:
+                application/json:
+                  schema:
+                    $ref: '#/components/schemas/RoomType'
+
+      /room-types/{roomTypeId}/users:
+        post:
+          summary: Atribuir permissão de tipo a usuário
+          tags: [room-types]
+          parameters:
+            - in: path
+              name: roomTypeId
+              required: true
+              schema:
+                type: string
+          requestBody:
+            required: true
+            content:
+              application/json:
+                schema:
+                  type: object
+                  properties:
+                    userId:
+                      type: string
+          responses:
+            '204':
+              description: Permissão atribuída
+        delete:
+          summary: Remover permissão de tipo de usuário
+          tags: [room-types]
+          parameters:
+            - in: path
+              name: roomTypeId
+              required: true
+              schema:
+                type: string
+            - in: path
+              name: userId
+              required: true
+              schema:
+                type: string
+          responses:
+            '204':
+              description: Permissão removida
+
+      /room-types/{roomTypeId}/profiles:
+        post:
+          summary: Atribuir permissão de tipo a perfil
+          tags: [room-types]
+          parameters:
+            - in: path
+              name: roomTypeId
+              required: true
+              schema:
+                type: string
+          requestBody:
+            required: true
+            content:
+              application/json:
+                schema:
+                  type: object
+                  properties:
+                    profileId:
+                      type: string
+          responses:
+            '204':
+              description: Permissão atribuída
+        delete:
+          summary: Remover permissão de tipo de perfil
+          tags: [room-types]
+          parameters:
+            - in: path
+              name: roomTypeId
+              required: true
+              schema:
+                type: string
+            - in: path
+              name: profileId
+              required: true
+              schema:
+                type: string
+          responses:
+            '204':
+              description: Permissão removida
  
   /doors/{controllerId}/commands:
     get:

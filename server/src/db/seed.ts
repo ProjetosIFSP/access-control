@@ -22,6 +22,7 @@ async function seed() {
     {
       name: "A101",
       blockId: blockReturning.id,
+      typeId: 'room-type-sala',
     }
   ]).returning()
 }

@@ -11,6 +11,14 @@ export const block = pgTable("block", {
 	name: text("name").notNull().unique(),
 });
 
+export const roomType = pgTable("room_type", {
+	id: text("id")
+		.primaryKey()
+		.$defaultFn(() => uuidv7()),
+	name: text("name").notNull().unique(),
+	description: text("description").notNull().default(""),
+});
+
 // Tabela de Salas/Portas
 export const room = pgTable("room", {
 	id: text("id")
@@ -25,6 +33,10 @@ export const room = pgTable("room", {
 	lastStatusUpdateAt: timestamp("last_status_update_at", {
 		withTimezone: true,
 	}),
+	// Tipo da sala (ex: Sala, Laboratório)
+	typeId: text("type_id")
+		.notNull()
+		.references(() => roomType.id, { onDelete: "restrict" }),
 	// Requisitos multimodais de acesso
 	requiresBiometry: boolean("requires_biometry").default(false),
 	requiresRFID: boolean("requires_rfid").default(false),

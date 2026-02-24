@@ -3,6 +3,7 @@ import type { SchemaWithExamples } from "@/api/openapi";
 import { z } from "@/lib/zod";
 import { doorStateEnum } from "@/db/schema/enums";
 import { getRooms } from "@/services/room/get-room";
+import { client } from "@/db";
 import { assignProfileToRoom } from "@/services/profile/assign-room";
 
 const doorStateValues = doorStateEnum.enumValues as [
@@ -102,15 +103,13 @@ export const roomRoute: FastifyPluginAsyncZod = async (app) => {
 		},
 		async (request, reply) => {
 			const roomId = request.params.id as string;
-			const { db } = await import('@/db');
-			const { profile, profileRoomPermission } = await import('@/db/schema/profile');
-			const rows = await db
-				.select({ id: profile.id, name: profile.name, description: profile.description })
-				.from(profile)
-				.innerJoin(profileRoomPermission, profileRoomPermission.profileId.eq(profile.id))
-				.where(profileRoomPermission.roomId.eq(roomId))
-				.all();
-			return reply.status(200).send({ result: rows });
+						const rows = await client<{ id: string; name: string; description: string }[]>`
+							SELECT p.id, p.name, p.description
+							FROM profile p
+							INNER JOIN profile_room_permission pr ON pr.profile_id = p.id
+							WHERE pr.room_id = ${roomId}
+						`;
+						return reply.status(200).send({ result: rows });
 		},
 	);
 
@@ -147,7 +146,7 @@ export const roomRoute: FastifyPluginAsyncZod = async (app) => {
 		async (request, reply) => {
 			const roomId = request.params.id as string;
 			const { userId, expiresAt } = request.body as { userId: string; expiresAt?: string };
-			const { addUserRoomPermission } = await import('@/services/permissions/add-user-room-permission');
+			const { addUserRoomPermission } = await import('../../services/permissions/add-user-room-permission.js');
 			const res = await addUserRoomPermission(userId, roomId, expiresAt ? new Date(expiresAt) : undefined);
 			return reply.status(201).send(res);
 		},
@@ -166,7 +165,7 @@ export const roomRoute: FastifyPluginAsyncZod = async (app) => {
 		async (request, reply) => {
 			const roomId = request.params.id as string;
 			const userId = request.params.userId as string;
-			const { removeUserRoomPermission } = await import('@/services/permissions/remove-user-room-permission');
+			const { removeUserRoomPermission } = await import('../../services/permissions/remove-user-room-permission.js');
 			await removeUserRoomPermission(userId, roomId);
 			return reply.status(204).send();
 		},

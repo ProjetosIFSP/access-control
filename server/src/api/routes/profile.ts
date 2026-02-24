@@ -25,7 +25,7 @@ export const profileRoute: FastifyPluginAsyncZod = async (app) => {
     async (_req, reply) => {
       const profiles = await getProfiles();
       const payload = {
-        result: profiles.result.map((p) => ({
+        result: profiles.result.map((p: any) => ({
           ...p,
           createdAt: p.createdAt.toISOString(),
         })),
@@ -65,7 +65,7 @@ export const profileRoute: FastifyPluginAsyncZod = async (app) => {
     async (request, reply) => {
       const profileId = request.params.id as string;
       const { userId } = request.body as { userId: string };
-      const { assignUserToProfile } = await import('@/services/profile/assign-user');
+      const { assignUserToProfile } = await import('../../services/profile/assign-user.js');
       await assignUserToProfile(userId, profileId);
       return reply.status(204).send();
     },
@@ -83,9 +83,8 @@ export const profileRoute: FastifyPluginAsyncZod = async (app) => {
     },
     async (request, reply) => {
       const { id: profileId, userId } = request.params as { id: string; userId: string };
-      const { db } = await import('@/db');
-      const { userProfile } = await import('@/db/schema/profile');
-      await db.delete(userProfile).where(userProfile.userId.eq(userId).and(userProfile.profileId.eq(profileId))).run();
+      const { removeUserFromProfile } = await import('../../services/profile/remove-user.js');
+      await removeUserFromProfile(userId, profileId);
       return reply.status(204).send();
     },
   );

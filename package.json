@@ -16,6 +16,7 @@
     "build:iot": "npm run build --workspace iot-broker"
   },
   "devDependencies": {
+    "@playwright/test": "^1.40.0",
     "orval": "^8.4.2",
     "yaml": "^2.8.2"
   }
