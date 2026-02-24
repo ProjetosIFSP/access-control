@@ -89,4 +89,86 @@ export const roomRoute: FastifyPluginAsyncZod = async (app) => {
 			return reply.status(200).send(payload);
 		},
 	);
+
+	app.get(
+		"/:id/profiles",
+		{
+			schema: {
+				tags: ["profiles"],
+				summary: "Listar perfis associados a uma sala",
+				params: z.object({ id: z.string().uuid() }),
+				response: { 200: z.object({ result: z.array(z.object({ id: z.string().uuid(), name: z.string(), description: z.string() })) }) },
+			},
+		},
+		async (request, reply) => {
+			const roomId = request.params.id as string;
+			const { db } = await import('@/db');
+			const { profile, profileRoomPermission } = await import('@/db/schema/profile');
+			const rows = await db
+				.select({ id: profile.id, name: profile.name, description: profile.description })
+				.from(profile)
+				.innerJoin(profileRoomPermission, profileRoomPermission.profileId.eq(profile.id))
+				.where(profileRoomPermission.roomId.eq(roomId))
+				.all();
+			return reply.status(200).send({ result: rows });
+		},
+	);
+
+	app.post(
+		"/:id/profiles",
+		{
+			schema: {
+				tags: ["profiles"],
+				summary: "Atribuir perfil à sala",
+				params: z.object({ id: z.string().uuid() }),
+				body: z.object({ profileId: z.string().uuid() }),
+				response: { 204: z.void() },
+			},
+		},
+		async (request, reply) => {
+			const roomId = request.params.id as string;
+			const { profileId } = request.body as { profileId: string };
+			await assignProfileToRoom(profileId, roomId);
+			return reply.status(204).send();
+		},
+	);
+
+	app.post(
+		"/:id/users",
+		{
+			schema: {
+				tags: ["permissions"],
+				summary: "Atribuir permissão direta de usuário à sala",
+				params: z.object({ id: z.string().uuid() }),
+				body: z.object({ userId: z.string().uuid(), expiresAt: z.string().datetime().optional() }),
+				response: { 201: z.object({ id: z.string().uuid() }) },
+			},
+		},
+		async (request, reply) => {
+			const roomId = request.params.id as string;
+			const { userId, expiresAt } = request.body as { userId: string; expiresAt?: string };
+			const { addUserRoomPermission } = await import('@/services/permissions/add-user-room-permission');
+			const res = await addUserRoomPermission(userId, roomId, expiresAt ? new Date(expiresAt) : undefined);
+			return reply.status(201).send(res);
+		},
+	);
+
+	app.delete(
+		"/:id/users/:userId",
+		{
+			schema: {
+				tags: ["permissions"],
+				summary: "Remover permissão direta de usuário da sala",
+				params: z.object({ id: z.string().uuid(), userId: z.string().uuid() }),
+				response: { 204: z.void() },
+			},
+		},
+		async (request, reply) => {
+			const roomId = request.params.id as string;
+			const userId = request.params.userId as string;
+			const { removeUserRoomPermission } = await import('@/services/permissions/remove-user-room-permission');
+			await removeUserRoomPermission(userId, roomId);
+			return reply.status(204).send();
+		},
+	);
 };

@@ -14,9 +14,14 @@ export const permissionsRoute: FastifyPluginAsyncZod = async (app) => {
       },
     },
     async (request, reply) => {
-      // Placeholder: delegar para serviço de verificação
-      // Exemplo de resposta
-      return reply.status(200).send({ granted: false, reason: "NOT_IMPLEMENTED" });
+      const { roomId, credentialValue, type } = request.body as {
+        roomId: string;
+        credentialValue: string;
+        type: "BIOMETRY" | "RFID";
+      };
+      const { verifyAccess } = await import('@/services/permissions/verify-access');
+      const res = await verifyAccess({ roomId, credentialValue, type });
+      return reply.status(200).send(res);
     },
   );
 };

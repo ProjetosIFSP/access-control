@@ -1,4 +1,7 @@
+import { db } from "@/db";
+import { userProfile } from "@/db/schema/profile";
+
 export const assignUserToProfile = async (userId: string, profileId: string) => {
-  // persistir associação user_profile no DB
+  await db.insert(userProfile).values({ userId, profileId }).onConflictDoNothing().run();
   return { ok: true } as const;
 };
