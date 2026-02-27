@@ -5,6 +5,8 @@ import tailwindcss from '@tailwindcss/vite'
 import { tanstackRouter } from '@tanstack/router-plugin/vite'
 import { resolve } from 'node:path'
 
+const rootDir = resolve(__dirname, '..')
+
 // https://vitejs.dev/config/
 export default defineConfig({
   plugins: [
@@ -20,5 +22,16 @@ export default defineConfig({
     alias: {
       '@': resolve(__dirname, './src'),
     },
+    preserveSymlinks: true,
+  },
+  server: {
+    fs: {
+      allow: [rootDir],
+    },
+  },
+  optimizeDeps: {
+    // Tell Vite to also search root node_modules (npm workspaces hoisting)
+    entries: ['./src/**/*.{ts,tsx}'],
   },
 })
+

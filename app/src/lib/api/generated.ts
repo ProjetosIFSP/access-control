@@ -739,17 +739,17 @@ export type getAuthAuthResponseSuccess = (getAuthAuthResponse200) & {
 
 export type getAuthAuthResponse = (getAuthAuthResponseSuccess)
 
-export const getGetAuthAuthUrl = (: string,) => {
+export const getGetAuthAuthUrl = (path: string,) => {
 
 
   
 
-  return `/auth/auth/${}`
+  return `/auth/auth/${path}`
 }
 
-export const getAuthAuth = async (: string, options?: RequestInit): Promise<getAuthAuthResponse> => {
+export const getAuthAuth = async (path: string, options?: RequestInit): Promise<getAuthAuthResponse> => {
   
-  const res = await fetch(getGetAuthAuthUrl(),
+  const res = await fetch(getGetAuthAuthUrl(path),
   {      
     ...options,
     method: 'GET'
@@ -782,17 +782,17 @@ export type postAuthAuthResponseSuccess = (postAuthAuthResponse200) & {
 
 export type postAuthAuthResponse = (postAuthAuthResponseSuccess)
 
-export const getPostAuthAuthUrl = (: string,) => {
+export const getPostAuthAuthUrl = (path: string,) => {
 
 
   
 
-  return `/auth/auth/${}`
+  return `/auth/auth/${path}`
 }
 
-export const postAuthAuth = async (: string, options?: RequestInit): Promise<postAuthAuthResponse> => {
+export const postAuthAuth = async (path: string, options?: RequestInit): Promise<postAuthAuthResponse> => {
   
-  const res = await fetch(getPostAuthAuthUrl(),
+  const res = await fetch(getPostAuthAuthUrl(path),
   {      
     ...options,
     method: 'POST'
