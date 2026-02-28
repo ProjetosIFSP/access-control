@@ -28,7 +28,7 @@ export const room = pgTable("room", {
 	blockId: text("block_id")
 		.notNull()
 		.references(() => block.id, { onDelete: "cascade" }),
-	isLocked: boolean("is_locked").default(true),
+	isLocked: boolean("is_locked").default(false),
 	doorState: doorStateEnum("door_state").default("UNKNOWN").notNull(),
 	lastStatusUpdateAt: timestamp("last_status_update_at", {
 		withTimezone: true,
