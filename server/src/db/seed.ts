@@ -1,19 +1,20 @@
 import { client, db } from "."
 import { user } from "./schema/auth"
 import { block, room, roomType } from "./schema/room"
+import dayjs from "dayjs"
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
-const NOW = new Date("2026-02-28T12:00:00Z")
+const NOW = dayjs	()
 
 function minutesAgo(n: number): Date {
-  return new Date(NOW.getTime() - n * 60 * 1000)
+  return new Date(NOW.toDate().getTime() - n * 60 * 1000)
 }
 function hoursAgo(n: number): Date {
-  return new Date(NOW.getTime() - n * 60 * 60 * 1000)
+  return new Date(NOW.toDate().getTime() - n * 60 * 60 * 1000)
 }
 function daysAgo(n: number): Date {
-  return new Date(NOW.getTime() - n * 24 * 60 * 60 * 1000)
+  return new Date(NOW.toDate().getTime() - n * 24 * 60 * 60 * 1000)
 }
 
 // ── Pools ─────────────────────────────────────────────────────────────────────

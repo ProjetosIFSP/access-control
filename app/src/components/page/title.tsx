@@ -5,7 +5,7 @@ interface PageTitleProps {
 
 export function PageTitle({ title, subtitle }: PageTitleProps) {
   return (
-    <div className="flex flex-col">
+    <div className="flex flex-col px-4 sm:px-8 md:px-16 lg:px-32 transition-all">
       <h1 className="text-2xl font-bold tracking-tight text-zinc-900 dark:text-zinc-100">
         {title}
       </h1>

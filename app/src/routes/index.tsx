@@ -95,14 +95,14 @@ function RoomsPage() {
 
   return (
     <>
-      <main className="flex w-full flex-col gap-8 px-4 sm:px-8 md:px-16 lg:px-32 transition-all pt-8">
+      <main className="flex w-full flex-col gap-8 pt-8">
         <PageTitle
           title="Monitoramento de Salas"
           subtitle="Visualize em tempo real o estado das salas e blocos cadastrados."
         />
 
         {/* Search toolbar */}
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-3 px-4 sm:px-8 md:px-16 lg:px-32 transition-all">
           <div className="relative max-w-sm flex-1">
             <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-zinc-400" />
             <Input
@@ -133,7 +133,7 @@ function RoomsPage() {
             </p>
           </div>
         ) : (
-          <div className="flex flex-col gap-4">
+          <div className="flex flex-col gap-4 pb-8">
             {data?.result.map(({ block, rooms }) =>
               rooms.length === 0 ? null : (
                 <BlockSection

@@ -57,7 +57,9 @@ export function RoomCard({ room, authenticated }: RoomCardProps) {
     room.state === "fechada" ? room.currentUser : room.lastUser;
 
   const formattedTime = room.lastStatusUpdateAt
-    ? dayjs(room.lastStatusUpdateAt).fromNow()
+    ? dayjs(room.lastStatusUpdateAt).isBefore(dayjs().startOf("day"))
+      ? dayjs(room.lastStatusUpdateAt).fromNow()
+      : dayjs(room.lastStatusUpdateAt).format("HH:mm")
     : null;
 
   const fullDateTime = room.lastStatusUpdateAt
@@ -69,6 +71,8 @@ export function RoomCard({ room, authenticated }: RoomCardProps) {
       className={cn(
         "flex w-42 shrink-0 items-stretch gap-2 rounded-lg bg-white dark:bg-zinc-800 py-3 px-2 shadow-sm backdrop-blur-sm",
         "transition-shadow hover:shadow-md",
+        "first:ml-4 first:sm:ml-8 first:md:ml-16 first:lg:ml-32 first:transition-all",
+        "last:mr-4 last:sm:mr-8 last:md:mr-16 last:lg:mr-32 last:transition-all",
       )}
     >
       {/* State indicator — vertical colored rectangle */}
