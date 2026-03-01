@@ -5,6 +5,17 @@ import { Search } from "lucide-react";
 
 import { Footer } from "@/components/footer";
 import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  ToggleGroup,
+  ToggleGroupItem,
+} from "@/components/animate-ui/components/radix/toggle-group";
 import { useDebounce } from "@/hooks/use-debounce";
 import { PageTitle } from "@/components/page/title";
 import { BlockSection } from "@/components/rooms/block-section";
@@ -35,40 +46,75 @@ type BlockWithRooms = {
 
 type RoomsSummaryResponse = {
   authenticated: boolean;
+  isAdmin: boolean;
   result: BlockWithRooms[];
 };
 
+type RoomType = { id: string; name: string; abbreviation: string };
+type RoomTypesResponse = { result: RoomType[] };
+
+// ── Query Params ──────────────────────────────────────────────────────────────
+
+const VALID_STATES = ["aberta", "fechada", "alerta"] as const;
+
 // ── API ───────────────────────────────────────────────────────────────────────
 
-const roomsSummaryQueryOptions = (q?: string) =>
+const roomsSummaryQueryOptions = (filters: {
+  q?: string;
+  type?: string;
+  state?: RoomState;
+}) =>
   queryOptions({
-    queryKey: ["rooms-summary", q ?? ""],
+    queryKey: ["rooms-summary", filters],
     queryFn: async () => {
       const url = new URL(`${API_BASE_URL}/rooms/summary`);
-      if (q?.trim()) url.searchParams.set("q", q.trim());
+      if (filters.q?.trim()) url.searchParams.set("q", filters.q.trim());
+      if (filters.type) url.searchParams.set("type", filters.type);
+      if (filters.state) url.searchParams.set("state", filters.state);
       const res = await fetch(url.toString(), { credentials: "include" });
       if (!res.ok) throw new Error("Falha ao carregar o resumo das salas");
       return res.json() as Promise<RoomsSummaryResponse>;
     },
-    staleTime: 1000 * 30,
+    staleTime: 1000 * 60 * 5,
   });
+
+const roomTypesQueryOptions = queryOptions({
+  queryKey: ["room-types"],
+  queryFn: async () => {
+    const res = await fetch(`${API_BASE_URL}/room-types`, {
+      credentials: "include",
+    });
+    if (!res.ok) throw new Error("Falha ao carregar os tipos de sala");
+    return res.json() as Promise<RoomTypesResponse>;
+  },
+  staleTime: 1000 * 60 * 5,
+});
 
 // ── Route ─────────────────────────────────────────────────────────────────────
 
 export const Route = createFileRoute("/")({
   validateSearch: (search: Record<string, unknown>) => ({
     q: typeof search.q === "string" ? search.q : undefined,
+    type: typeof search.type === "string" ? search.type : undefined,
+    state: VALID_STATES.includes(search.state as RoomState)
+      ? (search.state as RoomState)
+      : undefined,
   }),
-  loaderDeps: ({ search: { q } }) => ({ q }),
-  loader: ({ context, deps: { q } }) =>
-    context.queryClient.ensureQueryData(roomsSummaryQueryOptions(q)),
+  loaderDeps: ({ search: { q, type, state } }) => ({ q, type, state }),
+  loader: ({ context, deps: { q, type, state } }) =>
+    Promise.all([
+      context.queryClient.ensureQueryData(
+        roomsSummaryQueryOptions({ q, type, state }),
+      ),
+      context.queryClient.ensureQueryData(roomTypesQueryOptions),
+    ]),
   component: RoomsPage,
 });
 
 // ── Component ─────────────────────────────────────────────────────────────────
 
 function RoomsPage() {
-  const { q } = Route.useSearch();
+  const { q, type, state } = Route.useSearch();
   const navigate = Route.useNavigate();
 
   const [inputValue, setInputValue] = useState(q ?? "");
@@ -81,37 +127,98 @@ function RoomsPage() {
       return;
     }
     navigate({
-      search: { q: debouncedQ.trim() || undefined },
+      search: (prev) => ({ ...prev, q: debouncedQ.trim() || undefined }),
       replace: true,
     });
   }, [debouncedQ, navigate]);
 
   const { data, isLoading, isError, error } = useQuery(
-    roomsSummaryQueryOptions(q),
+    roomsSummaryQueryOptions({ q, type, state }),
   );
+  const { data: roomTypesData } = useQuery(roomTypesQueryOptions);
+
+  const isAdmin = data?.isAdmin ?? false;
+  const authenticated = data?.authenticated ?? false;
+
+  const searchPlaceholder =
+    authenticated && isAdmin
+      ? "Buscar por sala, bloco ou usuário…"
+      : "Buscar por sala ou bloco…";
 
   const totalRooms =
     data?.result.reduce((acc, b) => acc + b.rooms.length, 0) ?? 0;
 
+  const hasFilters = !!q?.trim() || !!type || !!state;
+
+  function setType(value: string) {
+    navigate({
+      search: (prev) => ({
+        ...prev,
+        type: value === "all" || !value ? undefined : value,
+      }),
+      replace: true,
+    });
+  }
+
+  function setState(value: string) {
+    navigate({
+      search: (prev) => ({
+        ...prev,
+        state: value === "all" || !value ? undefined : (value as RoomState),
+      }),
+      replace: true,
+    });
+  }
+
   return (
     <>
-      <main className="flex w-full flex-col gap-8 pt-8">
+      <main className="flex w-full flex-col gap-6 pt-8">
         <PageTitle
           title="Monitoramento de Salas"
           subtitle="Visualize em tempo real o estado das salas e blocos cadastrados."
         />
 
-        {/* Search toolbar */}
-        <div className="flex items-center gap-3 px-4 sm:px-8 md:px-16 lg:px-32 transition-all">
-          <div className="relative max-w-sm flex-1">
+        {/* Filters toolbar */}
+        <div className="flex flex-wrap items-center gap-3 px-4 sm:px-8 md:px-16 lg:px-32 transition-all">
+          {/* Search */}
+          <div className="relative w-full max-w-sm flex-1 min-w-40">
             <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-zinc-400" />
             <Input
-              placeholder="Buscar por sala ou bloco…"
+              placeholder={searchPlaceholder}
               value={inputValue}
               onChange={(e) => setInputValue(e.target.value)}
-              className="pl-9"
+              className="pl-9 bg-white"
             />
           </div>
+
+          {/* Room type select */}
+          <Select value={type ?? "all"} onValueChange={setType}>
+            <SelectTrigger size="default" className="w-auto min-w-36 bg-white">
+              <SelectValue placeholder="Tipo de sala" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Todos os tipos</SelectItem>
+              {roomTypesData?.result.map((rt) => (
+                <SelectItem key={rt.id} value={rt.abbreviation}>
+                  {rt.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+
+          {/* Door state toggle */}
+          <ToggleGroup
+            type="single"
+            value={state ?? "all"}
+            onValueChange={(v) => setState(v || "all")}
+            variant="outline"
+            className="bg-white dark:bg-zinc-950"
+          >
+            <ToggleGroupItem value="all">Todas</ToggleGroupItem>
+            <ToggleGroupItem value="aberta">Livres</ToggleGroupItem>
+            <ToggleGroupItem value="fechada">Em uso</ToggleGroupItem>
+            <ToggleGroupItem value="alerta">Alerta</ToggleGroupItem>
+          </ToggleGroup>
         </div>
 
         {/* Content */}
@@ -127,8 +234,8 @@ function RoomsPage() {
           <div className="flex flex-col items-center gap-2 py-16 text-center">
             <Search className="size-8 text-zinc-200" />
             <p className="text-sm text-zinc-500">
-              {q?.trim()
-                ? `Nenhuma sala encontrada para "${q}".`
+              {hasFilters
+                ? "Nenhuma sala encontrada com os filtros aplicados."
                 : "Nenhuma sala cadastrada até o momento."}
             </p>
           </div>
@@ -140,7 +247,7 @@ function RoomsPage() {
                   key={block.id}
                   blockName={block.name}
                   rooms={rooms}
-                  authenticated={data.authenticated}
+                  authenticated={authenticated}
                 />
               ),
             )}

@@ -1,11 +1,11 @@
-import { defineConfig } from 'vitest/config'
-import viteReact from '@vitejs/plugin-react'
-import tailwindcss from '@tailwindcss/vite'
+import { defineConfig } from "vitest/config";
+import viteReact from "@vitejs/plugin-react";
+import tailwindcss from "@tailwindcss/vite";
 
-import { tanstackRouter } from '@tanstack/router-plugin/vite'
-import { resolve } from 'node:path'
+import { tanstackRouter } from "@tanstack/router-plugin/vite";
+import { resolve } from "node:path";
 
-const rootDir = resolve(__dirname, '..')
+const rootDir = resolve(__dirname, "..");
 
 // https://vitejs.dev/config/
 export default defineConfig({
@@ -16,11 +16,11 @@ export default defineConfig({
   ],
   test: {
     globals: true,
-    environment: 'jsdom',
+    environment: "jsdom",
   },
   resolve: {
     alias: {
-      '@': resolve(__dirname, './src'),
+      "@": resolve(__dirname, "./src"),
     },
     preserveSymlinks: true,
   },
@@ -31,7 +31,8 @@ export default defineConfig({
   },
   optimizeDeps: {
     // Tell Vite to also search root node_modules (npm workspaces hoisting)
-    entries: ['./src/**/*.{ts,tsx}'],
+    entries: ["./src/**/*.{ts,tsx}"],
+    // Force pre-bundle packages that are discovered lazily (avoids 504 Outdated Optimize Dep)
+    include: ["motion/react", "radix-ui"],
   },
-})
-
+});

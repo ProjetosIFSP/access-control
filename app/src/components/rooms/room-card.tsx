@@ -43,7 +43,7 @@ const STATE_CONFIG: Record<
     label: "Alerta",
   },
   fechada: {
-    indicatorClass: "bg-zinc-700 dark:bg-zinc-300",
+    indicatorClass: "bg-zinc-400 dark:bg-zinc-500",
     label: "Em uso",
   },
 };
@@ -69,7 +69,7 @@ export function RoomCard({ room, authenticated }: RoomCardProps) {
   return (
     <div
       className={cn(
-        "flex w-42 shrink-0 items-stretch gap-2 rounded-lg bg-white dark:bg-zinc-800 py-3 px-2 shadow-sm backdrop-blur-sm",
+        "flex w-42 shrink-0 items-stretch gap-2 rounded-lg bg-white dark:bg-zinc-800 py-3 px-2 shadow-none backdrop-blur-sm",
         "transition-shadow hover:shadow-md",
         "first:ml-4 first:sm:ml-8 first:md:ml-16 first:lg:ml-32 first:transition-all",
         "last:mr-4 last:sm:mr-8 last:md:mr-16 last:lg:mr-32 last:transition-all",
@@ -85,14 +85,14 @@ export function RoomCard({ room, authenticated }: RoomCardProps) {
         {/* Room name + type badge */}
         <div className="flex w-full items-center justify-between">
           <div className="flex flex-wrap items-center gap-1.5">
-            <span className="truncate text-sm font-semibold text-zinc-900 leading-tight">
+            <span className="truncate text-sm font-semibold text-zinc-900 dark:text-zinc-200 leading-tight">
               {room.name}
             </span>
           </div>
 
           <Badge
             variant="outline"
-            className="w-fit text-[10px] uppercase px-1.5 py-0 bg-zinc-400 text-zinc-100 font-bold"
+            className="w-fit text-[10px] uppercase px-1.5 py-0 bg-zinc-200 text-zinc-600 dark:bg-zinc-600 dark:text-zinc-300 font-bold"
           >
             {room.typeAbbreviation}
           </Badge>

@@ -30,7 +30,6 @@ export function BlockSection({
     lastX.current = e.pageX;
     lastTime.current = Date.now();
     velocity.current = 0;
-    if (scrollRef.current) scrollRef.current.style.cursor = "grabbing";
   }
 
   function handleMouseMove(e: React.MouseEvent<HTMLDivElement>) {
@@ -54,7 +53,6 @@ export function BlockSection({
   function stopDragging() {
     if (!isDragging.current) return;
     isDragging.current = false;
-    if (scrollRef.current) scrollRef.current.style.cursor = "grab";
 
     const el = scrollRef.current;
     if (!el || Math.abs(velocity.current) < 0.05) return;
@@ -83,7 +81,7 @@ export function BlockSection({
       <section
         ref={scrollRef}
         aria-label={`Salas do bloco ${blockName}`}
-        className="flex gap-3 overflow-x-auto pb-2 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none] cursor-grab select-none"
+        className="flex gap-3 overflow-x-auto pb-2 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none] select-none"
         onMouseDown={handleMouseDown}
         onMouseMove={handleMouseMove}
         onMouseUp={stopDragging}
