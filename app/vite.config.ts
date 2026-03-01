@@ -33,6 +33,13 @@ export default defineConfig({
     // Tell Vite to also search root node_modules (npm workspaces hoisting)
     entries: ["./src/**/*.{ts,tsx}"],
     // Force pre-bundle packages that are discovered lazily (avoids 504 Outdated Optimize Dep)
-    include: ["motion/react", "radix-ui"],
+    include: [
+      "motion/react",
+      "radix-ui",
+      "better-auth/react",
+      "sonner",
+      "input-otp",
+      "nanostores",
+    ],
   },
 });

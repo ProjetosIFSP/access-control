@@ -9,7 +9,7 @@ type DOMMotionProps<T extends HTMLElement = HTMLElement> = Omit<
   "ref"
 > & { ref?: React.Ref<T> };
 
-type WithAsChild<Base extends object> =
+export type WithAsChild<Base extends object> =
   | (Base & { asChild: true; children: React.ReactElement })
   | (Base & { asChild?: false | undefined });
 
@@ -56,7 +56,7 @@ function mergeProps<T extends HTMLElement>(
   return merged;
 }
 
-function Slot<T extends HTMLElement = HTMLElement>({
+export function Slot<T extends HTMLElement = HTMLElement>({
   children,
   ref,
   ...props
@@ -85,10 +85,4 @@ function Slot<T extends HTMLElement = HTMLElement>({
   );
 }
 
-export {
-  Slot,
-  type SlotProps,
-  type WithAsChild,
-  type DOMMotionProps,
-  type AnyProps,
-};
+export { type SlotProps, type WithAsChild, type DOMMotionProps, type AnyProps };
