@@ -15,7 +15,8 @@ export const roomType = pgTable("room_type", {
 	id: text("id")
 		.primaryKey()
 		.$defaultFn(() => uuidv7()),
-	name: text("name").notNull().unique(),
+  name: text("name").notNull().unique(),
+	abbreviation: text("abbreviation").notNull(),
 	description: text("description").notNull().default(""),
 });
 

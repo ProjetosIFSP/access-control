@@ -2,76 +2,167 @@ import { client, db } from "."
 import { user } from "./schema/auth"
 import { block, room, roomType } from "./schema/room"
 
+// ── Helpers ───────────────────────────────────────────────────────────────────
+
+const NOW = new Date("2026-02-28T12:00:00Z")
+
+function minutesAgo(n: number): Date {
+  return new Date(NOW.getTime() - n * 60 * 1000)
+}
+function hoursAgo(n: number): Date {
+  return new Date(NOW.getTime() - n * 60 * 60 * 1000)
+}
+function daysAgo(n: number): Date {
+  return new Date(NOW.getTime() - n * 24 * 60 * 60 * 1000)
+}
+
+// ── Pools ─────────────────────────────────────────────────────────────────────
+
+type DoorState = "OPEN" | "CLOSED" | "UNKNOWN"
+
+const statePool: { doorState: DoorState; isLocked: boolean }[] = [
+  { doorState: "OPEN",    isLocked: false }, // aberta
+  { doorState: "CLOSED",  isLocked: false }, // fechada
+  { doorState: "CLOSED",  isLocked: false }, // fechada
+  { doorState: "OPEN",    isLocked: false }, // aberta
+  { doorState: "CLOSED",  isLocked: true  }, // fechada
+  { doorState: "UNKNOWN", isLocked: false }, // alerta
+  { doorState: "OPEN",    isLocked: false }, // aberta
+  { doorState: "CLOSED",  isLocked: false }, // fechada
+  { doorState: "OPEN",    isLocked: true  }, // alerta
+  { doorState: "CLOSED",  isLocked: false }, // fechada
+  { doorState: "OPEN",    isLocked: false }, // aberta
+  { doorState: "UNKNOWN", isLocked: false }, // alerta
+  { doorState: "CLOSED",  isLocked: false }, // fechada
+  { doorState: "OPEN",    isLocked: false }, // aberta
+  { doorState: "CLOSED",  isLocked: true  }, // fechada
+]
+
+// null = sem registro de uso
+const timestampPool: (Date | null)[] = [
+  minutesAgo(4),
+  minutesAgo(17),
+  minutesAgo(45),
+  hoursAgo(1),
+  hoursAgo(2),
+  hoursAgo(3),
+  hoursAgo(5),
+  hoursAgo(8),
+  hoursAgo(12),
+  hoursAgo(24),
+  daysAgo(2),
+  daysAgo(3),
+  daysAgo(5),
+  daysAgo(7),
+  daysAgo(14),
+  daysAgo(30),
+  daysAgo(60),
+  null,
+  null,
+  null,
+]
+
+// ── Seed ──────────────────────────────────────────────────────────────────────
+
 async function seed() {
   await db.delete(room)
   await db.delete(roomType)
   await db.delete(block)
   await db.delete(user)
 
-  const [userReturning] = await db.insert(user).values([
+  // ── Users ─────────────────────────────────────────────────────────────────
+
+  await db.insert(user).values([
     {
       name: "Admin User",
-      email: "[EMAIL_ADDRESS]",
+      email: "admin@ifsp.edu.br",
       emailVerified: true,
       isAdmin: true,
-    }
-  ]).returning()
+    },
+  ])
 
-  const blockReturning = await db.insert(block).values([
-    {
-      name: "Bloco A",
-    },
-    {
-      name: "Bloco B",
-    },
-    {
-      name: "Bloco C",
-    },
-    {
-      name: "Bloco D",
-    }
-  ]).returning()
+  // ── Blocks ────────────────────────────────────────────────────────────────
 
-  const roomTypeReturning = await db.insert(roomType).values([
-    {
-      name: "Sala de Aula",
-    },
-    {
-      name: "Laboratório de Informática",
-    },
-    {
-      name: "Laboratório de Eletrônica",
-    },
-    {
-      name: "Almoxarifado",
-    },
-    {
-      name: "Sala de Reunião",
-    }
-  ]).returning()
+  const blockReturning = await db
+    .insert(block)
+    .values([
+      { name: "Bloco A" },
+      { name: "Bloco B" },
+      { name: "Bloco C" },
+      { name: "Bloco D" },
+    ])
+    .returning()
 
-  const roomReturning = await db.insert(room).values([
-    {
-      name: "A101",
-      blockId: blockReturning[0].id,
-      typeId: roomTypeReturning[0].id,
-    },
-    {
-      name: "A106",
-      blockId: blockReturning[0].id,
-      typeId: roomTypeReturning[1].id,
-    },
-    {
-      name: "A107",
-      blockId: blockReturning[0].id,
-      typeId: roomTypeReturning[2].id,
-    },
-    {
-      name: "D104",
-      blockId: blockReturning[3].id,
-      typeId: roomTypeReturning[1].id,
+  // ── Room Types ────────────────────────────────────────────────────────────
+
+  const roomTypeReturning = await db
+    .insert(roomType)
+    .values([
+      { name: "Sala de Aula",               abbreviation: "SALA" },
+      { name: "Laboratório de Informática", abbreviation: "LINF" },
+      { name: "Laboratório de Eletrônica",  abbreviation: "LELE" },
+      { name: "Laboratório de Química",     abbreviation: "LQUI" },
+      { name: "Sala de Reunião",            abbreviation: "REUN" },
+      { name: "Coordenação",               abbreviation: "COOR" },
+      { name: "Sala de Professores",        abbreviation: "PROF" },
+      { name: "Biblioteca",                 abbreviation: "BIBL" },
+      { name: "Almoxarifado",              abbreviation: "ALMX" },
+    ])
+    .returning()
+
+  // ── Rooms ─────────────────────────────────────────────────────────────────
+  // Pattern: {BlockLetter}{Floor}{RoomNumber}
+  // 4 blocks × 2 floors × 11 rooms = 88 rooms total (≥ 20 per block)
+
+  const blockLetters = ["A", "B", "C", "D"]
+  const floors = [1, 2]
+  // 11 rooms per floor → 22 per block
+  const roomsPerFloor = Array.from({ length: 11 }, (_, i) =>
+    String(i + 1).padStart(2, "0"),
+  )
+
+  type RoomInsert = {
+    name: string
+    blockId: string
+    typeId: string
+    doorState: DoorState
+    isLocked: boolean
+    lastStatusUpdateAt: Date | null
+  }
+
+  const rooms: RoomInsert[] = []
+  let idx = 0
+
+  for (let blockIdx = 0; blockIdx < blockLetters.length; blockIdx++) {
+    const letter = blockLetters[blockIdx]
+    const blockId = blockReturning[blockIdx].id
+
+    for (const floor of floors) {
+      for (const num of roomsPerFloor) {
+        const name = `${letter}${floor}${num}`
+        const state = statePool[idx % statePool.length]
+        const typeId =
+          roomTypeReturning[idx % roomTypeReturning.length].id
+        const lastStatusUpdateAt =
+          timestampPool[idx % timestampPool.length]
+
+        rooms.push({
+          name,
+          blockId,
+          typeId,
+          doorState: state.doorState,
+          isLocked: state.isLocked,
+          lastStatusUpdateAt,
+        })
+
+        idx++
+      }
     }
-  ]).returning()
+  }
+
+  await db.insert(room).values(rooms)
+
+  console.log(`✅ Seed concluído: ${rooms.length} salas criadas em ${blockReturning.length} blocos.`)
 }
 
 seed().finally(() => {

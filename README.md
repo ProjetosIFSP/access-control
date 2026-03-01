@@ -39,6 +39,12 @@ Este repositório usa **npm workspaces** para gerenciar as dependências dos pac
 Aqui você pode encontrar informações sobre o protótipo e o guia de estilos.
 [↗️ Abrir protótipo no Figma](https://www.figma.com/design/8GcnhoimUUw2dgOL8HUtlE/Controle-de-Acesso?node-id=4003-2094&t=ODmc5wd0JM3k3qeM-1)
 
+## 📡 API
+
+A documentação interativa (Swagger UI) fica disponível em `http://localhost:3333/docs` durante o desenvolvimento.
+
+➡️ Leia o [Guia de Endpoints da API](/docs/API.md)
+
 ## ☁️ Deploy
 As instruções detalhadas para realizar o deploy da aplicação em um ambiente de produção estão localizadas na documentação.
 

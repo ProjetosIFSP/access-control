@@ -4,8 +4,9 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { Avatar, AvatarFallback, AvatarImage } from "../ui/avatar";
 import { Button } from "../ui/button";
 import { Separator } from "../ui/separator";
-
-const WRAPPER_HEIGHT = 48;
+import { cn } from "@/lib/utils";
+import { AnimatedThemeToggler } from "../ui/animated-theme-toggler";
+import useIsMobile from "@/hooks/useIsMobile.hook";
 
 /**
  * Expandable user menu with GSAP-powered width + height animation.
@@ -23,7 +24,8 @@ export function UserMenu() {
   const isAnimatingRef = useRef(false);
 
   // Hardcoded — will be replaced by real auth state later
-  const isLoggedIn = false;
+  const isLoggedIn = true;
+  const isMobile = useIsMobile();
 
   const toggle = useCallback(() => {
     if (isAnimatingRef.current) return;
@@ -49,7 +51,9 @@ export function UserMenu() {
       gsap.set(content, { display: "block", opacity: 0 });
       gsap.set(container, { width: "auto", height: "auto" });
 
-      const expandedWidth = container.scrollWidth;
+      const expandedWidth = isMobile
+        ? (container.parentElement?.offsetWidth ?? container.scrollWidth)
+        : container.scrollWidth;
       const expandedHeight = container.scrollHeight;
 
       gsap.set(container, { width: collapsedWidth, height: collapsedHeight });
@@ -134,7 +138,7 @@ export function UserMenu() {
         tl.to(chevron, { rotation: 0, duration: 0.3, ease: "power2.inOut" }, 0);
       }
     }
-  }, [isOpen]);
+  }, [isOpen, isMobile]);
 
   // ── Click outside to close ───────────────────────────────────
   useEffect(() => {
@@ -154,25 +158,39 @@ export function UserMenu() {
   // ── Render ────────────────────────────────────────────────────
   return (
     <div
-      className="flex justify-end overflow-visible"
-      style={{ height: WRAPPER_HEIGHT }}
+      className={cn(
+        "absolute right-0 flex justify-end overflow-visible h-10 md:h-12 z-10",
+        isOpen && isMobile && "left-0",
+      )}
     >
       <div
         ref={containerRef}
-        className="bg-white/70 flex flex-col backdrop-blur-sm hover:bg-white rounded-[1.5rem] overflow-hidden ml-auto"
+        className={cn(
+          "bg-white/70 flex flex-col backdrop-blur-sm hover:bg-white rounded-[1.5rem] overflow-hidden ml-auto transition-all",
+          "dark:bg-zinc-800/70 dark:hover:bg-zinc-800",
+          isOpen && "shadow-md bg-white dark:bg-zinc-800",
+        )}
       >
-        {/* Header row: bell + avatar trigger */}
-        <div className="flex items-center justify-between gap-1 pl-2">
-          <Button variant="ghost" size="icon" className="rounded-full">
-            <Bell className="size-4" />
-          </Button>
+        {/* Header row: themetoggler + bell + avatar trigger */}
+        <div className={cn("flex items-center justify-end pl-2")}>
+          <AnimatedThemeToggler iconClassName="size-4" />
+
+          {isLoggedIn && (
+            <Button
+              variant="ghost"
+              size="icon"
+              className="rounded-full max-md:size-6"
+            >
+              <Bell className="size-4" />
+            </Button>
+          )}
 
           <button
             type="button"
-            className="flex items-center gap-2 hover:bg-muted py-2 px-2 rounded-full cursor-pointer select-none"
+            className="flex items-center md:gap-2 hover:bg-muted py-2 px-2 rounded-full cursor-pointer select-none"
             onClick={toggle}
           >
-            <Avatar className="size-8">
+            <Avatar className="size-6 md:size-8">
               {isLoggedIn ? (
                 <>
                   <AvatarImage
@@ -197,29 +215,31 @@ export function UserMenu() {
         </div>
 
         {/* Expandable menu content */}
-        <div ref={contentRef} style={{ display: "none" }} className="px-2 pb-2">
-          <Separator className="mb-2" />
-
+        <div
+          ref={contentRef}
+          style={{ display: "none" }}
+          className="px-2 pb-2 max-md:w-full"
+        >
           {isLoggedIn ? (
             <div className="flex flex-col gap-0.5 min-w-48">
               <button
                 type="button"
-                className="user-menu-item flex items-center gap-3 px-3 py-2 rounded-lg text-sm text-zinc-700 hover:bg-muted transition-colors w-full text-left"
+                className="user-menu-item flex items-center gap-3 px-3 py-2 rounded-lg text-sm text-zinc-700 dark:text-zinc-300 hover:bg-muted dark:hover:bg-zinc-600 transition-colors w-full text-left"
               >
                 <User className="size-4" />
                 Meu perfil
               </button>
               <button
                 type="button"
-                className="user-menu-item flex items-center gap-3 px-3 py-2 rounded-lg text-sm text-zinc-700 hover:bg-muted transition-colors w-full text-left"
+                className="user-menu-item flex items-center gap-3 px-3 py-2 rounded-lg text-sm text-zinc-700 dark:text-zinc-300 hover:bg-muted dark:hover:bg-zinc-600 transition-colors w-full text-left"
               >
                 <Settings className="size-4" />
                 Preferências
               </button>
-              <Separator className="my-1" />
+              <Separator className="my-1 dark:bg-zinc-700" />
               <button
                 type="button"
-                className="user-menu-item flex items-center gap-3 px-3 py-2 rounded-lg text-sm text-red-600 hover:bg-red-50 transition-colors w-full text-left"
+                className="user-menu-item flex items-center gap-3 px-3 py-2 rounded-lg text-sm text-destructive dark:text-red-500 hover:bg-red-200 dark:hover:bg-red-900/50 transition-colors w-full text-left"
               >
                 <LogOut className="size-4" />
                 Sair

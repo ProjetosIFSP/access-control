@@ -3,8 +3,10 @@ import type { SchemaWithExamples } from "@/api/openapi";
 import { z } from "@/lib/zod";
 import { doorStateEnum } from "@/db/schema/enums";
 import { getRooms } from "@/services/room/get-room";
+import { getRoomsSummary } from "@/services/room/get-rooms-summary";
 import { client } from "@/db";
 import { assignProfileToRoom } from "@/services/profile/assign-room";
+import { auth } from "@/lib/auth";
 
 const doorStateValues = doorStateEnum.enumValues as [
 	typeof doorStateEnum.enumValues[number],
@@ -57,7 +59,113 @@ const listRoomsResponseExample: z.infer<typeof listRoomsResponseSchema> = {
 	],
 };
 
+// ── /rooms/summary schemas ────────────────────────────────────────────────────
+
+const roomStateSchema = z.enum(["aberta", "fechada", "alerta"]);
+
+const userInfoSchema = z.object({
+	id: z.string().uuid(),
+	name: z.string(),
+	email: z.string().email(),
+});
+
+const roomSummaryItemBaseSchema = z.object({
+	id: z.string().uuid(),
+	name: z.string(),
+	typeAbbreviation: z.string(),
+	state: roomStateSchema,
+	lastStatusUpdateAt: z.string().datetime().nullable(),
+});
+
+const roomSummaryItemAuthSchema = roomSummaryItemBaseSchema.extend({
+	currentUser: userInfoSchema.nullable(),
+	lastUser: userInfoSchema.nullable(),
+});
+
+const blockWithRoomsBaseSchema = z.object({
+	block: z.object({ id: z.string().uuid(), name: z.string() }),
+	rooms: z.array(roomSummaryItemBaseSchema),
+});
+
+const blockWithRoomsAuthSchema = z.object({
+	block: z.object({ id: z.string().uuid(), name: z.string() }),
+	rooms: z.array(roomSummaryItemAuthSchema),
+});
+
+const roomsSummaryResponseSchema = z.object({
+	authenticated: z.boolean(),
+	result: z.array(
+		z.union([blockWithRoomsAuthSchema, blockWithRoomsBaseSchema]),
+	),
+});
+
+const roomsSummaryResponseExample: z.infer<typeof roomsSummaryResponseSchema> =
+	{
+		authenticated: true,
+		result: [
+			{
+				block: { id: "1cf51c96-86a9-4fb3-b8e8-556a745d4423", name: "Bloco A" },
+				rooms: [
+					{
+						id: "cdea3efb-650d-4c8a-a9c0-8ee97d739f5c",
+						name: "Laboratório 101",
+						typeAbbreviation: "LAB",
+						state: "aberta",
+						lastStatusUpdateAt: "2025-02-20T14:30:00.000Z",
+						currentUser: {
+							id: "7b3cf58e-353f-48de-b2fd-6f203d64d3f8",
+							name: "Ana Souza",
+							email: "ana.souza@ifsp.edu.br",
+						},
+						lastUser: {
+							id: "7b3cf58e-353f-48de-b2fd-6f203d64d3f8",
+							name: "Ana Souza",
+							email: "ana.souza@ifsp.edu.br",
+						},
+					},
+				],
+			},
+		],
+	};
+
+// ─────────────────────────────────────────────────────────────────────────────
+
 export const roomRoute: FastifyPluginAsyncZod = async (app) => {
+	// ── GET /rooms/summary ──────────────────────────────────────────────────────
+	app.get(
+		"/summary",
+		{
+			schema: {
+				tags: ["rooms"],
+				summary: "Resumo de salas agrupadas por bloco",
+				description:
+					"Retorna todas as salas agrupadas por bloco com nome, tipo, estado (aberta/fechada/alerta) e horário da última atualização. " +
+					"Se o chamador estiver autenticado, inclui também quem está usando a sala no momento e quem foi o último utilizador.",
+				querystring: z.object({
+					q: z.string().optional().describe("Filtro de busca por nome da sala ou do bloco"),
+				}),
+				response: {
+					200: roomsSummaryResponseSchema,
+				},
+				responseExamples: {
+					200: roomsSummaryResponseExample,
+				},
+			} satisfies SchemaWithExamples,
+		},
+		async (request, reply) => {
+			// Resolve session without throwing – endpoint is public but enriches data when auth'd
+			const session = await auth.api
+				.getSession({ headers: new Headers(request.headers as Record<string, string>) })
+				.catch(() => null);
+
+			const authenticated = !!session?.user;
+			const { q } = request.query;
+			const summary = await getRoomsSummary(authenticated, q);
+
+			return reply.status(200).send({ authenticated, ...summary });
+		},
+	);
+
 	app.get(
 		"/",
 		{

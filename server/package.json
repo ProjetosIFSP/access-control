@@ -8,6 +8,7 @@
 		"dev": "tsx watch --env-file .env src/api/server.ts",
 		"openapi:generate": "tsx --env-file .env src/scripts/generate-openapi.ts",
 		"db:seed": "tsx --env-file .env src/db/seed.ts",
+		"db:cleanup": "tsx --env-file .env src/db/cleanup.ts",
 		"db:generate": "npx drizzle-kit generate",
 		"db:migrate": "npx drizzle-kit migrate",
 		"db:orm": "npx drizzle-kit generate && npx drizzle-kit migrate",

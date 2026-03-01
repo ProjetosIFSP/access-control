@@ -22,6 +22,7 @@ const app = fastify({
 async function bootstrap() {
 	app.register(fastifyCors, {
 		origin: ["http://localhost:5173", "http://localhost:3000"],
+		credentials: true,
 	});
 
 	await registerDocs(app);
