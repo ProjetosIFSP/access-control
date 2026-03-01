@@ -24,7 +24,7 @@ export function UserMenu() {
   const isAnimatingRef = useRef(false);
 
   // Hardcoded — will be replaced by real auth state later
-  const isLoggedIn = true;
+  const isLoggedIn = false;
   const isMobile = useIsMobile();
 
   const toggle = useCallback(() => {
@@ -190,23 +190,22 @@ export function UserMenu() {
             className="flex items-center md:gap-2 hover:bg-muted py-2 px-2 rounded-full cursor-pointer select-none"
             onClick={toggle}
           >
-            <Avatar className="size-6 md:size-8">
-              {isLoggedIn ? (
-                <>
-                  <AvatarImage
-                    src="https://github.com/abnerjs.png"
-                    alt="@abnerjs"
-                  />
-                  <AvatarFallback className="bg-zinc-300 text-zinc-700 font-bold">
-                    AS
-                  </AvatarFallback>
-                </>
-              ) : (
-                <AvatarFallback className="bg-zinc-300 text-zinc-700 font-bold">
-                  <User className="size-4" />
+            {isLoggedIn && (
+              <Avatar className="size-6 md:size-8">
+                <AvatarImage
+                  src="https://github.com/abnerjs.png"
+                  alt="@abnerjs"
+                />
+                <AvatarFallback className="bg-zinc-300 dark:bg-zinc-600 text-zinc-700 dark:text-zinc-400 font-bold">
+                  AS
                 </AvatarFallback>
-              )}
-            </Avatar>
+              </Avatar>
+            )}
+            {!isLoggedIn && (
+              <div className="bg-zinc-300 dark:bg-zinc-600 size-6 md:size-8 flex items-center justify-center rounded-full text-zinc-700 dark:text-zinc-400 font-bold">
+                <User className="size-4" />
+              </div>
+            )}
 
             <span ref={chevronRef} className="flex">
               <ChevronDown className="size-4" />
