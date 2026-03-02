@@ -12,6 +12,8 @@ import { iotRoute } from "./routes/iot";
 import { roomRoute } from "./routes/room";
 import { roomTypesRoute } from "./routes/room-types"; // GET / added
 import { userRoute } from "./routes/user";
+import { blockRoute } from "./routes/block";
+import { profileRoute } from "./routes/profile";
 
 const app = fastify({
 	routerOptions: {
@@ -34,6 +36,8 @@ async function bootstrap() {
 	app.register(roomTypesRoute, { prefix: "/room-types" });
 	app.register(doorRoute, { prefix: "/doors" });
 	app.register(iotRoute, { prefix: "/iot" });
+	app.register(blockRoute, { prefix: "/blocks" });
+	app.register(profileRoute, { prefix: "/profiles" });
 	app.get("/", (_request, reply) => {
 		reply.send({
 			hello: "Bem vindo à API do sistema de controle de acesso",

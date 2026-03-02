@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { queryOptions, useQuery } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
 import { Search } from "lucide-react";
 
@@ -21,76 +21,15 @@ import { useDebounce } from "@/hooks/use-debounce";
 import { useIsMac, useIsMobile as useIsMobileOS } from "@/hooks/use-os";
 import { PageTitle } from "@/components/page/title";
 import { BlockSection } from "@/components/rooms/block-section";
-
-// ── Config ────────────────────────────────────────────────────────────────────
-
-const API_BASE_URL = import.meta.env.VITE_API_URL ?? "http://localhost:3333";
-
-// ── Types ─────────────────────────────────────────────────────────────────────
-
-type UserInfo = { id: string; name: string; email: string };
-type RoomState = "aberta" | "fechada" | "alerta";
-
-type RoomSummaryItem = {
-  id: string;
-  name: string;
-  typeAbbreviation: string;
-  state: RoomState;
-  lastStatusUpdateAt: string | null;
-  currentUser?: UserInfo | null;
-  lastUser?: UserInfo | null;
-};
-
-type BlockWithRooms = {
-  block: { id: string; name: string };
-  rooms: RoomSummaryItem[];
-};
-
-type RoomsSummaryResponse = {
-  authenticated: boolean;
-  isAdmin: boolean;
-  result: BlockWithRooms[];
-};
-
-type RoomType = { id: string; name: string; abbreviation: string };
-type RoomTypesResponse = { result: RoomType[] };
+import {
+  roomsSummaryQueryOptions,
+  roomTypesQueryOptions,
+} from "@/services/rooms";
+import type { RoomState } from "@/services/rooms/types";
 
 // ── Query Params ──────────────────────────────────────────────────────────────
 
 const VALID_STATES = ["aberta", "fechada", "alerta"] as const;
-
-// ── API ───────────────────────────────────────────────────────────────────────
-
-const roomsSummaryQueryOptions = (filters: {
-  q?: string;
-  type?: string;
-  state?: RoomState;
-}) =>
-  queryOptions({
-    queryKey: ["rooms-summary", filters],
-    queryFn: async () => {
-      const url = new URL(`${API_BASE_URL}/rooms/summary`);
-      if (filters.q?.trim()) url.searchParams.set("q", filters.q.trim());
-      if (filters.type) url.searchParams.set("type", filters.type);
-      if (filters.state) url.searchParams.set("state", filters.state);
-      const res = await fetch(url.toString(), { credentials: "include" });
-      if (!res.ok) throw new Error("Falha ao carregar o resumo das salas");
-      return res.json() as Promise<RoomsSummaryResponse>;
-    },
-    staleTime: 1000 * 60 * 5,
-  });
-
-const roomTypesQueryOptions = queryOptions({
-  queryKey: ["room-types"],
-  queryFn: async () => {
-    const res = await fetch(`${API_BASE_URL}/room-types`, {
-      credentials: "include",
-    });
-    if (!res.ok) throw new Error("Falha ao carregar os tipos de sala");
-    return res.json() as Promise<RoomTypesResponse>;
-  },
-  staleTime: 1000 * 60 * 5,
-});
 
 // ── Route ─────────────────────────────────────────────────────────────────────
 
@@ -126,6 +65,7 @@ function RoomsPage() {
   const isMac = useIsMac();
   const isMobileOS = useIsMobileOS();
 
+  // Sync debounced search value → URL
   useEffect(() => {
     if (!isMounted.current) {
       isMounted.current = true;
@@ -137,7 +77,7 @@ function RoomsPage() {
     });
   }, [debouncedQ, navigate]);
 
-  // Shortcut Ctrl+K para focar no input de busca
+  // Shortcut Ctrl+K → focus search input
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if ((e.ctrlKey || e.metaKey) && e.key === "k") {

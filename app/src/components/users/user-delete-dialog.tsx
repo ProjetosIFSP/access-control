@@ -1,15 +1,4 @@
-import { Loader2 } from "lucide-react";
-
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
+import { CrudDeleteDialog } from "@/components/ui/crud-delete-dialog";
 
 interface UserDeleteDialogProps {
   open: boolean;
@@ -27,35 +16,20 @@ export function UserDeleteDialog({
   onConfirm,
 }: UserDeleteDialogProps) {
   return (
-    <AlertDialog open={open} onOpenChange={onOpenChange}>
-      <AlertDialogContent>
-        <AlertDialogHeader>
-          <AlertDialogTitle>Excluir usuário</AlertDialogTitle>
-          <AlertDialogDescription>
-            Tem certeza que deseja excluir o usuário{" "}
-            <strong className="text-foreground">{userName}</strong>? Essa ação
-            não pode ser desfeita. Todas as sessões, contas vinculadas e
-            credenciais do usuário serão removidas permanentemente.
-          </AlertDialogDescription>
-        </AlertDialogHeader>
-        <AlertDialogFooter>
-          <AlertDialogCancel disabled={isDeleting}>Cancelar</AlertDialogCancel>
-          <AlertDialogAction
-            onClick={(e) => {
-              e.preventDefault();
-              onConfirm();
-            }}
-            disabled={isDeleting}
-            className="bg-destructive text-white hover:bg-destructive/90"
-          >
-            {isDeleting ? (
-              <Loader2 className="size-4 animate-spin" />
-            ) : (
-              "Excluir"
-            )}
-          </AlertDialogAction>
-        </AlertDialogFooter>
-      </AlertDialogContent>
-    </AlertDialog>
+    <CrudDeleteDialog
+      open={open}
+      onOpenChange={onOpenChange}
+      title="Excluir usuario"
+      description={
+        <>
+          Tem certeza que deseja excluir o usuario{" "}
+          <strong className="text-foreground">{userName}</strong>? Essa acao nao
+          pode ser desfeita. Todas as sessoes, contas vinculadas e credenciais
+          do usuario serao removidas permanentemente.
+        </>
+      }
+      isDeleting={isDeleting}
+      onConfirm={onConfirm}
+    />
   );
 }

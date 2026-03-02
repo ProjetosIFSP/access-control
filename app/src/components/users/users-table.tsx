@@ -16,7 +16,7 @@ import {
   KeyRound,
 } from "lucide-react";
 
-import type { UserSummary } from "@/routes/users";
+import type { UserSummary } from "@/services/users/types";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {

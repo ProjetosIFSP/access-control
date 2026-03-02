@@ -58,6 +58,26 @@ export function HeaderNav() {
                     </ItemContent>
                   </Link>
                 </Item>
+                <Item asChild className="hover:bg-muted">
+                  <Link to="/rooms">
+                    <ItemContent>
+                      <ItemTitle>Salas e Blocos</ItemTitle>
+                      <ItemDescription>
+                        Gerenciar salas e blocos cadastrados.
+                      </ItemDescription>
+                    </ItemContent>
+                  </Link>
+                </Item>
+                <Item asChild className="hover:bg-muted">
+                  <Link to="/profiles">
+                    <ItemContent>
+                      <ItemTitle>Perfis de Acesso</ItemTitle>
+                      <ItemDescription>
+                        Gerenciar perfis que agrupam permissões.
+                      </ItemDescription>
+                    </ItemContent>
+                  </Link>
+                </Item>
               </ul>
             </NavigationMenuContent>
           </NavigationMenuItem>
