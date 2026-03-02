@@ -126,10 +126,15 @@ export function HeaderLogo() {
   return (
     <Link
       to="/"
+      search={{
+        q: undefined,
+        type: undefined,
+        state: undefined,
+      }}
       className={cn(
         "flex items-center cursor-pointer gap-2 backdrop-blur-sm h-10 md:h-12 px-3 md:px-4 rounded-full outline-none transition-[color,box-shadow] focus-visible:ring-[3px]",
-        "bg-white/70 hover:bg-white focus-visible:ring-ring/50",
-        "dark:bg-zinc-800/70 dark:hover:bg-zinc-800",
+        "bg-white/70 focus-visible:ring-ring/50",
+        "dark:bg-zinc-800/70",
         "transition-all",
       )}
       onMouseEnter={handleMouseEnter}

@@ -1,10 +1,21 @@
 import { createAuthClient } from "better-auth/react";
-
-const API_BASE_URL = import.meta.env.VITE_API_URL ?? "http://localhost:3333";
+import { inferAdditionalFields } from "better-auth/client/plugins";
 
 export const authClient = createAuthClient({
-  baseURL: API_BASE_URL,
+  baseURL:
+    typeof window !== "undefined"
+      ? window.location.origin
+      : "http://localhost:3000",
   basePath: "/auth",
+  plugins: [
+    inferAdditionalFields({
+      user: {
+        isAdmin: {
+          type: "boolean",
+        },
+      },
+    }),
+  ],
 });
 
 export type Session = typeof authClient.$Infer.Session;

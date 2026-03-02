@@ -1,10 +1,10 @@
-import { sql } from "drizzle-orm";
+import { sql, ilike, or } from "drizzle-orm";
 import { db } from "@/db";
 import { accessCredential } from "@/db/schema/access";
 import { user } from "@/db/schema/auth";
 
-export async function getUsers() {
-	const result = await db
+export async function getUsers(q?: string) {
+	const baseQuery = db
 		.select({
 			id: user.id,
 			name: user.name,
@@ -19,7 +19,16 @@ export async function getUsers() {
 			)`.as("hasCredentials"),
 		})
 		.from(user)
-		.orderBy(user.name);
+		.$dynamic();
+
+	if (q?.trim()) {
+		const pattern = `%${q.trim()}%`;
+		baseQuery.where(
+			or(ilike(user.name, pattern), ilike(user.email, pattern)),
+		);
+	}
+
+	const result = await baseQuery.orderBy(user.name);
 
 	return { result };
 }

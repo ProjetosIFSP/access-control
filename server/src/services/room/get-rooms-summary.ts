@@ -1,4 +1,4 @@
-import { eq, ilike, or } from "drizzle-orm";
+import { and, eq, ilike, or } from "drizzle-orm";
 import { db, client } from "@/db";
 import { block, room, roomType } from "@/db/schema/room";
 
@@ -39,14 +39,27 @@ function mapDoorState(
 	return "alerta";
 }
 
+export interface RoomsSummaryFilters {
+	q?: string;
+	type?: string;
+	state?: RoomState;
+}
+
 export async function getRoomsSummary(
 	authenticated: boolean,
-	search?: string,
+	isAdmin: boolean,
+	filters?: RoomsSummaryFilters,
 ): Promise<{ result: BlockWithRooms[] }> {
-	const term = search?.trim();
-	const whereClause = term
-		? or(ilike(room.name, `%${term}%`), ilike(block.name, `%${term}%`))
-		: undefined;
+	const term = filters?.q?.trim();
+
+	// For admin users with a search term, we skip the SQL text filter and do in-memory
+	// filtering so we can also match against user names.
+	const whereClause = and(
+		filters?.type ? eq(roomType.abbreviation, filters.type) : undefined,
+		term && !isAdmin
+			? or(ilike(room.name, `%${term}%`), ilike(block.name, `%${term}%`))
+			: undefined,
+	);
 
 	// Fetch all rooms joined with block and roomType
 	const rows = await db
@@ -109,6 +122,21 @@ export async function getRoomsSummary(
 	>();
 
 	for (const row of rows) {
+		const state = mapDoorState(row.doorState, row.isLocked);
+
+		// In-memory state filter
+		if (filters?.state && state !== filters.state) continue;
+
+		// In-memory admin user-name search (also matches room/block name)
+		if (term && isAdmin) {
+			const lastUser = lastAccessMap.get(row.roomId);
+			const lc = term.toLowerCase();
+			const matchesRoom = row.roomName.toLowerCase().includes(lc);
+			const matchesBlock = row.blockName.toLowerCase().includes(lc);
+			const matchesUser = lastUser?.name.toLowerCase().includes(lc);
+			if (!matchesRoom && !matchesBlock && !matchesUser) continue;
+		}
+
 		if (!blocksMap.has(row.blockId)) {
 			blocksMap.set(row.blockId, {
 				block: { id: row.blockId, name: row.blockName },
@@ -116,7 +144,6 @@ export async function getRoomsSummary(
 			});
 		}
 
-		const state = mapDoorState(row.doorState, row.isLocked);
 		const lastUser = authenticated
 			? (lastAccessMap.get(row.roomId) ?? null)
 			: undefined;

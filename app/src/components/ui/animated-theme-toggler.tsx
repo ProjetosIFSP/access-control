@@ -17,15 +17,28 @@ export const AnimatedThemeToggler = ({
   iconClassName,
   ...props
 }: AnimatedThemeTogglerProps) => {
-  const [isDark, setIsDark] = useState(false);
+  const [isDark, setIsDark] = useState(() => {
+    if (typeof window === "undefined") return false;
+    const stored = localStorage.getItem("theme");
+    if (stored) return stored === "dark";
+    return window.matchMedia("(prefers-color-scheme: dark)").matches;
+  });
   const buttonRef = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
+    // Apply the correct theme to the DOM on first mount, before React paint
+    const stored = localStorage.getItem("theme");
+    const prefersDark = window.matchMedia(
+      "(prefers-color-scheme: dark)",
+    ).matches;
+    const shouldBeDark = stored ? stored === "dark" : prefersDark;
+    document.documentElement.classList.toggle("dark", shouldBeDark);
+    setIsDark(shouldBeDark);
+
+    // Keep local state in sync if the class is changed externally
     const updateTheme = () => {
       setIsDark(document.documentElement.classList.contains("dark"));
     };
-
-    updateTheme();
 
     const observer = new MutationObserver(updateTheme);
     observer.observe(document.documentElement, {
@@ -41,10 +54,10 @@ export const AnimatedThemeToggler = ({
 
     await document.startViewTransition(() => {
       flushSync(() => {
-        const newTheme = !isDark;
-        setIsDark(newTheme);
-        document.documentElement.classList.toggle("dark");
-        localStorage.setItem("theme", newTheme ? "dark" : "light");
+        const newIsDark = !isDark;
+        setIsDark(newIsDark);
+        document.documentElement.classList.toggle("dark", newIsDark);
+        localStorage.setItem("theme", newIsDark ? "dark" : "light");
       });
     }).ready;
 

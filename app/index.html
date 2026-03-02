@@ -32,6 +32,20 @@
     <meta property="og:image" content="/app-icon.svg" />
     <meta property="og:locale" content="pt_BR" />
 
+    <!-- Theme: apply saved preference before first paint to avoid FOUC -->
+    <script>
+      (function () {
+        try {
+          var stored = localStorage.getItem("theme");
+          var prefersDark = window.matchMedia(
+            "(prefers-color-scheme: dark)",
+          ).matches;
+          var dark = stored ? stored === "dark" : prefersDark;
+          if (dark) document.documentElement.classList.add("dark");
+        } catch (e) {}
+      })();
+    </script>
+
     <!-- Theme -->
     <meta name="theme-color" content="#379936" />
     <link rel="manifest" href="/manifest.json" />

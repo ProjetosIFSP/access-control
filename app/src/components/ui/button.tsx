@@ -21,7 +21,9 @@ const buttonVariants = cva(
           "hover:bg-accent hover:text-accent-foreground dark:hover:bg-accent/50",
         link: "text-primary underline-offset-4 hover:underline",
         hover:
-          "relative overflow-hidden rounded-full bg-transparent text-foreground px-6 py-3.5 tracking-tight hover:text-background after:absolute after:inset-0 after:rounded-full after:border-2 after:border-zinc-600 after:pointer-events-none after:content-['']",
+          "relative bg-zinc-950 text-white overflow-hidden rounded-full! px-6 py-3.5 tracking-tight after:absolute after:inset-0 after:rounded-full after:pointer-events-none after:content-[''] dark:text-white!",
+        hoverOutline:
+          "relative overflow-hidden rounded-full! bg-transparent text-foreground px-6 py-3.5 tracking-tight hover:text-background after:absolute after:inset-0 after:rounded-full after:border-2 after:border-zinc-500 after:pointer-events-none after:content-[''] dark:after:border-zinc-400",
       },
       size: {
         default: "h-9 px-4 py-2 has-[>svg]:px-3",
@@ -46,7 +48,7 @@ function useHoverFlair(variant: string | null | undefined) {
   const flairRef = React.useRef<HTMLSpanElement>(null);
 
   React.useEffect(() => {
-    if (variant !== "hover") return;
+    if (variant !== "hover" && variant !== "hoverOutline") return;
 
     const button = buttonRef.current;
     const flair = flairRef.current;
@@ -56,7 +58,8 @@ function useHoverFlair(variant: string | null | undefined) {
     const ySet = gsap.quickSetter(flair, "yPercent");
 
     function getXY(e: MouseEvent) {
-      const { left, top, width, height } = button!.getBoundingClientRect();
+      if (!button) return;
+      const { left, top, width, height } = button.getBoundingClientRect();
 
       const xTransformer = gsap.utils.pipe(
         gsap.utils.mapRange(0, width, 0, 100),
@@ -142,7 +145,7 @@ function Button({
   const Comp = asChild ? Slot.Root : "button";
   const { buttonRef, flairRef } = useHoverFlair(variant);
 
-  if (variant === "hover") {
+  if (variant === "hover" || variant === "hoverOutline") {
     return (
       <button
         ref={buttonRef}
@@ -158,10 +161,13 @@ function Button({
             "pointer-events-none absolute inset-0 origin-top-left scale-0 will-change-transform",
             "before:pointer-events-none before:absolute before:left-0 before:top-0 before:block before:aspect-square before:w-[170%]",
             "before:-translate-x-1/2 before:-translate-y-1/2 before:rounded-full before:bg-zinc-600 before:content-['']",
+            variant === "hover" && "before:bg-primary",
+            variant === "hoverOutline" &&
+              "before:bg-zinc-500 dark:before:bg-zinc-400",
             overlayClassname,
           )}
         />
-        <span className="relative z-10 text-center transition-colors duration-150">
+        <span className="relative flex items-center gap-2 z-10 text-center transition-colors duration-150">
           {children}
         </span>
       </button>

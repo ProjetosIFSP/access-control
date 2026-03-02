@@ -10,7 +10,7 @@ import { authRoute } from "./routes/auth";
 import { doorRoute } from "./routes/door";
 import { iotRoute } from "./routes/iot";
 import { roomRoute } from "./routes/room";
-import { roomTypesRoute } from "./routes/room-types";
+import { roomTypesRoute } from "./routes/room-types"; // GET / added
 import { userRoute } from "./routes/user";
 
 const app = fastify({
@@ -21,8 +21,9 @@ const app = fastify({
 
 async function bootstrap() {
 	app.register(fastifyCors, {
-		origin: ["http://localhost:5173", "http://localhost:3000"],
+		origin: ["http://localhost:5173", "http://localhost:3000", "http://localhost:3333"],
 		credentials: true,
+		methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
 	});
 
 	await registerDocs(app);

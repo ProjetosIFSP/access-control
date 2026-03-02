@@ -4,7 +4,7 @@ import { auth } from "@/lib/auth";
 export const authRoute: FastifyPluginAsyncZod = async (app) => {
 	app.route({
 		method: ["GET", "POST"],
-		url: "/auth/*",
+		url: "/*",
 		schema: {
 			tags: ["auth"],
 			summary: "Delegar operações de autenticação",

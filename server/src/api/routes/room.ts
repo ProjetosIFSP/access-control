@@ -94,6 +94,7 @@ const blockWithRoomsAuthSchema = z.object({
 
 const roomsSummaryResponseSchema = z.object({
 	authenticated: z.boolean(),
+	isAdmin: z.boolean(),
 	result: z.array(
 		z.union([blockWithRoomsAuthSchema, blockWithRoomsBaseSchema]),
 	),
@@ -102,6 +103,7 @@ const roomsSummaryResponseSchema = z.object({
 const roomsSummaryResponseExample: z.infer<typeof roomsSummaryResponseSchema> =
 	{
 		authenticated: true,
+		isAdmin: true,
 		result: [
 			{
 				block: { id: "1cf51c96-86a9-4fb3-b8e8-556a745d4423", name: "Bloco A" },
@@ -142,7 +144,9 @@ export const roomRoute: FastifyPluginAsyncZod = async (app) => {
 					"Retorna todas as salas agrupadas por bloco com nome, tipo, estado (aberta/fechada/alerta) e horário da última atualização. " +
 					"Se o chamador estiver autenticado, inclui também quem está usando a sala no momento e quem foi o último utilizador.",
 				querystring: z.object({
-					q: z.string().optional().describe("Filtro de busca por nome da sala ou do bloco"),
+					q: z.string().optional().describe("Filtro de busca por nome da sala, bloco ou (para admin) usuário"),
+					type: z.string().optional().describe("Filtrar por abreviação do tipo de sala"),
+					state: z.enum(["aberta", "fechada", "alerta"]).optional().describe("Filtrar por estado da porta"),
 				}),
 				response: {
 					200: roomsSummaryResponseSchema,
@@ -159,10 +163,11 @@ export const roomRoute: FastifyPluginAsyncZod = async (app) => {
 				.catch(() => null);
 
 			const authenticated = !!session?.user;
-			const { q } = request.query;
-			const summary = await getRoomsSummary(authenticated, q);
+			const isAdmin = authenticated && !!((session?.user as Record<string, unknown>)?.isAdmin);
+			const { q, type, state } = request.query;
+			const summary = await getRoomsSummary(authenticated, isAdmin, { q, type, state });
 
-			return reply.status(200).send({ authenticated, ...summary });
+			return reply.status(200).send({ authenticated, isAdmin, ...summary });
 		},
 	);
 

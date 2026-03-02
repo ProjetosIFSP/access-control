@@ -1,7 +1,7 @@
 import { useForm } from "@tanstack/react-form";
 import { Link } from "@tanstack/react-router";
 import { Loader2 } from "lucide-react";
-import { toast } from "sonner";
+import { useState } from "react";
 import { z } from "zod";
 
 import { authClient } from "@/lib/auth-client";
@@ -18,24 +18,41 @@ const loginSchema = z.object({
   rememberMe: z.boolean(),
 });
 
+const errorMessages: Record<string, string> = {
+  "Invalid email or password": "E-mail ou senha inválidos.",
+  "Email not verified":
+    "E-mail não verificado. Verifique sua caixa de entrada.",
+  "Too many requests":
+    "Muitas tentativas. Aguarde um momento e tente novamente.",
+  "User not found": "Usuário não encontrado.",
+  "Account not found": "Conta não encontrada.",
+};
+
+function translateError(message?: string | null): string {
+  if (!message) return "Credenciais inválidas. Tente novamente.";
+  return errorMessages[message] ?? message;
+}
+
 interface LoginFormProps {
   onSuccess?: () => void;
 }
 
 export function LoginForm({ onSuccess }: LoginFormProps) {
+  const [formError, setFormError] = useState<string | null>(null);
+
   const form = useForm({
     defaultValues: { email: "", password: "", rememberMe: false },
     onSubmit: async ({ value }) => {
+      setFormError(null);
       const { error } = await authClient.signIn.email({
         email: value.email,
         password: value.password,
         rememberMe: value.rememberMe,
       });
       if (error) {
-        toast.error(error.message ?? "Credenciais inválidas. Tente novamente.");
+        setFormError(translateError(error.message));
         return;
       }
-      toast.success("Bem-vindo de volta!");
       onSuccess?.();
     },
   });
@@ -52,7 +69,7 @@ export function LoginForm({ onSuccess }: LoginFormProps) {
       {/* Google */}
       <Button
         type="button"
-        variant="outline"
+        variant="hoverOutline"
         className="w-full gap-2"
         onClick={handleGoogle}
       >
@@ -73,13 +90,20 @@ export function LoginForm({ onSuccess }: LoginFormProps) {
         }}
         className="flex flex-col gap-3"
       >
+        {/* Inline error */}
+        {formError && (
+          <p className="text-xs text-destructive bg-destructive/10 rounded-md px-3 py-2">
+            {formError}
+          </p>
+        )}
+
         {/* Email */}
         <form.Field
           name="email"
           validators={{
             onChange: ({ value }) => {
               const r = loginSchema.shape.email.safeParse(value);
-              return r.success ? undefined : r.error.errors[0]?.message;
+              return r.success ? undefined : r.error.issues[0]?.message;
             },
           }}
         >
@@ -111,7 +135,7 @@ export function LoginForm({ onSuccess }: LoginFormProps) {
           validators={{
             onChange: ({ value }) => {
               const r = loginSchema.shape.password.safeParse(value);
-              return r.success ? undefined : r.error.errors[0]?.message;
+              return r.success ? undefined : r.error.issues[0]?.message;
             },
           }}
         >
@@ -122,6 +146,7 @@ export function LoginForm({ onSuccess }: LoginFormProps) {
                 <Link
                   to="/forgot-password"
                   className="text-xs text-muted-foreground hover:text-primary transition-colors"
+                  tabIndex={-1}
                 >
                   Esqueci minha senha
                 </Link>
@@ -170,7 +195,9 @@ export function LoginForm({ onSuccess }: LoginFormProps) {
           {([canSubmit, isSubmitting]) => (
             <Button
               type="submit"
-              className="w-full"
+              className="w-full bg-zinc-950 text-zinc-50 after:border-none"
+              overlayClassname="before:bg-primary"
+              variant="hover"
               disabled={!canSubmit || isSubmitting}
             >
               {isSubmitting ? (

@@ -1,6 +1,6 @@
 import { useForm } from "@tanstack/react-form";
 import { Loader2 } from "lucide-react";
-import { toast } from "sonner";
+import { useState } from "react";
 import { z } from "zod";
 
 import { authClient } from "@/lib/auth-client";
@@ -10,30 +10,25 @@ import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { GoogleIcon } from "@/components/icons/google";
 
-const registerSchema = z
-  .object({
-    name: z.string().min(2, "Nome deve ter ao menos 2 caracteres"),
-    email: z.string().min(1, "E-mail obrigatório").email("E-mail inválido"),
-    password: z
-      .string()
-      .min(8, "Senha deve ter ao menos 8 caracteres")
-      .regex(/[A-Z]/, "Deve conter ao menos uma letra maiúscula")
-      .regex(/[0-9]/, "Deve conter ao menos um número"),
-    confirmPassword: z.string().min(1, "Confirmação obrigatória"),
-  })
-  .refine((d) => d.password === d.confirmPassword, {
-    message: "As senhas não coincidem",
-    path: ["confirmPassword"],
-  });
-
-type RegisterValues = z.infer<typeof registerSchema>;
+const fieldSchemas = {
+  name: z.string().min(2, "Nome deve ter ao menos 2 caracteres"),
+  email: z.string().min(1, "E-mail obrigatório").email("E-mail inválido"),
+  password: z
+    .string()
+    .min(8, "Senha deve ter ao menos 8 caracteres")
+    .regex(/[A-Z]/, "Deve conter ao menos uma letra maiúscula")
+    .regex(/[0-9]/, "Deve conter ao menos um número"),
+  confirmPassword: z.string().min(1, "Confirmação obrigatória"),
+};
 
 interface RegisterFormProps {
   onSuccess?: () => void;
 }
 
 export function RegisterForm({ onSuccess }: RegisterFormProps) {
-  const form = useForm<RegisterValues>({
+  const [formError, setFormError] = useState<string | null>(null);
+
+  const form = useForm({
     defaultValues: {
       name: "",
       email: "",
@@ -41,16 +36,17 @@ export function RegisterForm({ onSuccess }: RegisterFormProps) {
       confirmPassword: "",
     },
     onSubmit: async ({ value }) => {
+      setFormError(null);
       const { error } = await authClient.signUp.email({
         name: value.name,
         email: value.email,
         password: value.password,
+        isAdmin: false,
       });
       if (error) {
-        toast.error(error.message ?? "Erro ao criar conta. Tente novamente.");
+        setFormError(error.message ?? "Erro ao criar conta. Tente novamente.");
         return;
       }
-      toast.success("Conta criada com sucesso! Bem-vindo(a).");
       onSuccess?.();
     },
   });
@@ -67,7 +63,7 @@ export function RegisterForm({ onSuccess }: RegisterFormProps) {
       {/* Google */}
       <Button
         type="button"
-        variant="outline"
+        variant="hover"
         className="w-full gap-2"
         onClick={handleGoogle}
       >
@@ -88,13 +84,20 @@ export function RegisterForm({ onSuccess }: RegisterFormProps) {
         }}
         className="flex flex-col gap-3"
       >
+        {/* Inline error */}
+        {formError && (
+          <p className="text-xs text-destructive bg-destructive/10 rounded-md px-3 py-2">
+            {formError}
+          </p>
+        )}
+
         {/* Name */}
         <form.Field
           name="name"
           validators={{
             onChange: ({ value }) => {
-              const r = registerSchema.shape.name.safeParse(value);
-              return r.success ? undefined : r.error.errors[0]?.message;
+              const r = fieldSchemas.name.safeParse(value);
+              return r.success ? undefined : r.error.issues[0]?.message;
             },
           }}
         >
@@ -125,8 +128,8 @@ export function RegisterForm({ onSuccess }: RegisterFormProps) {
           name="email"
           validators={{
             onChange: ({ value }) => {
-              const r = registerSchema.shape.email.safeParse(value);
-              return r.success ? undefined : r.error.errors[0]?.message;
+              const r = fieldSchemas.email.safeParse(value);
+              return r.success ? undefined : r.error.issues[0]?.message;
             },
           }}
         >
@@ -157,8 +160,8 @@ export function RegisterForm({ onSuccess }: RegisterFormProps) {
           name="password"
           validators={{
             onChange: ({ value }) => {
-              const r = registerSchema.shape.password.safeParse(value);
-              return r.success ? undefined : r.error.errors[0]?.message;
+              const r = fieldSchemas.password.safeParse(value);
+              return r.success ? undefined : r.error.issues[0]?.message;
             },
           }}
         >
@@ -223,7 +226,9 @@ export function RegisterForm({ onSuccess }: RegisterFormProps) {
           {([canSubmit, isSubmitting]) => (
             <Button
               type="submit"
-              className="w-full"
+              className="w-full bg-zinc-950 text-white after:border-none"
+              overlayClassname="before:bg-primary"
+              variant="hover"
               disabled={!canSubmit || isSubmitting}
             >
               {isSubmitting ? (

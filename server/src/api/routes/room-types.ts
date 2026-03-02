@@ -1,16 +1,24 @@
-import { FastifyPluginAsync } from "fastify";
+import type { FastifyPluginAsync } from "fastify";
 import { db } from "@/db";
 import { roomType } from "@/db/schema/room";
 import { userRoomTypePermission } from "@/db/schema/access";
 import { profileRoomTypePermission } from "@/db/schema/profile";
-import { eq, and } from "drizzle-orm";
+import { eq, and, asc } from "drizzle-orm";
 import { v7 as uuidv7 } from "uuid";
 
 const route: FastifyPluginAsync = async (fastify) => {
+  fastify.get("/", async (_request, reply) => {
+    const types = await db
+      .select({ id: roomType.id, name: roomType.name, abbreviation: roomType.abbreviation })
+      .from(roomType)
+      .orderBy(asc(roomType.name));
+    reply.code(200).send({ result: types });
+  });
+
   fastify.post("/", async (request, reply) => {
     const body: any = request.body as any;
     const id = uuidv7();
-    await db.insert(roomType).values({ id, name: body.name, description: body.description ?? "" });
+    await db.insert(roomType).values({ id, name: body.name, abbreviation: body.abbreviation, description: body.description ?? "" });
     const rows = await db.select().from(roomType).where(eq(roomType.id, id));
     reply.code(201).send(rows[0]);
   });

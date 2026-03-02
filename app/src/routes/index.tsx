@@ -5,6 +5,7 @@ import { Search } from "lucide-react";
 
 import { Footer } from "@/components/footer";
 import { Input } from "@/components/ui/input";
+import { Kbd } from "@/components/ui/kbd";
 import {
   Select,
   SelectContent,
@@ -17,6 +18,7 @@ import {
   ToggleGroupItem,
 } from "@/components/animate-ui/components/radix/toggle-group";
 import { useDebounce } from "@/hooks/use-debounce";
+import { useIsMac, useIsMobile as useIsMobileOS } from "@/hooks/use-os";
 import { PageTitle } from "@/components/page/title";
 import { BlockSection } from "@/components/rooms/block-section";
 
@@ -120,6 +122,9 @@ function RoomsPage() {
   const [inputValue, setInputValue] = useState(q ?? "");
   const debouncedQ = useDebounce(inputValue, 400);
   const isMounted = useRef(false);
+  const searchInputRef = useRef<HTMLInputElement>(null);
+  const isMac = useIsMac();
+  const isMobileOS = useIsMobileOS();
 
   useEffect(() => {
     if (!isMounted.current) {
@@ -131,6 +136,19 @@ function RoomsPage() {
       replace: true,
     });
   }, [debouncedQ, navigate]);
+
+  // Shortcut Ctrl+K para focar no input de busca
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === "k") {
+        e.preventDefault();
+        searchInputRef.current?.focus();
+      }
+    };
+
+    document.addEventListener("keydown", handleKeyDown);
+    return () => document.removeEventListener("keydown", handleKeyDown);
+  }, []);
 
   const { data, isLoading, isError, error } = useQuery(
     roomsSummaryQueryOptions({ q, type, state }),
@@ -184,11 +202,18 @@ function RoomsPage() {
           <div className="relative w-full max-w-sm flex-1 min-w-40">
             <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-zinc-400" />
             <Input
+              ref={searchInputRef}
               placeholder={searchPlaceholder}
               value={inputValue}
               onChange={(e) => setInputValue(e.target.value)}
-              className="pl-9 bg-white"
+              className="pl-9 pr-16 bg-white"
             />
+            {!isMobileOS && (
+              <div className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 hidden sm:flex items-center gap-1">
+                <Kbd>{isMac ? "⌘" : "Ctrl"}</Kbd>
+                <Kbd>K</Kbd>
+              </div>
+            )}
           </div>
 
           {/* Room type select */}

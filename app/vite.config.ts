@@ -28,6 +28,12 @@ export default defineConfig({
     fs: {
       allow: [rootDir],
     },
+    proxy: {
+      "/auth": {
+        target: "http://localhost:3333",
+        changeOrigin: true,
+      },
+    },
   },
   optimizeDeps: {
     // Tell Vite to also search root node_modules (npm workspaces hoisting)
