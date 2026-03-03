@@ -4,6 +4,7 @@ import { queryOptions } from "@tanstack/react-query";
 import type {
   CreateUserPayload,
   UpdateUserPayload,
+  UserRelations,
   UserSummary,
   UsersResponse,
 } from "./types";
@@ -23,6 +24,7 @@ const API_BASE_URL =
 export const usersQueryKeys = {
   all: ["users"] as const,
   list: (filters: { q?: string }) => ["users", filters] as const,
+  relations: (id: string) => ["users", id, "relations"] as const,
 };
 
 // ── API Functions ─────────────────────────────────────────────────────────────
@@ -90,11 +92,27 @@ export async function deleteUser(id: string): Promise<void> {
   }
 }
 
+export async function fetchUserRelations(id: string): Promise<UserRelations> {
+  const res = await fetch(`${API_BASE_URL}/users/${id}/relations`, {
+    credentials: "include",
+  });
+  if (!res.ok) throw new Error("Falha ao carregar vínculos do usuário");
+  return res.json();
+}
+
 // ── Query Options ─────────────────────────────────────────────────────────────
 
 export const usersQueryOptions = (filters: { q?: string }) =>
   queryOptions({
     queryKey: usersQueryKeys.list(filters),
     queryFn: () => fetchUsers(filters),
+    staleTime: 1000 * 60 * 2,
+  });
+
+export const userRelationsQueryOptions = (id: string | null) =>
+  queryOptions({
+    queryKey: usersQueryKeys.relations(id ?? ""),
+    queryFn: () => fetchUserRelations(id as string),
+    enabled: !!id,
     staleTime: 1000 * 60 * 2,
   });

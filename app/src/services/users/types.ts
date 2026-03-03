@@ -32,3 +32,9 @@ export type UpdateUserPayload = {
   roomIds?: string[];
   roomTypeIds?: string[];
 };
+
+export type UserRelations = {
+  profiles: { id: string; name: string; description: string }[];
+  rooms: { id: string; name: string; blockId: string }[];
+  roomTypes: { id: string; name: string; abbreviation: string }[];
+};

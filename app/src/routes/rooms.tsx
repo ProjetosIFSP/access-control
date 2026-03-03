@@ -37,6 +37,7 @@ import {
   createRoom,
   deleteBlock,
   deleteRoom,
+  roomRelationsQueryOptions,
   roomsAdminQueryOptions,
   roomsQueryKeys,
   roomTypesQueryOptions,
@@ -206,6 +207,11 @@ function RoomsManagePage() {
   const invalidateBlocks = () =>
     queryClient.invalidateQueries({ queryKey: roomsQueryKeys.blocks });
 
+  const invalidateRoomRelations = (roomId: string) =>
+    queryClient.invalidateQueries({
+      queryKey: roomRelationsQueryOptions(roomId).queryKey,
+    });
+
   const createRoomMutation = useMutation({
     mutationFn: createRoom,
     onSuccess: () => {
@@ -217,8 +223,9 @@ function RoomsManagePage() {
   });
   const updateRoomMutation = useMutation({
     mutationFn: updateRoom,
-    onSuccess: () => {
+    onSuccess: (_data, variables) => {
       invalidateRooms();
+      invalidateRoomRelations(variables.id);
       toast.success("Sala atualizada com sucesso!");
       closePanel();
     },
@@ -226,8 +233,9 @@ function RoomsManagePage() {
   });
   const deleteRoomMutation = useMutation({
     mutationFn: deleteRoom,
-    onSuccess: () => {
+    onSuccess: (_data, roomId) => {
       invalidateRooms();
+      invalidateRoomRelations(roomId);
       toast.success("Sala excluida com sucesso!");
       setDeleteRoomTarget(null);
     },

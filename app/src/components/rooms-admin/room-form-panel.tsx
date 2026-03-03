@@ -25,6 +25,7 @@ import {
 import { Label } from "@/components/ui/label";
 import { profilesQueryOptions } from "@/services/profiles";
 import { usersQueryOptions } from "@/services/users";
+import { roomRelationsQueryOptions } from "@/services/rooms";
 
 const roomFormSchema = z.object({
   name: z.string().min(1, "Nome obrigatorio").min(2, "Minimo 2 caracteres"),
@@ -67,6 +68,9 @@ export function RoomFormPanel({
 
   const { data: profilesData } = useQuery(profilesQueryOptions);
   const { data: usersData } = useQuery(usersQueryOptions({}));
+  const { data: relationsData } = useQuery(
+    roomRelationsQueryOptions(room?.id ?? null),
+  );
 
   const profileOptions = (profilesData?.result ?? []).map((p) => ({
     value: p.id,
@@ -104,10 +108,10 @@ export function RoomFormPanel({
       typeId: room?.typeId ?? "",
       requiresBiometry: room?.requiresBiometry ?? false,
       requiresRFID: room?.requiresRFID ?? false,
-      profileIds: [],
-      userIds: [],
+      profileIds: relationsData?.profiles.map((p) => p.id) ?? [],
+      userIds: relationsData?.users.map((u) => u.id) ?? [],
     });
-  }, [room, form]);
+  }, [room, relationsData, form]);
 
   return (
     <form

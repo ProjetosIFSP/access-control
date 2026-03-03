@@ -1,16 +1,56 @@
 import type { FastifyPluginAsyncZod } from "fastify-type-provider-zod";
+
+type AdminReply = { status: (code: number) => { send: (body: unknown) => void } };
 import type { SchemaWithExamples } from "@/api/openapi";
 import { z } from "@/lib/zod";
+import { auth } from "@/lib/auth";
+import { db } from "@/db";
 import { doorStateEnum } from "@/db/schema/enums";
+import { room } from "@/db/schema/room";
+import { profile, profileRoomPermission } from "@/db/schema/profile";
+import { user } from "@/db/schema/auth";
+import { userRoomPermission } from "@/db/schema/access";
+import { eq, and, inArray } from "drizzle-orm";
+import { v7 as uuidv7 } from "uuid";
 import { getRooms } from "@/services/room/get-room";
 import { getRoomsSummary } from "@/services/room/get-rooms-summary";
-import { client } from "@/db";
-import { assignProfileToRoom } from "@/services/profile/assign-room";
-import { auth } from "@/lib/auth";
+import { createRoom } from "@/services/room/create-room";
+import { updateRoom } from "@/services/room/update-room";
+import { deleteRoom } from "@/services/room/delete-room";
+import { addUserRoomPermission } from "@/services/permissions/add-user-room-permission";
+import { removeUserRoomPermission } from "@/services/permissions/remove-user-room-permission";
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+
+async function requireAdmin(
+	request: { headers: Record<string, unknown> },
+	reply: AdminReply,
+) {
+	const session = await auth.api
+		.getSession({
+			headers: new Headers(request.headers as Record<string, string>),
+		})
+		.catch(() => null);
+
+	if (!session?.user) {
+		reply.status(401).send({ message: "Autenticação necessária." });
+		return null;
+	}
+
+	const isAdmin = !!(session.user as Record<string, unknown>).isAdmin;
+	if (!isAdmin) {
+		reply.status(403).send({ message: "Acesso restrito a administradores." });
+		return null;
+	}
+
+	return session;
+}
+
+// ── Schemas ───────────────────────────────────────────────────────────────────
 
 const doorStateValues = doorStateEnum.enumValues as [
-	typeof doorStateEnum.enumValues[number],
-	...typeof doorStateEnum.enumValues[number][],
+	(typeof doorStateEnum.enumValues)[number],
+	...(typeof doorStateEnum.enumValues)[number][],
 ];
 
 const doorStateSchema = z.enum(doorStateValues);
@@ -19,6 +59,9 @@ const roomSummarySchema = z.object({
 	id: z.string().uuid(),
 	name: z.string(),
 	blockId: z.string().uuid(),
+	typeId: z.string().uuid(),
+	requiresBiometry: z.boolean(),
+	requiresRFID: z.boolean(),
 	isLocked: z.boolean().nullable(),
 	doorState: doorStateSchema,
 	lastStatusUpdateAt: z.string().datetime().nullable(),
@@ -46,6 +89,9 @@ const listRoomsResponseExample: z.infer<typeof listRoomsResponseSchema> = {
 				id: "cdea3efb-650d-4c8a-a9c0-8ee97d739f5c",
 				name: "Laboratório 101",
 				blockId: "1cf51c96-86a9-4fb3-b8e8-556a745d4423",
+				typeId: "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+				requiresBiometry: false,
+				requiresRFID: false,
 				isLocked: true,
 				doorState: "CLOSED",
 				lastStatusUpdateAt: "2025-02-20T14:30:00.000Z",
@@ -130,7 +176,36 @@ const roomsSummaryResponseExample: z.infer<typeof roomsSummaryResponseSchema> =
 		],
 	};
 
-// ─────────────────────────────────────────────────────────────────────────────
+// ── Body & relation schemas ───────────────────────────────────────────────────
+
+const roomBodySchema = z.object({
+	name: z.string().min(2),
+	blockId: z.string().uuid(),
+	typeId: z.string().uuid(),
+	requiresBiometry: z.boolean().optional(),
+	requiresRFID: z.boolean().optional(),
+	profileIds: z.array(z.string().uuid()).optional(),
+	userIds: z.array(z.string().uuid()).optional(),
+});
+
+const roomRelationsSchema = z.object({
+	profiles: z.array(
+		z.object({
+			id: z.string(),
+			name: z.string(),
+			description: z.string(),
+		}),
+	),
+	users: z.array(
+		z.object({
+			id: z.string(),
+			name: z.string(),
+			email: z.string(),
+		}),
+	),
+});
+
+// ── Route ─────────────────────────────────────────────────────────────────────
 
 export const roomRoute: FastifyPluginAsyncZod = async (app) => {
 	// ── GET /rooms/summary ──────────────────────────────────────────────────────
@@ -141,12 +216,23 @@ export const roomRoute: FastifyPluginAsyncZod = async (app) => {
 				tags: ["rooms"],
 				summary: "Resumo de salas agrupadas por bloco",
 				description:
-					"Retorna todas as salas agrupadas por bloco com nome, tipo, estado (aberta/fechada/alerta) e horário da última atualização. " +
+					"Retorna todas as salas agrupadas por bloco com nome, tipo, estado e horário da última atualização. " +
 					"Se o chamador estiver autenticado, inclui também quem está usando a sala no momento e quem foi o último utilizador.",
 				querystring: z.object({
-					q: z.string().optional().describe("Filtro de busca por nome da sala, bloco ou (para admin) usuário"),
-					type: z.string().optional().describe("Filtrar por abreviação do tipo de sala"),
-					state: z.enum(["aberta", "fechada", "alerta"]).optional().describe("Filtrar por estado da porta"),
+					q: z
+						.string()
+						.optional()
+						.describe(
+							"Filtro de busca por nome da sala, bloco ou (para admin) usuário",
+						),
+					type: z
+						.string()
+						.optional()
+						.describe("Filtrar por abreviação do tipo de sala"),
+					state: z
+						.enum(["aberta", "fechada", "alerta"])
+						.optional()
+						.describe("Filtrar por estado da porta"),
 				}),
 				response: {
 					200: roomsSummaryResponseSchema,
@@ -157,20 +243,28 @@ export const roomRoute: FastifyPluginAsyncZod = async (app) => {
 			} satisfies SchemaWithExamples,
 		},
 		async (request, reply) => {
-			// Resolve session without throwing – endpoint is public but enriches data when auth'd
 			const session = await auth.api
-				.getSession({ headers: new Headers(request.headers as Record<string, string>) })
+				.getSession({
+					headers: new Headers(request.headers as Record<string, string>),
+				})
 				.catch(() => null);
 
 			const authenticated = !!session?.user;
-			const isAdmin = authenticated && !!((session?.user as Record<string, unknown>)?.isAdmin);
+			const isAdmin =
+				authenticated &&
+				!!((session?.user as Record<string, unknown>)?.isAdmin);
 			const { q, type, state } = request.query;
-			const summary = await getRoomsSummary(authenticated, isAdmin, { q, type, state });
+			const summary = await getRoomsSummary(authenticated, isAdmin, {
+				q,
+				type,
+				state,
+			});
 
 			return reply.status(200).send({ authenticated, isAdmin, ...summary });
 		},
 	);
 
+	// ── GET /rooms ──────────────────────────────────────────────────────────────
 	app.get(
 		"/",
 		{
@@ -188,12 +282,16 @@ export const roomRoute: FastifyPluginAsyncZod = async (app) => {
 				},
 			} satisfies SchemaWithExamples,
 		},
-		async (_request, reply) => {
+		async (request, reply) => {
+			if (!(await requireAdmin(request, reply as unknown as AdminReply))) return;
+
 			const rooms = await getRooms();
 			const payload: z.infer<typeof listRoomsResponseSchema> = {
 				result: rooms.result.map(({ room, block }) => ({
 					room: {
 						...room,
+						requiresBiometry: room.requiresBiometry ?? false,
+						requiresRFID: room.requiresRFID ?? false,
 						lastStatusUpdateAt: room.lastStatusUpdateAt?.toISOString() ?? null,
 						createdAt: room.createdAt.toISOString(),
 					},
@@ -204,82 +302,406 @@ export const roomRoute: FastifyPluginAsyncZod = async (app) => {
 		},
 	);
 
+	// ── GET /rooms/:id/relations ────────────────────────────────────────────────
 	app.get(
-		"/:id/profiles",
+		"/:id/relations",
 		{
 			schema: {
-				tags: ["profiles"],
-				summary: "Listar perfis associados a uma sala",
+				tags: ["rooms"],
+				summary: "Vínculos da sala",
+				description:
+					"Retorna os perfis e usuários com acesso direto associados à sala.",
+				security: [{ sessionCookie: [] }],
 				params: z.object({ id: z.string().uuid() }),
-				response: { 200: z.object({ result: z.array(z.object({ id: z.string().uuid(), name: z.string(), description: z.string() })) }) },
+				response: { 200: roomRelationsSchema },
 			},
 		},
 		async (request, reply) => {
-			const roomId = request.params.id as string;
-						const rows = await client<{ id: string; name: string; description: string }[]>`
-							SELECT p.id, p.name, p.description
-							FROM profile p
-							INNER JOIN profile_room_permission pr ON pr.profile_id = p.id
-							WHERE pr.room_id = ${roomId}
-						`;
-						return reply.status(200).send({ result: rows });
+			if (!(await requireAdmin(request, reply as unknown as AdminReply))) return;
+
+			const { id: roomId } = request.params as { id: string };
+
+			const [profiles, users] = await Promise.all([
+				db
+					.select({
+						id: profile.id,
+						name: profile.name,
+						description: profile.description,
+					})
+					.from(profileRoomPermission)
+					.innerJoin(profile, eq(profileRoomPermission.profileId, profile.id))
+					.where(eq(profileRoomPermission.roomId, roomId)),
+
+				db
+					.select({
+						id: user.id,
+						name: user.name,
+						email: user.email,
+					})
+					.from(userRoomPermission)
+					.innerJoin(user, eq(userRoomPermission.userId, user.id))
+					.where(eq(userRoomPermission.roomId, roomId)),
+			]);
+
+			return reply.status(200).send({ profiles, users });
 		},
 	);
 
+	// ── POST /rooms ─────────────────────────────────────────────────────────────
+	app.post(
+		"/",
+		{
+			schema: {
+				tags: ["rooms"],
+				summary: "Criar sala",
+				description:
+					"Cria uma nova sala. Opcionalmente vincula perfis e usuários com acesso direto.",
+				security: [{ sessionCookie: [] }],
+				body: roomBodySchema,
+				response: {
+					201: roomSummarySchema,
+				},
+			},
+		},
+		async (request, reply) => {
+			if (!(await requireAdmin(request, reply as unknown as AdminReply))) return;
+
+			const {
+				name,
+				blockId,
+				typeId,
+				requiresBiometry,
+				requiresRFID,
+				profileIds,
+				userIds,
+			} = request.body as z.infer<typeof roomBodySchema>;
+
+			const created = await createRoom({
+				name,
+				blockId,
+				typeId,
+				requiresBiometry,
+				requiresRFID,
+				profileIds,
+				userIds,
+			});
+
+			return reply.status(201).send({
+				...created,
+				requiresBiometry: created.requiresBiometry ?? false,
+				requiresRFID: created.requiresRFID ?? false,
+				lastStatusUpdateAt: created.lastStatusUpdateAt?.toISOString() ?? null,
+				createdAt: created.createdAt.toISOString(),
+			});
+		},
+	);
+
+	// ── PUT /rooms/:id ──────────────────────────────────────────────────────────
+	app.put(
+		"/:id",
+		{
+			schema: {
+				tags: ["rooms"],
+				summary: "Atualizar sala",
+				description:
+					"Atualiza os dados de uma sala e sincroniza perfis e usuários com acesso direto.",
+				security: [{ sessionCookie: [] }],
+				params: z.object({ id: z.string().uuid() }),
+				body: roomBodySchema.partial(),
+				response: {
+					200: roomSummarySchema,
+				},
+			},
+		},
+		async (request, reply) => {
+			if (!(await requireAdmin(request, reply as unknown as AdminReply))) return;
+
+			const { id } = request.params as { id: string };
+			const {
+				name,
+				blockId,
+				typeId,
+				requiresBiometry,
+				requiresRFID,
+				profileIds,
+				userIds,
+			} = request.body as Partial<z.infer<typeof roomBodySchema>>;
+
+			const updated = await updateRoom({
+				id,
+				name,
+				blockId,
+				typeId,
+				requiresBiometry,
+				requiresRFID,
+				profileIds,
+				userIds,
+			});
+
+			return reply.status(200).send({
+				...updated,
+				requiresBiometry: updated.requiresBiometry ?? false,
+				requiresRFID: updated.requiresRFID ?? false,
+				lastStatusUpdateAt: updated.lastStatusUpdateAt?.toISOString() ?? null,
+				createdAt: updated.createdAt.toISOString(),
+			});
+		},
+	);
+
+	// ── DELETE /rooms/:id ───────────────────────────────────────────────────────
+	app.delete(
+		"/:id",
+		{
+			schema: {
+				tags: ["rooms"],
+				summary: "Excluir sala",
+				description: "Remove uma sala do sistema.",
+				security: [{ sessionCookie: [] }],
+				params: z.object({ id: z.string().uuid() }),
+				response: { 204: z.void() },
+			},
+		},
+		async (request, reply) => {
+			if (!(await requireAdmin(request, reply as unknown as AdminReply))) return;
+
+			const { id } = request.params as { id: string };
+			await deleteRoom(id);
+			return reply.status(204).send();
+		},
+	);
+
+	// ── POST /rooms/:id/profiles ────────────────────────────────────────────────
 	app.post(
 		"/:id/profiles",
 		{
 			schema: {
-				tags: ["profiles"],
+				tags: ["rooms"],
 				summary: "Atribuir perfil à sala",
+				security: [{ sessionCookie: [] }],
 				params: z.object({ id: z.string().uuid() }),
 				body: z.object({ profileId: z.string().uuid() }),
 				response: { 204: z.void() },
 			},
 		},
 		async (request, reply) => {
-			const roomId = request.params.id as string;
+			if (!(await requireAdmin(request, reply as unknown as AdminReply))) return;
+
+			const { id: roomId } = request.params as { id: string };
 			const { profileId } = request.body as { profileId: string };
-			await assignProfileToRoom(profileId, roomId);
+
+			await db
+				.insert(profileRoomPermission)
+				.values({ id: uuidv7(), profileId, roomId })
+				.onConflictDoNothing();
+
 			return reply.status(204).send();
 		},
 	);
 
-	app.post(
-		"/:id/users",
-		{
-			schema: {
-				tags: ["permissions"],
-				summary: "Atribuir permissão direta de usuário à sala",
-				params: z.object({ id: z.string().uuid() }),
-				body: z.object({ userId: z.string().uuid(), expiresAt: z.string().datetime().optional() }),
-				response: { 201: z.object({ id: z.string().uuid() }) },
-			},
-		},
-		async (request, reply) => {
-			const roomId = request.params.id as string;
-			const { userId, expiresAt } = request.body as { userId: string; expiresAt?: string };
-			const { addUserRoomPermission } = await import('../../services/permissions/add-user-room-permission.js');
-			const res = await addUserRoomPermission(userId, roomId, expiresAt ? new Date(expiresAt) : undefined);
-			return reply.status(201).send(res);
-		},
-	);
-
+	// ── DELETE /rooms/:id/profiles/:profileId ───────────────────────────────────
 	app.delete(
-		"/:id/users/:userId",
+		"/:id/profiles/:profileId",
 		{
 			schema: {
-				tags: ["permissions"],
-				summary: "Remover permissão direta de usuário da sala",
-				params: z.object({ id: z.string().uuid(), userId: z.string().uuid() }),
+				tags: ["rooms"],
+				summary: "Remover perfil da sala",
+				security: [{ sessionCookie: [] }],
+				params: z.object({
+					id: z.string().uuid(),
+					profileId: z.string().uuid(),
+				}),
 				response: { 204: z.void() },
 			},
 		},
 		async (request, reply) => {
-			const roomId = request.params.id as string;
-			const userId = request.params.userId as string;
-			const { removeUserRoomPermission } = await import('../../services/permissions/remove-user-room-permission.js');
+			if (!(await requireAdmin(request, reply as unknown as AdminReply))) return;
+
+			const { id: roomId, profileId } = request.params as {
+				id: string;
+				profileId: string;
+			};
+
+			await db
+				.delete(profileRoomPermission)
+				.where(
+					and(
+						eq(profileRoomPermission.roomId, roomId),
+						eq(profileRoomPermission.profileId, profileId),
+					),
+				);
+
+			return reply.status(204).send();
+		},
+	);
+
+	// ── POST /rooms/:id/users ───────────────────────────────────────────────────
+	app.post(
+		"/:id/users",
+		{
+			schema: {
+				tags: ["rooms"],
+				summary: "Atribuir permissão direta de usuário à sala",
+				security: [{ sessionCookie: [] }],
+				params: z.object({ id: z.string().uuid() }),
+				body: z.object({
+					userId: z.string().uuid(),
+					expiresAt: z.string().datetime().optional(),
+				}),
+				response: { 201: z.object({ id: z.string().uuid() }) },
+			},
+		},
+		async (request, reply) => {
+			if (!(await requireAdmin(request, reply as unknown as AdminReply))) return;
+
+			const { id: roomId } = request.params as { id: string };
+			const { userId, expiresAt } = request.body as {
+				userId: string;
+				expiresAt?: string;
+			};
+
+			const res = await addUserRoomPermission(
+				userId,
+				roomId,
+				expiresAt ? new Date(expiresAt) : undefined,
+			);
+			return reply.status(201).send(res);
+		},
+	);
+
+	// ── DELETE /rooms/:id/users/:userId ─────────────────────────────────────────
+	app.delete(
+		"/:id/users/:userId",
+		{
+			schema: {
+				tags: ["rooms"],
+				summary: "Remover permissão direta de usuário da sala",
+				security: [{ sessionCookie: [] }],
+				params: z.object({
+					id: z.string().uuid(),
+					userId: z.string().uuid(),
+				}),
+				response: { 204: z.void() },
+			},
+		},
+		async (request, reply) => {
+			if (!(await requireAdmin(request, reply as unknown as AdminReply))) return;
+
+			const { id: roomId, userId } = request.params as {
+				id: string;
+				userId: string;
+			};
+
 			await removeUserRoomPermission(userId, roomId);
+			return reply.status(204).send();
+		},
+	);
+
+	// ── POST /rooms/:id/users/bulk — sincronizar lista completa de usuários ──────
+	app.post(
+		"/:id/users/bulk",
+		{
+			schema: {
+				tags: ["rooms"],
+				summary: "Sincronizar usuários com acesso direto à sala",
+				description:
+					"Substitui completamente a lista de usuários com permissão direta para a sala.",
+				security: [{ sessionCookie: [] }],
+				params: z.object({ id: z.string().uuid() }),
+				body: z.object({ userIds: z.array(z.string().uuid()) }),
+				response: { 204: z.void() },
+			},
+		},
+		async (request, reply) => {
+			if (!(await requireAdmin(request, reply as unknown as AdminReply))) return;
+
+			const { id: roomId } = request.params as { id: string };
+			const { userIds } = request.body as { userIds: string[] };
+
+			const current = await db
+				.select({ userId: userRoomPermission.userId })
+				.from(userRoomPermission)
+				.where(eq(userRoomPermission.roomId, roomId));
+
+			const currentSet = new Set(current.map((r) => r.userId));
+			const nextSet = new Set(userIds);
+
+			const toAdd = userIds.filter((id) => !currentSet.has(id));
+			const toRemove = [...currentSet].filter((id) => !nextSet.has(id));
+
+			if (toAdd.length > 0) {
+				await db
+					.insert(userRoomPermission)
+					.values(toAdd.map((userId) => ({ id: uuidv7(), userId, roomId })))
+					.onConflictDoNothing();
+			}
+
+			if (toRemove.length > 0) {
+				await db
+					.delete(userRoomPermission)
+					.where(
+						and(
+							eq(userRoomPermission.roomId, roomId),
+							inArray(userRoomPermission.userId, toRemove),
+						),
+					);
+			}
+
+			return reply.status(204).send();
+		},
+	);
+
+	// ── POST /rooms/:id/profiles/bulk — sincronizar lista completa de perfis ─────
+	app.post(
+		"/:id/profiles/bulk",
+		{
+			schema: {
+				tags: ["rooms"],
+				summary: "Sincronizar perfis com acesso à sala",
+				description:
+					"Substitui completamente a lista de perfis com permissão para a sala.",
+				security: [{ sessionCookie: [] }],
+				params: z.object({ id: z.string().uuid() }),
+				body: z.object({ profileIds: z.array(z.string().uuid()) }),
+				response: { 204: z.void() },
+			},
+		},
+		async (request, reply) => {
+			if (!(await requireAdmin(request, reply as unknown as AdminReply))) return;
+
+			const { id: roomId } = request.params as { id: string };
+			const { profileIds } = request.body as { profileIds: string[] };
+
+			const current = await db
+				.select({ profileId: profileRoomPermission.profileId })
+				.from(profileRoomPermission)
+				.where(eq(profileRoomPermission.roomId, roomId));
+
+			const currentSet = new Set(current.map((r) => r.profileId));
+			const nextSet = new Set(profileIds);
+
+			const toAdd = profileIds.filter((id) => !currentSet.has(id));
+			const toRemove = [...currentSet].filter((id) => !nextSet.has(id));
+
+			if (toAdd.length > 0) {
+				await db
+					.insert(profileRoomPermission)
+					.values(
+						toAdd.map((profileId) => ({ id: uuidv7(), profileId, roomId })),
+					)
+					.onConflictDoNothing();
+			}
+
+			if (toRemove.length > 0) {
+				await db
+					.delete(profileRoomPermission)
+					.where(
+						and(
+							eq(profileRoomPermission.roomId, roomId),
+							inArray(profileRoomPermission.profileId, toRemove),
+						),
+					);
+			}
+
 			return reply.status(204).send();
 		},
 	);

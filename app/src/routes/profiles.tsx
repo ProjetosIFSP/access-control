@@ -25,12 +25,16 @@ import { ProfileDeleteDialog } from "@/components/profiles/profile-delete-dialog
 import {
   createProfile,
   deleteProfile,
+  profileRelationsQueryOptions,
   profilesQueryKeys,
   profilesQueryOptions,
   updateProfile,
 } from "@/services/profiles";
 import { usersQueryOptions } from "@/services/users";
-import { roomsAdminQueryOptions } from "@/services/rooms";
+import {
+  roomsAdminQueryOptions,
+  roomTypesQueryOptions,
+} from "@/services/rooms";
 import type { ProfileSummary } from "@/services/profiles/types";
 
 export const Route = createFileRoute("/profiles")({
@@ -55,6 +59,7 @@ export const Route = createFileRoute("/profiles")({
       context.queryClient.ensureQueryData(profilesQueryOptions),
       context.queryClient.ensureQueryData(usersQueryOptions({})),
       context.queryClient.ensureQueryData(roomsAdminQueryOptions),
+      context.queryClient.ensureQueryData(roomTypesQueryOptions),
     ]),
   component: ProfilesPage,
 });
@@ -114,6 +119,11 @@ function ProfilesPage() {
   const invalidateProfiles = () =>
     queryClient.invalidateQueries({ queryKey: profilesQueryKeys.all });
 
+  const invalidateProfileRelations = (profileId: string) =>
+    queryClient.invalidateQueries({
+      queryKey: profileRelationsQueryOptions(profileId).queryKey,
+    });
+
   const createMutation = useMutation({
     mutationFn: createProfile,
     onSuccess: () => {
@@ -125,8 +135,9 @@ function ProfilesPage() {
   });
   const updateMutation = useMutation({
     mutationFn: updateProfile,
-    onSuccess: () => {
+    onSuccess: (_data, variables) => {
       invalidateProfiles();
+      invalidateProfileRelations(variables.id);
       toast.success("Perfil atualizado com sucesso!");
       closePanel();
     },
@@ -134,8 +145,9 @@ function ProfilesPage() {
   });
   const deleteMutation = useMutation({
     mutationFn: deleteProfile,
-    onSuccess: () => {
+    onSuccess: (_data, profileId) => {
       invalidateProfiles();
+      invalidateProfileRelations(profileId);
       toast.success("Perfil excluido com sucesso!");
       setDeleteTarget(null);
     },

@@ -1,5 +1,11 @@
 import * as React from "react";
 import { Check, ChevronsUpDown, X } from "lucide-react";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 
 import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
@@ -24,6 +30,13 @@ export interface MultiSelectOption {
   label: string;
   /** Optional secondary label (e.g. email) shown in smaller text */
   sublabel?: string;
+  /** Optional tooltip content shown when hovering the badge */
+  tooltip?: React.ReactNode;
+}
+
+export interface ReadonlyBadge {
+  label: string;
+  tooltip?: React.ReactNode;
 }
 
 interface MultiSelectProps {
@@ -41,6 +54,8 @@ interface MultiSelectProps {
   showBadges?: boolean;
   /** If true the trigger will take full width */
   fullWidth?: boolean;
+  /** Readonly (inactive) badges shown inside the trigger — no remove button */
+  readonlyBadges?: ReadonlyBadge[];
 }
 
 // ── Component ─────────────────────────────────────────────────────────────────
@@ -57,6 +72,7 @@ export function MultiSelect({
   maxHeight = "300px",
   showBadges = true,
   fullWidth = true,
+  readonlyBadges = [],
 }: MultiSelectProps) {
   const [open, setOpen] = React.useState(false);
   const [search, setSearch] = React.useState("");
@@ -116,25 +132,86 @@ export function MultiSelect({
           )}
         >
           <div className="flex flex-1 flex-wrap gap-1 overflow-hidden">
-            {showBadges && selectedOptions.length > 0 ? (
-              selectedOptions.map((opt) => (
-                <Badge
-                  key={opt.value}
-                  variant="secondary"
-                  className="flex items-center gap-1 pr-1 text-xs"
-                >
-                  <span className="max-w-[120px] truncate">{opt.label}</span>
-                  <button
-                    type="button"
-                    onClick={(e) => remove(opt.value, e)}
-                    className="ml-0.5 rounded-full p-0.5 hover:bg-muted-foreground/20"
-                    aria-label={`Remover ${opt.label}`}
+            {/* Readonly (inactive) badges — no remove button */}
+            <TooltipProvider delayDuration={300}>
+              {readonlyBadges.map((rb) =>
+                rb.tooltip ? (
+                  <Tooltip key={rb.label}>
+                    <TooltipTrigger asChild>
+                      <Badge
+                        variant="secondary"
+                        className="flex items-center text-xs cursor-default select-none opacity-70"
+                      >
+                        <span className="max-w-[140px] truncate">
+                          {rb.label}
+                        </span>
+                      </Badge>
+                    </TooltipTrigger>
+                    <TooltipContent side="top" className="max-w-xs">
+                      {rb.tooltip}
+                    </TooltipContent>
+                  </Tooltip>
+                ) : (
+                  <Badge
+                    key={rb.label}
+                    variant="secondary"
+                    className="flex items-center text-xs cursor-default select-none opacity-70"
                   >
-                    <X className="size-2.5" />
-                  </button>
-                </Badge>
-              ))
-            ) : (
+                    <span className="max-w-[140px] truncate">{rb.label}</span>
+                  </Badge>
+                ),
+              )}
+            </TooltipProvider>
+
+            {showBadges && selectedOptions.length > 0 ? (
+              <TooltipProvider delayDuration={300}>
+                {selectedOptions.map((opt) =>
+                  opt.tooltip ? (
+                    <Tooltip key={opt.value}>
+                      <TooltipTrigger asChild>
+                        <Badge
+                          variant="secondary"
+                          className="flex items-center gap-1 pr-1 text-xs"
+                        >
+                          <span className="max-w-[120px] truncate">
+                            {opt.label}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={(e) => remove(opt.value, e)}
+                            className="ml-0.5 rounded-full p-0.5 hover:bg-muted-foreground/20"
+                            aria-label={`Remover ${opt.label}`}
+                          >
+                            <X className="size-2.5" />
+                          </button>
+                        </Badge>
+                      </TooltipTrigger>
+                      <TooltipContent side="top" className="max-w-xs">
+                        {opt.tooltip}
+                      </TooltipContent>
+                    </Tooltip>
+                  ) : (
+                    <Badge
+                      key={opt.value}
+                      variant="secondary"
+                      className="flex items-center gap-1 pr-1 text-xs"
+                    >
+                      <span className="max-w-[120px] truncate">
+                        {opt.label}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={(e) => remove(opt.value, e)}
+                        className="ml-0.5 rounded-full p-0.5 hover:bg-muted-foreground/20"
+                        aria-label={`Remover ${opt.label}`}
+                      >
+                        <X className="size-2.5" />
+                      </button>
+                    </Badge>
+                  ),
+                )}
+              </TooltipProvider>
+            ) : readonlyBadges.length === 0 ? (
               <span
                 className={cn(
                   "truncate",
@@ -147,7 +224,7 @@ export function MultiSelect({
                     ? `${selectedOptions.length} selecionado${selectedOptions.length > 1 ? "s" : ""}`
                     : placeholder}
               </span>
-            )}
+            ) : null}
           </div>
 
           <div className="flex shrink-0 items-center gap-1">

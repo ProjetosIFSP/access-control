@@ -14,6 +14,7 @@ export type CreateProfilePayload = {
   description?: string;
   userIds?: string[];
   roomIds?: string[];
+  roomTypeIds?: string[];
 };
 
 export type UpdateProfilePayload = {
@@ -22,4 +23,11 @@ export type UpdateProfilePayload = {
   description?: string;
   userIds?: string[];
   roomIds?: string[];
+  roomTypeIds?: string[];
+};
+
+export type ProfileRelations = {
+  users: { id: string; name: string; email: string }[];
+  rooms: { id: string; name: string; blockId: string }[];
+  roomTypes: { id: string; name: string; abbreviation: string }[];
 };

@@ -3,6 +3,7 @@ import { queryOptions } from "@tanstack/react-query";
 
 import type {
   CreateProfilePayload,
+  ProfileRelations,
   ProfileSummary,
   ProfilesResponse,
   UpdateProfilePayload,
@@ -23,6 +24,7 @@ const API_BASE_URL =
 export const profilesQueryKeys = {
   all: ["profiles"] as const,
   list: ["profiles", "list"] as const,
+  relations: (id: string) => ["profiles", id, "relations"] as const,
 };
 
 // ── API Functions ─────────────────────────────────────────────────────────────
@@ -85,6 +87,16 @@ export async function deleteProfile(id: string): Promise<void> {
   }
 }
 
+export async function fetchProfileRelations(
+  id: string,
+): Promise<ProfileRelations> {
+  const res = await fetch(`${API_BASE_URL}/profiles/${id}/relations`, {
+    credentials: "include",
+  });
+  if (!res.ok) throw new Error("Falha ao carregar vínculos do perfil");
+  return res.json();
+}
+
 // ── Query Options ─────────────────────────────────────────────────────────────
 
 export const profilesQueryOptions = queryOptions({
@@ -92,3 +104,11 @@ export const profilesQueryOptions = queryOptions({
   queryFn: fetchProfiles,
   staleTime: 1000 * 60 * 2,
 });
+
+export const profileRelationsQueryOptions = (id: string | null) =>
+  queryOptions({
+    queryKey: profilesQueryKeys.relations(id ?? ""),
+    queryFn: () => fetchProfileRelations(id as string),
+    enabled: !!id,
+    staleTime: 1000 * 60 * 2,
+  });

@@ -105,3 +105,8 @@ export type UpdateRoomPayload = {
   profileIds?: string[];
   userIds?: string[];
 };
+
+export type RoomRelations = {
+  profiles: { id: string; name: string; description: string }[];
+  users: { id: string; name: string; email: string }[];
+};

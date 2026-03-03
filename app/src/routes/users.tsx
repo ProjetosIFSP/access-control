@@ -27,6 +27,7 @@ import {
   usersQueryKeys,
   usersQueryOptions,
 } from "@/services/users";
+import { userRelationsQueryOptions } from "@/services/users";
 import { profilesQueryOptions } from "@/services/profiles";
 import {
   roomsAdminQueryOptions,
@@ -137,6 +138,11 @@ function UsersPage() {
   const invalidateUsers = () =>
     queryClient.invalidateQueries({ queryKey: usersQueryKeys.all });
 
+  const invalidateUserRelations = (userId: string) =>
+    queryClient.invalidateQueries({
+      queryKey: userRelationsQueryOptions(userId).queryKey,
+    });
+
   const createMutation = useMutation({
     mutationFn: createUser,
     onSuccess: () => {
@@ -149,8 +155,9 @@ function UsersPage() {
 
   const updateMutation = useMutation({
     mutationFn: updateUser,
-    onSuccess: () => {
+    onSuccess: (_data, variables) => {
       invalidateUsers();
+      invalidateUserRelations(variables.id);
       toast.success("Usuario atualizado com sucesso!");
       closePanel();
     },
@@ -159,8 +166,9 @@ function UsersPage() {
 
   const deleteMutation = useMutation({
     mutationFn: deleteUser,
-    onSuccess: () => {
+    onSuccess: (_data, userId) => {
       invalidateUsers();
+      invalidateUserRelations(userId);
       toast.success("Usuario excluido com sucesso!");
       setDeleteTarget(null);
     },

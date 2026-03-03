@@ -7,6 +7,7 @@ import type {
   CreateBlockPayload,
   CreateRoomPayload,
   RoomsAdminResponse,
+  RoomRelations,
   RoomsSummaryFilters,
   RoomsSummaryResponse,
   RoomSummaryAdmin,
@@ -34,6 +35,7 @@ export const roomsQueryKeys = {
   adminList: ["rooms", "admin"] as const,
   types: ["room-types"] as const,
   blocks: ["blocks"] as const,
+  relations: (id: string) => ["rooms", id, "relations"] as const,
 };
 
 // ── Room Summary (public) ─────────────────────────────────────────────────────
@@ -75,6 +77,9 @@ export async function fetchRoomsAdmin(): Promise<RoomsAdminResponse> {
         id: string;
         name: string;
         blockId: string;
+        typeId: string;
+        requiresBiometry: boolean;
+        requiresRFID: boolean;
         isLocked: boolean | null;
         doorState: string;
         lastStatusUpdateAt: string | null;
@@ -90,11 +95,11 @@ export async function fetchRoomsAdmin(): Promise<RoomsAdminResponse> {
       name: room.name,
       blockId: room.blockId,
       blockName: block.name,
-      typeId: "",
+      typeId: room.typeId,
       typeAbbreviation: "",
       typeName: "",
-      requiresBiometry: false,
-      requiresRFID: false,
+      requiresBiometry: room.requiresBiometry ?? false,
+      requiresRFID: room.requiresRFID ?? false,
       doorState: room.doorState,
       isLocked: room.isLocked,
       lastStatusUpdateAt: room.lastStatusUpdateAt,
@@ -213,6 +218,14 @@ export async function deleteBlock(id: string): Promise<void> {
   }
 }
 
+export async function fetchRoomRelations(id: string): Promise<RoomRelations> {
+  const res = await fetch(`${API_BASE_URL}/rooms/${id}/relations`, {
+    credentials: "include",
+  });
+  if (!res.ok) throw new Error("Falha ao carregar vínculos da sala");
+  return res.json();
+}
+
 // ── Query Options ─────────────────────────────────────────────────────────────
 
 export const roomsSummaryQueryOptions = (filters: RoomsSummaryFilters) =>
@@ -239,3 +252,11 @@ export const blocksQueryOptions = queryOptions({
   queryFn: fetchBlocks,
   staleTime: 1000 * 60 * 5,
 });
+
+export const roomRelationsQueryOptions = (id: string | null) =>
+  queryOptions({
+    queryKey: roomsQueryKeys.relations(id ?? ""),
+    queryFn: () => fetchRoomRelations(id as string),
+    enabled: !!id,
+    staleTime: 1000 * 60 * 2,
+  });
