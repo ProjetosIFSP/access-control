@@ -21,7 +21,8 @@ import {
   SplitViewPanel,
 } from "@/components/ui/split-view";
 import { useDebounce } from "@/hooks/use-debounce";
-import { fetchCurrentUser } from "@/services/users";
+import { fetchCurrentUser, usersQueryOptions } from "@/services/users";
+import { profilesQueryOptions } from "@/services/profiles";
 
 import { RoomsTable } from "@/components/rooms-admin/rooms-table";
 import { RoomFormPanel } from "@/components/rooms-admin/room-form-panel";
@@ -71,6 +72,8 @@ export const Route = createFileRoute("/rooms")({
       context.queryClient.ensureQueryData(roomsAdminQueryOptions),
       context.queryClient.ensureQueryData(blocksQueryOptions),
       context.queryClient.ensureQueryData(roomTypesQueryOptions),
+      context.queryClient.ensureQueryData(profilesQueryOptions),
+      context.queryClient.ensureQueryData(usersQueryOptions({})),
     ]),
   component: RoomsManagePage,
 });

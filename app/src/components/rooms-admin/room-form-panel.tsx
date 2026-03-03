@@ -2,6 +2,7 @@ import { useForm } from "@tanstack/react-form";
 import { Loader2 } from "lucide-react";
 import { z } from "zod";
 import { useEffect } from "react";
+import { useQuery } from "@tanstack/react-query";
 
 import type {
   RoomSummaryAdmin,
@@ -13,6 +14,7 @@ import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { Separator } from "@/components/ui/separator";
 import { FormField } from "@/components/ui/form-field";
+import { MultiSelect } from "@/components/ui/multi-select";
 import {
   Select,
   SelectContent,
@@ -21,6 +23,8 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
+import { profilesQueryOptions } from "@/services/profiles";
+import { usersQueryOptions } from "@/services/users";
 
 const roomFormSchema = z.object({
   name: z.string().min(1, "Nome obrigatorio").min(2, "Minimo 2 caracteres"),
@@ -36,6 +40,8 @@ export interface RoomFormValues {
   typeId: string;
   requiresBiometry: boolean;
   requiresRFID: boolean;
+  profileIds?: string[];
+  userIds?: string[];
 }
 
 interface RoomFormPanelProps {
@@ -57,6 +63,25 @@ export function RoomFormPanel({
 }: RoomFormPanelProps) {
   const isEditing = room !== null;
 
+  // ── Remote data for selectors ────────────────────────────────────────────
+
+  const { data: profilesData } = useQuery(profilesQueryOptions);
+  const { data: usersData } = useQuery(usersQueryOptions({}));
+
+  const profileOptions = (profilesData?.result ?? []).map((p) => ({
+    value: p.id,
+    label: p.name,
+    sublabel: p.description || undefined,
+  }));
+
+  const userOptions = (usersData?.result ?? []).map((u) => ({
+    value: u.id,
+    label: u.name,
+    sublabel: u.email,
+  }));
+
+  // ── Form ──────────────────────────────────────────────────────────────────
+
   const form = useForm({
     defaultValues: {
       name: room?.name ?? "",
@@ -64,6 +89,8 @@ export function RoomFormPanel({
       typeId: room?.typeId ?? "",
       requiresBiometry: room?.requiresBiometry ?? false,
       requiresRFID: room?.requiresRFID ?? false,
+      profileIds: [] as string[],
+      userIds: [] as string[],
     },
     onSubmit: async ({ value }) => {
       onSubmit(value);
@@ -77,6 +104,8 @@ export function RoomFormPanel({
       typeId: room?.typeId ?? "",
       requiresBiometry: room?.requiresBiometry ?? false,
       requiresRFID: room?.requiresRFID ?? false,
+      profileIds: [],
+      userIds: [],
     });
   }, [room, form]);
 
@@ -88,6 +117,7 @@ export function RoomFormPanel({
       }}
       className="flex flex-col gap-5"
     >
+      {/* Nome */}
       <form.Field
         name="name"
         validators={{
@@ -116,6 +146,7 @@ export function RoomFormPanel({
         )}
       </form.Field>
 
+      {/* Bloco */}
       <form.Field
         name="blockId"
         validators={{
@@ -137,7 +168,7 @@ export function RoomFormPanel({
             >
               <SelectTrigger
                 id="room-block"
-                className="bg-white dark:bg-zinc-900"
+                className="bg-white dark:bg-zinc-900 w-full"
                 aria-invalid={field.state.meta.errors.length > 0}
               >
                 <SelectValue placeholder="Selecione um bloco" />
@@ -154,6 +185,7 @@ export function RoomFormPanel({
         )}
       </form.Field>
 
+      {/* Tipo de sala */}
       <form.Field
         name="typeId"
         validators={{
@@ -175,7 +207,7 @@ export function RoomFormPanel({
             >
               <SelectTrigger
                 id="room-type"
-                className="bg-white dark:bg-zinc-900"
+                className="bg-white dark:bg-zinc-900 w-full"
                 aria-invalid={field.state.meta.errors.length > 0}
               >
                 <SelectValue placeholder="Selecione um tipo" />
@@ -194,6 +226,7 @@ export function RoomFormPanel({
 
       <Separator className="bg-zinc-300 dark:bg-zinc-800" />
 
+      {/* Exige Biometria */}
       <form.Field name="requiresBiometry">
         {(field) => (
           <div className="flex items-center justify-between rounded-lg py-3">
@@ -214,6 +247,7 @@ export function RoomFormPanel({
         )}
       </form.Field>
 
+      {/* Exige RFID */}
       <form.Field name="requiresRFID">
         {(field) => (
           <div className="flex items-center justify-between rounded-lg py-3">
@@ -234,6 +268,49 @@ export function RoomFormPanel({
         )}
       </form.Field>
 
+      <Separator className="bg-zinc-300 dark:bg-zinc-800" />
+
+      {/* Perfis com acesso */}
+      <form.Field name="profileIds">
+        {(field) => (
+          <FormField
+            label="Perfis com Acesso"
+            htmlFor="room-profiles"
+            hint="Perfis de usuarios que terao permissao para acessar esta sala."
+          >
+            <MultiSelect
+              options={profileOptions}
+              value={field.state.value}
+              onChange={(v) => field.handleChange(v)}
+              placeholder="Selecionar perfis..."
+              searchPlaceholder="Buscar perfil..."
+              emptyMessage="Nenhum perfil encontrado."
+            />
+          </FormField>
+        )}
+      </form.Field>
+
+      {/* Usuarios com acesso direto */}
+      <form.Field name="userIds">
+        {(field) => (
+          <FormField
+            label="Usuarios com Acesso Direto"
+            htmlFor="room-users"
+            hint="Usuarios individuais que terao acesso direto a esta sala."
+          >
+            <MultiSelect
+              options={userOptions}
+              value={field.state.value}
+              onChange={(v) => field.handleChange(v)}
+              placeholder="Selecionar usuarios..."
+              searchPlaceholder="Buscar por nome ou e-mail..."
+              emptyMessage="Nenhum usuario encontrado."
+            />
+          </FormField>
+        )}
+      </form.Field>
+
+      {/* Actions */}
       <div className="flex items-center gap-2 pt-2">
         <Button
           type="button"

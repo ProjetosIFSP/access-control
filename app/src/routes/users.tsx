@@ -27,6 +27,11 @@ import {
   usersQueryKeys,
   usersQueryOptions,
 } from "@/services/users";
+import { profilesQueryOptions } from "@/services/profiles";
+import {
+  roomsAdminQueryOptions,
+  roomTypesQueryOptions,
+} from "@/services/rooms";
 import type { UserSummary } from "@/services/users/types";
 
 // ── Route ─────────────────────────────────────────────────────────────────────
@@ -53,7 +58,12 @@ export const Route = createFileRoute("/users")({
   },
   loaderDeps: ({ search: { q } }) => ({ q }),
   loader: ({ context, deps: { q } }) =>
-    context.queryClient.ensureQueryData(usersQueryOptions({ q })),
+    Promise.all([
+      context.queryClient.ensureQueryData(usersQueryOptions({ q })),
+      context.queryClient.ensureQueryData(profilesQueryOptions),
+      context.queryClient.ensureQueryData(roomsAdminQueryOptions),
+      context.queryClient.ensureQueryData(roomTypesQueryOptions),
+    ]),
   component: UsersPage,
 });
 

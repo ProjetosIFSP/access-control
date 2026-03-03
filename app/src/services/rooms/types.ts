@@ -91,6 +91,8 @@ export type CreateRoomPayload = {
   typeId: string;
   requiresBiometry?: boolean;
   requiresRFID?: boolean;
+  profileIds?: string[];
+  userIds?: string[];
 };
 
 export type UpdateRoomPayload = {
@@ -100,4 +102,6 @@ export type UpdateRoomPayload = {
   typeId: string;
   requiresBiometry?: boolean;
   requiresRFID?: boolean;
+  profileIds?: string[];
+  userIds?: string[];
 };

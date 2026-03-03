@@ -12,10 +12,14 @@ export type ProfilesResponse = {
 export type CreateProfilePayload = {
   name: string;
   description?: string;
+  userIds?: string[];
+  roomIds?: string[];
 };
 
 export type UpdateProfilePayload = {
   id: string;
   name: string;
   description?: string;
+  userIds?: string[];
+  roomIds?: string[];
 };

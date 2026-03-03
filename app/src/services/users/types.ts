@@ -18,6 +18,9 @@ export type CreateUserPayload = {
   email: string;
   isAdmin: boolean;
   password?: string;
+  profileIds?: string[];
+  roomIds?: string[];
+  roomTypeIds?: string[];
 };
 
 export type UpdateUserPayload = {
@@ -25,4 +28,7 @@ export type UpdateUserPayload = {
   name: string;
   email: string;
   isAdmin: boolean;
+  profileIds?: string[];
+  roomIds?: string[];
+  roomTypeIds?: string[];
 };

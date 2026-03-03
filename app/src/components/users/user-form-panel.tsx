@@ -2,6 +2,7 @@ import { useForm } from "@tanstack/react-form";
 import { Loader2 } from "lucide-react";
 import { z } from "zod";
 import { useEffect } from "react";
+import { useQuery } from "@tanstack/react-query";
 
 import type { UserSummary } from "@/services/users/types";
 import { Button } from "@/components/ui/button";
@@ -9,6 +10,13 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Separator } from "@/components/ui/separator";
+import { FormField } from "@/components/ui/form-field";
+import { MultiSelect } from "@/components/ui/multi-select";
+import { profilesQueryOptions } from "@/services/profiles";
+import {
+  roomsAdminQueryOptions,
+  roomTypesQueryOptions,
+} from "@/services/rooms";
 
 // ── Schemas ───────────────────────────────────────────────────────────────────
 
@@ -33,6 +41,9 @@ interface UserFormPanelProps {
     email: string;
     isAdmin: boolean;
     password?: string;
+    profileIds?: string[];
+    roomTypeIds?: string[];
+    roomIds?: string[];
   }) => void;
   onCancel: () => void;
 }
@@ -47,12 +58,41 @@ export function UserFormPanel({
 }: UserFormPanelProps) {
   const isEditing = user !== null;
 
+  // ── Remote data for selectors ──────────────────────────────────────────────
+
+  const { data: profilesData } = useQuery(profilesQueryOptions);
+  const { data: roomTypesData } = useQuery(roomTypesQueryOptions);
+  const { data: roomsData } = useQuery(roomsAdminQueryOptions);
+
+  const profileOptions = (profilesData?.result ?? []).map((p) => ({
+    value: p.id,
+    label: p.name,
+    sublabel: p.description || undefined,
+  }));
+
+  const roomTypeOptions = (roomTypesData?.result ?? []).map((rt) => ({
+    value: rt.id,
+    label: rt.name,
+    sublabel: rt.abbreviation,
+  }));
+
+  const roomOptions = (roomsData?.result ?? []).map((r) => ({
+    value: r.id,
+    label: r.name,
+    sublabel: r.blockName,
+  }));
+
+  // ── Form ───────────────────────────────────────────────────────────────────
+
   const form = useForm({
     defaultValues: {
       name: user?.name ?? "",
       email: user?.email ?? "",
       isAdmin: user?.isAdmin ?? false,
       password: "",
+      profileIds: [] as string[],
+      roomTypeIds: [] as string[],
+      roomIds: [] as string[],
     },
     onSubmit: async ({ value }) => {
       const { password, ...rest } = value;
@@ -71,6 +111,9 @@ export function UserFormPanel({
       email: user?.email ?? "",
       isAdmin: user?.isAdmin ?? false,
       password: "",
+      profileIds: [],
+      roomTypeIds: [],
+      roomIds: [],
     });
   }, [user, form]);
 
@@ -209,6 +252,68 @@ export function UserFormPanel({
               onCheckedChange={(checked) => field.handleChange(checked)}
             />
           </div>
+        )}
+      </form.Field>
+
+      <Separator className="bg-zinc-300 dark:bg-zinc-800" />
+
+      {/* Perfis */}
+      <form.Field name="profileIds">
+        {(field) => (
+          <FormField
+            label="Perfis de Acesso"
+            htmlFor="user-profiles"
+            hint="Associe um ou mais perfis a este usuário."
+          >
+            <MultiSelect
+              options={profileOptions}
+              value={field.state.value}
+              onChange={(v) => field.handleChange(v)}
+              placeholder="Selecionar perfis..."
+              searchPlaceholder="Buscar perfil..."
+              emptyMessage="Nenhum perfil encontrado."
+            />
+          </FormField>
+        )}
+      </form.Field>
+
+      {/* Tipos de sala */}
+      <form.Field name="roomTypeIds">
+        {(field) => (
+          <FormField
+            label="Tipos de Sala com Acesso"
+            htmlFor="user-room-types"
+            hint="O usuário terá acesso a todas as salas destes tipos."
+          >
+            <MultiSelect
+              options={roomTypeOptions}
+              value={field.state.value}
+              onChange={(v) => field.handleChange(v)}
+              placeholder="Selecionar tipos de sala..."
+              searchPlaceholder="Buscar tipo..."
+              emptyMessage="Nenhum tipo de sala encontrado."
+            />
+          </FormField>
+        )}
+      </form.Field>
+
+      {/* Salas específicas */}
+      <form.Field name="roomIds">
+        {(field) => (
+          <FormField
+            label="Salas Específicas com Acesso"
+            htmlFor="user-rooms"
+            hint="Salas individuais às quais o usuário terá acesso direto."
+          >
+            <MultiSelect
+              options={roomOptions}
+              value={field.state.value}
+              onChange={(v) => field.handleChange(v)}
+              placeholder="Selecionar salas..."
+              searchPlaceholder="Buscar sala ou bloco..."
+              emptyMessage="Nenhuma sala encontrada."
+            />
+          </FormField>
         )}
       </form.Field>
 

@@ -29,6 +29,8 @@ import {
   profilesQueryOptions,
   updateProfile,
 } from "@/services/profiles";
+import { usersQueryOptions } from "@/services/users";
+import { roomsAdminQueryOptions } from "@/services/rooms";
 import type { ProfileSummary } from "@/services/profiles/types";
 
 export const Route = createFileRoute("/profiles")({
@@ -49,7 +51,11 @@ export const Route = createFileRoute("/profiles")({
     }
   },
   loader: ({ context }) =>
-    context.queryClient.ensureQueryData(profilesQueryOptions),
+    Promise.all([
+      context.queryClient.ensureQueryData(profilesQueryOptions),
+      context.queryClient.ensureQueryData(usersQueryOptions({})),
+      context.queryClient.ensureQueryData(roomsAdminQueryOptions),
+    ]),
   component: ProfilesPage,
 });
 
