@@ -216,7 +216,7 @@ export function UserFormPanel({
       <div className="flex items-center gap-2 pt-2">
         <Button
           type="button"
-          variant="outline"
+          variant="hoverOutline"
           className="flex-1"
           onClick={onCancel}
           disabled={isSubmitting}
@@ -227,6 +227,7 @@ export function UserFormPanel({
           {([canSubmit]) => (
             <Button
               type="submit"
+              variant="hover"
               className="flex-1"
               disabled={!canSubmit || isSubmitting}
             >

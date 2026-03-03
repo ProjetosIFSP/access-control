@@ -4,6 +4,11 @@ import { createFileRoute, redirect } from "@tanstack/react-router";
 import { Plus, DoorOpen, Building2 } from "lucide-react";
 import { toast } from "sonner";
 
+import {
+  ToggleGroup,
+  ToggleGroupItem,
+} from "@/components/animate-ui/components/radix/toggle-group";
+
 import { Button } from "@/components/ui/button";
 import { SearchToolbar } from "@/components/ui/search-toolbar";
 import { TableSkeleton } from "@/components/ui/table-skeleton";
@@ -42,6 +47,9 @@ import type { BlockSummary, RoomSummaryAdmin } from "@/services/rooms/types";
 type ActiveTab = "rooms" | "blocks";
 
 export const Route = createFileRoute("/rooms")({
+  validateSearch: (search: Record<string, unknown>) => ({
+    block: typeof search.block === "string" ? search.block : undefined,
+  }),
   beforeLoad: async () => {
     try {
       const me = await fetchCurrentUser();
@@ -69,6 +77,8 @@ export const Route = createFileRoute("/rooms")({
 
 function RoomsManagePage() {
   const queryClient = useQueryClient();
+  const { block: blockFilter } = Route.useSearch();
+  const navigate = Route.useNavigate();
 
   const [activeTab, setActiveTab] = useState<ActiveTab>("rooms");
   const [inputValue, setInputValue] = useState("");
@@ -132,9 +142,15 @@ function RoomsManagePage() {
     return () => document.removeEventListener("keydown", handleKeyDown);
   }, [panelVisible, closePanel]);
 
-  // biome-ignore lint/correctness/useExhaustiveDependencies: intentionally resets search only on tab change
+  // biome-ignore lint/correctness/useExhaustiveDependencies: intentionally resets search and block filter only on tab change
   useEffect(() => {
     setInputValue("");
+    if (activeTab === "blocks") {
+      navigate({
+        search: (prev) => ({ ...prev, block: undefined }),
+        replace: true,
+      });
+    }
   }, [activeTab]);
 
   const {
@@ -155,13 +171,14 @@ function RoomsManagePage() {
   const allBlocks = blocksData?.result ?? [];
   const roomTypes = roomTypesData?.result ?? [];
 
-  const filteredRooms = debouncedQ.trim()
-    ? allRooms.filter(
-        (r) =>
-          r.name.toLowerCase().includes(debouncedQ.toLowerCase()) ||
-          r.blockName.toLowerCase().includes(debouncedQ.toLowerCase()),
-      )
-    : allRooms;
+  const filteredRooms = allRooms
+    .filter((r) => (blockFilter ? r.blockId === blockFilter : true))
+    .filter((r) =>
+      debouncedQ.trim()
+        ? r.name.toLowerCase().includes(debouncedQ.toLowerCase()) ||
+          r.blockName.toLowerCase().includes(debouncedQ.toLowerCase())
+        : true,
+    );
 
   const filteredBlocks = debouncedQ.trim()
     ? allBlocks.filter((b) =>
@@ -169,7 +186,17 @@ function RoomsManagePage() {
       )
     : allBlocks;
 
-  const hasFilters = !!debouncedQ.trim();
+  const hasFilters = !!debouncedQ.trim() || !!blockFilter;
+
+  function setBlockFilter(value: string) {
+    navigate({
+      search: (prev) => ({
+        ...prev,
+        block: value === "all" || !value ? undefined : value,
+      }),
+      replace: true,
+    });
+  }
 
   const invalidateRooms = () =>
     queryClient.invalidateQueries({ queryKey: roomsQueryKeys.adminList });
@@ -248,7 +275,7 @@ function RoomsManagePage() {
 
   return (
     <>
-      <main className="flex w-full flex-1 flex-col overflow-hidden px-4 sm:px-8 md:px-16 lg:px-24 py-8">
+      <main className="flex w-full flex-1 flex-col overflow-hidden px-4 sm:px-8 md:px-16 lg:px-32 transition-all py-8">
         <SplitView
           open={panelVisible}
           onOpenChange={(open) => !open && closePanel()}
@@ -299,6 +326,23 @@ function RoomsManagePage() {
                   )
                 }
               />
+
+              {activeTab === "rooms" && allBlocks.length > 0 && (
+                <ToggleGroup
+                  type="single"
+                  value={blockFilter ?? "all"}
+                  onValueChange={(v) => setBlockFilter(v || "all")}
+                  variant="outline"
+                  className="flex-wrap justify-start gap-1.5 bg-white dark:bg-zinc-950"
+                >
+                  <ToggleGroupItem value="all">Todos</ToggleGroupItem>
+                  {allBlocks.map((b) => (
+                    <ToggleGroupItem key={b.id} value={b.id}>
+                      {b.name}
+                    </ToggleGroupItem>
+                  ))}
+                </ToggleGroup>
+              )}
 
               {activeTab === "rooms" && (
                 <>

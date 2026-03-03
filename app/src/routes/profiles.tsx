@@ -138,7 +138,7 @@ function ProfilesPage() {
 
   return (
     <>
-      <main className="flex w-full flex-1 flex-col overflow-hidden px-4 sm:px-8 md:px-16 lg:px-24 py-8">
+      <main className="flex w-full flex-1 flex-col overflow-hidden px-4 sm:px-8 md:px-16 lg:px-32 transition-all py-8">
         <SplitView
           open={panelVisible}
           onOpenChange={(open) => !open && closePanel()}

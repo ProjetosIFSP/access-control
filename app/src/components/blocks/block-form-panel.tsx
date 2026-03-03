@@ -33,7 +33,9 @@ export function BlockFormPanel({
 
   const form = useForm({
     defaultValues: { name: block?.name ?? "" },
-    onSubmit: async ({ value }) => { onSubmit(value); },
+    onSubmit: async ({ value }) => {
+      onSubmit(value);
+    },
   });
 
   useEffect(() => {
@@ -42,7 +44,10 @@ export function BlockFormPanel({
 
   return (
     <form
-      onSubmit={(e) => { e.preventDefault(); form.handleSubmit(); }}
+      onSubmit={(e) => {
+        e.preventDefault();
+        form.handleSubmit();
+      }}
       className="flex flex-col gap-5"
     >
       <form.Field
@@ -74,15 +79,30 @@ export function BlockFormPanel({
       </form.Field>
 
       <div className="flex items-center gap-2 pt-2">
-        <Button type="button" variant="outline" className="flex-1" onClick={onCancel} disabled={isSubmitting}>
+        <Button
+          type="button"
+          variant="hoverOutline"
+          className="flex-1"
+          onClick={onCancel}
+          disabled={isSubmitting}
+        >
           Cancelar
         </Button>
         <form.Subscribe selector={(s) => [s.canSubmit, s.isSubmitting]}>
           {([canSubmit]) => (
-            <Button type="submit" className="flex-1" disabled={!canSubmit || isSubmitting}>
+            <Button
+              type="submit"
+              variant="hover"
+              className="flex-1"
+              disabled={!canSubmit || isSubmitting}
+            >
               {isSubmitting ? (
                 <Loader2 className="size-4 animate-spin" />
-              ) : isEditing ? "Salvar" : "Criar"}
+              ) : isEditing ? (
+                "Salvar"
+              ) : (
+                "Criar"
+              )}
             </Button>
           )}
         </form.Subscribe>
