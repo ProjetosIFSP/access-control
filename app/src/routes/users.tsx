@@ -9,6 +9,8 @@ import { ProfilesTable } from "@/components/profiles/profiles-table";
 import { Button } from "@/components/ui/button";
 import { CrudPageHeader } from "@/components/ui/crud-page-header";
 import { EmptyState } from "@/components/ui/empty-state";
+import { FilterBar } from "@/components/ui/filter-bar";
+import { MultiSelect } from "@/components/ui/multi-select";
 import { SearchToolbar } from "@/components/ui/search-toolbar";
 import {
 	SplitView,
@@ -235,7 +237,13 @@ function UsersProfilesPage() {
 			)
 		: allProfiles;
 
-	const hasFilters = !!debouncedQ.trim() || !!q?.trim();
+	const hasFilters =
+		!!debouncedQ.trim() || !!q?.trim() || selectedProfileIds.length > 0;
+	const activeUserFiltersCount = selectedProfileIds.length > 0 ? 1 : 0;
+	const profileOptions = allProfiles.map((p) => ({
+		value: p.id,
+		label: p.name,
+	}));
 
 	// ── Mutations ────────────────────────────────────────────────────────────────
 
@@ -365,31 +373,74 @@ function UsersProfilesPage() {
 								/>
 							</div>
 
-							<SearchToolbar
-								value={inputValue}
-								onChange={setInputValue}
-								inputRef={searchInputRef}
-								placeholder={
-									activeTab === "users"
-										? "Buscar por nome ou e-mail..."
-										: "Buscar por nome ou descricao..."
-								}
-								actions={
-									activeTab === "users" ? (
-										<Button size="sm" variant="hover" onClick={openCreateUser}>
-											<Plus className="size-4" /> Novo Usuario
+							<div className="flex items-center justify-between gap-3 w-full">
+								<div className="flex items-center gap-3 flex-1 min-w-0">
+									<SearchToolbar
+										value={inputValue}
+										onChange={setInputValue}
+										inputRef={searchInputRef}
+										placeholder={
+											activeTab === "users"
+												? "Buscar por nome ou e-mail..."
+												: "Buscar por nome ou descricao..."
+										}
+									/>
+									{activeTab === "users" && profileOptions.length > 0 && (
+										<FilterBar
+											activeCount={activeUserFiltersCount}
+											panelOpen={panelVisible}
+											onClear={() => setSelectedProfileIds([])}
+										>
+											<div className="min-w-[170px]">
+												<MultiSelect
+													options={profileOptions}
+													value={selectedProfileIds}
+													onChange={setSelectedProfileIds}
+													placeholder="Perfis de acesso"
+													searchPlaceholder="Buscar perfil..."
+													emptyMessage="Nenhum perfil encontrado."
+													fullWidth
+												/>
+											</div>
+										</FilterBar>
+									)}
+								</div>
+								<div className="flex-shrink-0">
+									{activeTab === "users" ? (
+										<Button
+											size={panelVisible ? "icon" : "sm"}
+											variant="hover"
+											onClick={openCreateUser}
+											className={
+												!panelVisible ? "max-sm:px-2 max-sm:w-9 max-sm:h-9" : ""
+											}
+										>
+											<Plus className="size-4" />
+											<span
+												className={`hidden ${!panelVisible ? "sm:inline" : ""}`}
+											>
+												Novo Usuario
+											</span>
 										</Button>
 									) : (
 										<Button
-											size="sm"
+											size={panelVisible ? "icon" : "sm"}
 											variant="hover"
 											onClick={openCreateProfile}
+											className={
+												!panelVisible ? "max-sm:px-2 max-sm:w-9 max-sm:h-9" : ""
+											}
 										>
-											<Plus className="size-4" /> Novo Perfil
+											<Plus className="size-4" />
+											<span
+												className={`hidden ${!panelVisible ? "sm:inline" : ""}`}
+											>
+												Novo Perfil
+											</span>
 										</Button>
-									)
-								}
-							/>
+									)}
+								</div>
+							</div>
 
 							{/* Users tab */}
 							{activeTab === "users" &&
@@ -447,7 +498,7 @@ function UsersProfilesPage() {
 						</div>
 					</SplitViewMain>
 
-					<SplitViewPanel className="flex flex-col pl-6">
+					<SplitViewPanel className="flex flex-col">
 						<SplitViewPanelHeader
 							title={getPanelTitle()}
 							subtitle={getPanelSubtitle()}

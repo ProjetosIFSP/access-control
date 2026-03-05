@@ -17,7 +17,6 @@ import { Button } from "@/components/ui/button";
 import { CrudPageHeader } from "@/components/ui/crud-page-header";
 import { EmptyState } from "@/components/ui/empty-state";
 import { FilterBar } from "@/components/ui/filter-bar";
-import { Label } from "@/components/ui/label";
 import { MultiSelect } from "@/components/ui/multi-select";
 import { SearchToolbar } from "@/components/ui/search-toolbar";
 import {
@@ -483,80 +482,110 @@ function RoomsManagePage() {
 								/>
 							</div>
 
-							<SearchToolbar
-								value={inputValue}
-								onChange={setInputValue}
-								inputRef={searchInputRef}
-								placeholder={
-									activeTab === "rooms"
-										? "Buscar por nome..."
-										: activeTab === "types"
-											? "Buscar por nome ou sigla..."
-											: "Buscar por nome..."
-								}
-								actions={
-									activeTab === "rooms" ? (
-										<Button size="sm" variant="hover" onClick={openCreateRoom}>
-											<Plus className="size-4" /> Nova Sala
+							<div className="flex items-center justify-between gap-3 w-full">
+								<div className="flex items-center gap-3 flex-1 min-w-0">
+									<SearchToolbar
+										value={inputValue}
+										onChange={setInputValue}
+										inputRef={searchInputRef}
+										placeholder={
+											activeTab === "rooms"
+												? "Buscar por nome..."
+												: activeTab === "types"
+													? "Buscar por nome ou sigla..."
+													: "Buscar por nome..."
+										}
+									/>
+
+									{/* Rooms filters */}
+									{activeTab === "rooms" &&
+										(blockOptions.length > 0 || typeOptions.length > 0) && (
+											<FilterBar
+												activeCount={roomsFilterActiveCount}
+												panelOpen={panelVisible}
+												onClear={clearRoomsFilters}
+											>
+												{typeOptions.length > 0 && (
+													<div className="min-w-[170px]">
+														<MultiSelect
+															options={typeOptions}
+															value={selectedTypeIds}
+															onChange={setSelectedTypeIds}
+															placeholder="Tipos de sala"
+															searchPlaceholder="Buscar tipo..."
+															emptyMessage="Nenhum tipo encontrado."
+															fullWidth
+														/>
+													</div>
+												)}
+												{blockOptions.length > 0 && (
+													<div className="min-w-[170px]">
+														<MultiSelect
+															options={blockOptions}
+															value={selectedBlockIds}
+															onChange={setSelectedBlockIds}
+															placeholder="Blocos"
+															searchPlaceholder="Buscar bloco..."
+															emptyMessage="Nenhum bloco encontrado."
+															fullWidth
+														/>
+													</div>
+												)}
+											</FilterBar>
+										)}
+								</div>
+								<div className="flex-shrink-0">
+									{activeTab === "rooms" ? (
+										<Button
+											size={panelVisible ? "icon" : "sm"}
+											variant="hover"
+											onClick={openCreateRoom}
+											className={
+												!panelVisible ? "max-sm:px-2 max-sm:w-9 max-sm:h-9" : ""
+											}
+										>
+											<Plus className="size-4" />
+											<span
+												className={`hidden ${!panelVisible ? "sm:inline" : ""}`}
+											>
+												Nova Sala
+											</span>
 										</Button>
 									) : activeTab === "blocks" ? (
-										<Button size="sm" variant="hover" onClick={openCreateBlock}>
-											<Plus className="size-4" /> Novo Bloco
+										<Button
+											size={panelVisible ? "icon" : "sm"}
+											variant="hover"
+											onClick={openCreateBlock}
+											className={
+												!panelVisible ? "max-sm:px-2 max-sm:w-9 max-sm:h-9" : ""
+											}
+										>
+											<Plus className="size-4" />
+											<span
+												className={`hidden ${!panelVisible ? "sm:inline" : ""}`}
+											>
+												Novo Bloco
+											</span>
 										</Button>
 									) : (
 										<Button
-											size="sm"
+											size={panelVisible ? "icon" : "sm"}
 											variant="hover"
 											onClick={openCreateRoomType}
+											className={
+												!panelVisible ? "max-sm:px-2 max-sm:w-9 max-sm:h-9" : ""
+											}
 										>
-											<Plus className="size-4" /> Novo Tipo
+											<Plus className="size-4" />
+											<span
+												className={`hidden ${!panelVisible ? "sm:inline" : ""}`}
+											>
+												Novo Tipo
+											</span>
 										</Button>
-									)
-								}
-							/>
-
-							{/* Rooms filters */}
-							{activeTab === "rooms" &&
-								(blockOptions.length > 0 || typeOptions.length > 0) && (
-									<FilterBar
-										activeCount={roomsFilterActiveCount}
-										panelOpen={panelVisible}
-										onClear={clearRoomsFilters}
-									>
-										{typeOptions.length > 0 && (
-											<div className="flex flex-col gap-1.5">
-												<Label className="text-xs text-muted-foreground">
-													Tipo de sala
-												</Label>
-												<MultiSelect
-													options={typeOptions}
-													value={selectedTypeIds}
-													onChange={setSelectedTypeIds}
-													placeholder="Todos os tipos"
-													searchPlaceholder="Buscar tipo..."
-													emptyMessage="Nenhum tipo encontrado."
-													fullWidth
-												/>
-											</div>
-										)}
-										{blockOptions.length > 0 && (
-											<div className="flex flex-col gap-1.5">
-												<Label className="text-xs text-muted-foreground">
-													Bloco
-												</Label>
-												<MultiSelect
-													options={blockOptions}
-													value={selectedBlockIds}
-													onChange={setSelectedBlockIds}
-													placeholder="Todos os blocos"
-													searchPlaceholder="Buscar bloco..."
-													emptyMessage="Nenhum bloco encontrado."
-													fullWidth
-												/>
-											</div>
-										)}
-									</FilterBar>
-								)}
+									)}
+								</div>
+							</div>
 
 							{activeTab === "rooms" &&
 								(roomsLoading ? (
@@ -638,7 +667,7 @@ function RoomsManagePage() {
 						</div>
 					</SplitViewMain>
 
-					<SplitViewPanel className="flex flex-col pl-6">
+					<SplitViewPanel className="flex flex-col">
 						<SplitViewPanelHeader
 							title={getPanelTitle()}
 							subtitle={getPanelSubtitle()}

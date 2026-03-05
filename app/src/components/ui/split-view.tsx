@@ -55,11 +55,12 @@ export function SplitView({
 			<div className={cn("h-full w-full overflow-hidden", className)}>
 				<div
 					className={cn(
-						"flex h-full transition-transform duration-300 ease-in-out",
+						"flex h-full transition-transform duration-300 ease-in-out gap-4",
 						isOpen
-							? "w-[200dvw] md:w-full -translate-x-[100dvw] md:translate-x-0"
-							: "w-[200dvw] md:w-full translate-x-0",
+							? "w-[calc(200%+1rem)] md:w-full -translate-x-[calc(50%+0.5rem)] md:translate-x-0"
+							: "w-[calc(200%+1rem)] md:w-full translate-x-0",
 					)}
+					role="split-view"
 				>
 					{children}
 				</div>
@@ -81,10 +82,11 @@ export function SplitViewMain({ children, className }: SplitViewSlotProps) {
 	return (
 		<div
 			className={cn(
-				"h-full w-dvw shrink-0 overflow-y-auto transition-all duration-300",
-				isOpen ? "md:w-1/2" : "md:w-full",
+				"h-full w-[calc(50%-0.5rem)] shrink-0 overflow-y-auto transition-all duration-300",
+				isOpen ? "md:w-[calc(50%-0.5rem)]" : "md:w-full",
 				className,
 			)}
+			role="split-view-main"
 		>
 			{children}
 		</div>
@@ -99,10 +101,11 @@ export function SplitViewPanel({ children, className }: SplitViewSlotProps) {
 	return (
 		<div
 			className={cn(
-				"h-full w-dvw shrink-0 overflow-y-auto transition-all duration-300",
-				isOpen ? "md:w-1/2" : "md:w-0 md:opacity-0",
+				"h-full w-[calc(50%-0.5rem)] shrink-0 overflow-y-auto transition-all duration-300",
+				isOpen ? "md:w-[calc(50%-0.5rem)]" : "md:w-0 md:opacity-0",
 				className,
 			)}
+			role="split-view-panel"
 		>
 			{isOpen && children}
 		</div>

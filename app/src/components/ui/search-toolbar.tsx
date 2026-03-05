@@ -32,9 +32,9 @@ export function SearchToolbar({
 	const isMobileOS = useIsMobileOS();
 
 	return (
-		<div className="flex flex-wrap items-center gap-3">
+		<div className="flex items-center gap-3 w-full min-w-0">
 			{/* Search input */}
-			<div className="relative w-full max-w-sm flex-1 min-w-40">
+			<div className="relative flex-1 min-w-0">
 				<Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-zinc-400" />
 				<Input
 					ref={inputRef as RefObject<HTMLInputElement>}
