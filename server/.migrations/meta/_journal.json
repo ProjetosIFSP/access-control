@@ -5,22 +5,8 @@
     {
       "idx": 0,
       "version": "7",
-      "when": 1759616546476,
-      "tag": "0000_lethal_tomas",
-      "breakpoints": true
-    },
-    {
-      "idx": 1,
-      "version": "7",
-      "when": 1772219917293,
-      "tag": "0001_unique_franklin_richards",
-      "breakpoints": true
-    },
-    {
-      "idx": 2,
-      "version": "7",
-      "when": 1772330506538,
-      "tag": "0002_glamorous_sunspot",
+      "when": 1772716370191,
+      "tag": "0000_minor_iron_monger",
       "breakpoints": true
     }
   ]

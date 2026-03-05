@@ -1,4 +1,4 @@
-import { sql, ilike, or } from "drizzle-orm";
+import { ilike, or, sql } from "drizzle-orm";
 import { db } from "@/db";
 import { accessCredential } from "@/db/schema/access";
 import { user } from "@/db/schema/auth";
@@ -23,9 +23,7 @@ export async function getUsers(q?: string) {
 
 	if (q?.trim()) {
 		const pattern = `%${q.trim()}%`;
-		baseQuery.where(
-			or(ilike(user.name, pattern), ilike(user.email, pattern)),
-		);
+		baseQuery.where(or(ilike(user.name, pattern), ilike(user.email, pattern)));
 	}
 
 	const result = await baseQuery.orderBy(user.name);

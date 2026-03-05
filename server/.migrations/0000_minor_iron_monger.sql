@@ -33,6 +33,14 @@ CREATE TABLE "user_room_permission" (
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
+CREATE TABLE "user_room_type_permission" (
+	"id" text PRIMARY KEY NOT NULL,
+	"user_id" text NOT NULL,
+	"room_type_id" text NOT NULL,
+	"expires_at" timestamp with time zone,
+	"created_at" timestamp with time zone DEFAULT now() NOT NULL
+);
+--> statement-breakpoint
 CREATE TABLE "account" (
 	"id" text PRIMARY KEY NOT NULL,
 	"account_id" text NOT NULL,
@@ -105,6 +113,35 @@ CREATE TABLE "door_controller" (
 	CONSTRAINT "door_controller_room_id_unique" UNIQUE("room_id")
 );
 --> statement-breakpoint
+CREATE TABLE "profile" (
+	"id" text PRIMARY KEY NOT NULL,
+	"name" text NOT NULL,
+	"description" text DEFAULT '' NOT NULL,
+	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
+	CONSTRAINT "profile_name_unique" UNIQUE("name")
+);
+--> statement-breakpoint
+CREATE TABLE "profile_room_permission" (
+	"id" text PRIMARY KEY NOT NULL,
+	"profile_id" text NOT NULL,
+	"room_id" text NOT NULL,
+	"expires_at" timestamp with time zone,
+	"created_at" timestamp with time zone DEFAULT now() NOT NULL
+);
+--> statement-breakpoint
+CREATE TABLE "profile_room_type_permission" (
+	"id" text PRIMARY KEY NOT NULL,
+	"profile_id" text NOT NULL,
+	"room_type_id" text NOT NULL,
+	"expires_at" timestamp with time zone,
+	"created_at" timestamp with time zone DEFAULT now() NOT NULL
+);
+--> statement-breakpoint
+CREATE TABLE "user_profile" (
+	"user_id" text NOT NULL,
+	"profile_id" text NOT NULL
+);
+--> statement-breakpoint
 CREATE TABLE "block" (
 	"id" text PRIMARY KEY NOT NULL,
 	"name" text NOT NULL,
@@ -115,11 +152,22 @@ CREATE TABLE "room" (
 	"id" text PRIMARY KEY NOT NULL,
 	"name" text NOT NULL,
 	"block_id" text NOT NULL,
-	"is_locked" boolean DEFAULT true,
+	"is_locked" boolean DEFAULT false,
 	"door_state" "door_state" DEFAULT 'UNKNOWN' NOT NULL,
 	"last_status_update_at" timestamp with time zone,
+	"type_id" text NOT NULL,
+	"requires_biometry" boolean DEFAULT false,
+	"requires_rfid" boolean DEFAULT false,
 	"created_at" timestamp DEFAULT now() NOT NULL,
 	CONSTRAINT "room_name_unique" UNIQUE("name")
+);
+--> statement-breakpoint
+CREATE TABLE "room_type" (
+	"id" text PRIMARY KEY NOT NULL,
+	"name" text NOT NULL,
+	"abbreviation" text NOT NULL,
+	"description" text DEFAULT '' NOT NULL,
+	CONSTRAINT "room_type_name_unique" UNIQUE("name")
 );
 --> statement-breakpoint
 ALTER TABLE "access_credential" ADD CONSTRAINT "access_credential_user_id_user_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."user"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
@@ -128,8 +176,17 @@ ALTER TABLE "access_log" ADD CONSTRAINT "access_log_user_id_user_id_fk" FOREIGN 
 ALTER TABLE "access_log" ADD CONSTRAINT "access_log_access_credential_id_access_credential_id_fk" FOREIGN KEY ("access_credential_id") REFERENCES "public"."access_credential"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "user_room_permission" ADD CONSTRAINT "user_room_permission_user_id_user_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."user"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "user_room_permission" ADD CONSTRAINT "user_room_permission_room_id_room_id_fk" FOREIGN KEY ("room_id") REFERENCES "public"."room"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "user_room_type_permission" ADD CONSTRAINT "user_room_type_permission_user_id_user_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."user"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "user_room_type_permission" ADD CONSTRAINT "user_room_type_permission_room_type_id_room_type_id_fk" FOREIGN KEY ("room_type_id") REFERENCES "public"."room_type"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "account" ADD CONSTRAINT "account_user_id_user_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."user"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "session" ADD CONSTRAINT "session_user_id_user_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."user"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "door_command" ADD CONSTRAINT "door_command_controller_id_door_controller_id_fk" FOREIGN KEY ("controller_id") REFERENCES "public"."door_controller"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "door_controller" ADD CONSTRAINT "door_controller_room_id_room_id_fk" FOREIGN KEY ("room_id") REFERENCES "public"."room"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "room" ADD CONSTRAINT "room_block_id_block_id_fk" FOREIGN KEY ("block_id") REFERENCES "public"."block"("id") ON DELETE cascade ON UPDATE no action;
+ALTER TABLE "profile_room_permission" ADD CONSTRAINT "profile_room_permission_profile_id_profile_id_fk" FOREIGN KEY ("profile_id") REFERENCES "public"."profile"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "profile_room_permission" ADD CONSTRAINT "profile_room_permission_room_id_room_id_fk" FOREIGN KEY ("room_id") REFERENCES "public"."room"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "profile_room_type_permission" ADD CONSTRAINT "profile_room_type_permission_profile_id_profile_id_fk" FOREIGN KEY ("profile_id") REFERENCES "public"."profile"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "profile_room_type_permission" ADD CONSTRAINT "profile_room_type_permission_room_type_id_room_type_id_fk" FOREIGN KEY ("room_type_id") REFERENCES "public"."room_type"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "user_profile" ADD CONSTRAINT "user_profile_user_id_user_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."user"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "user_profile" ADD CONSTRAINT "user_profile_profile_id_profile_id_fk" FOREIGN KEY ("profile_id") REFERENCES "public"."profile"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "room" ADD CONSTRAINT "room_block_id_block_id_fk" FOREIGN KEY ("block_id") REFERENCES "public"."block"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "room" ADD CONSTRAINT "room_type_id_room_type_id_fk" FOREIGN KEY ("type_id") REFERENCES "public"."room_type"("id") ON DELETE restrict ON UPDATE no action;
