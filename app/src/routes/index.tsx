@@ -1,7 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
 import { Search } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
 	ToggleGroup,
 	ToggleGroupItem,
@@ -124,11 +124,14 @@ function RoomsPage() {
 		});
 	}
 
-	const roomTypeOptions =
-		roomTypesData?.result.map((rt) => ({
-			value: rt.abbreviation,
-			label: rt.name,
-		})) ?? [];
+	const roomTypeOptions = useMemo(
+		() =>
+			roomTypesData?.result.map((rt) => ({
+				value: rt.abbreviation,
+				label: rt.name,
+			})) ?? [],
+		[roomTypesData],
+	);
 
 	return (
 		<>

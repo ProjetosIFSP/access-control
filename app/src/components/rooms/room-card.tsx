@@ -2,6 +2,7 @@ import dayjs from "dayjs";
 import relativeTime from "dayjs/plugin/relativeTime";
 import "dayjs/locale/pt-br";
 import { UserRound } from "lucide-react";
+import { useMemo } from "react";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 
@@ -56,15 +57,17 @@ export function RoomCard({ room, authenticated }: RoomCardProps) {
 	const displayUser =
 		room.state === "fechada" ? room.currentUser : room.lastUser;
 
-	const formattedTime = room.lastStatusUpdateAt
-		? dayjs(room.lastStatusUpdateAt).isBefore(dayjs().startOf("day"))
-			? dayjs(room.lastStatusUpdateAt).fromNow()
-			: dayjs(room.lastStatusUpdateAt).format("HH:mm")
-		: null;
-
-	const fullDateTime = room.lastStatusUpdateAt
-		? dayjs(room.lastStatusUpdateAt).format("DD/MM/YYYY HH:mm")
-		: null;
+	const { formattedTime, fullDateTime } = useMemo(() => {
+		if (!room.lastStatusUpdateAt)
+			return { formattedTime: null, fullDateTime: null };
+		const parsed = dayjs(room.lastStatusUpdateAt);
+		return {
+			formattedTime: parsed.isBefore(dayjs().startOf("day"))
+				? parsed.fromNow()
+				: parsed.format("HH:mm"),
+			fullDateTime: parsed.format("DD/MM/YYYY HH:mm"),
+		};
+	}, [room.lastStatusUpdateAt]);
 
 	return (
 		<div

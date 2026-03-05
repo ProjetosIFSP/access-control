@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { memo, useMemo, useState } from "react";
 import {
   Combobox,
   ComboboxContent,
@@ -22,7 +22,15 @@ interface SelectFilterProps {
   className?: string;
 }
 
-export function SelectFilter({
+/** Strips diacritics from a string for accent-insensitive comparison. */
+function normalize(str: string): string {
+  return str
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "");
+}
+
+export const SelectFilter = memo(function SelectFilter({
   value,
   onValueChange,
   placeholder,
@@ -32,26 +40,23 @@ export function SelectFilter({
 }: SelectFilterProps) {
   const [query, setQuery] = useState("");
 
-  const currentValue =
-    value === defaultValue
-      ? null
-      : (options.find((o) => o.value === value) ?? null);
+  const currentValue = useMemo(
+    () =>
+      value === defaultValue
+        ? null
+        : (options.find((o) => o.value === value) ?? null),
+    [value, defaultValue, options],
+  );
 
-  const filtered =
-    query.trim() === ""
-      ? options
-      : options.filter((o) =>
-          o.label
-            .toLowerCase()
-            .normalize("NFD")
-            .replace(/[\u0300-\u036f]/g, "")
-            .includes(
-              query
-                .toLowerCase()
-                .normalize("NFD")
-                .replace(/[\u0300-\u036f]/g, ""),
-            ),
-        );
+  const normalizedQuery = useMemo(() => normalize(query.trim()), [query]);
+
+  const filtered = useMemo(
+    () =>
+      normalizedQuery === ""
+        ? options
+        : options.filter((o) => normalize(o.label).includes(normalizedQuery)),
+    [options, normalizedQuery],
+  );
 
   return (
     <Combobox<SelectFilterOption>
@@ -87,4 +92,4 @@ export function SelectFilter({
       </ComboboxContent>
     </Combobox>
   );
-}
+});

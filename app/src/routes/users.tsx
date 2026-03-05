@@ -1,7 +1,8 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, redirect } from "@tanstack/react-router";
 import { Plus, ShieldCheck, Users } from "lucide-react";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+
 import { toast } from "sonner";
 import { ProfileDeleteDialog } from "@/components/profiles/profile-delete-dialog";
 import { ProfileFormPanel } from "@/components/profiles/profile-form-panel";
@@ -115,56 +116,52 @@ function UsersProfilesPage() {
 		profileIdsParam?.[0] ?? "all",
 	);
 
-	// ── User panel state ────────────────────────────────────────────────────────
-	const [userFormOpen, setUserFormOpen] = useState(false);
-	const [editUser, setEditUser] = useState<UserSummary | null>(null);
+	// ── Panel state — single discriminated union replaces 4 booleans/nulls ─────
+	type PanelMode =
+		| { kind: "none" }
+		| { kind: "createUser" }
+		| { kind: "editUser"; item: UserSummary }
+		| { kind: "createProfile" }
+		| { kind: "editProfile"; item: ProfileSummary };
+
+	const [panelMode, setPanelMode] = useState<PanelMode>({ kind: "none" });
+
+	const panelVisible = panelMode.kind !== "none";
+
+	const userFormOpen =
+		panelMode.kind === "createUser" || panelMode.kind === "editUser";
+	const editUser = panelMode.kind === "editUser" ? panelMode.item : null;
+
+	const profileFormOpen =
+		panelMode.kind === "createProfile" || panelMode.kind === "editProfile";
+	const editProfile = panelMode.kind === "editProfile" ? panelMode.item : null;
+
+	// Delete targets remain independent (dialogs can be open alongside panel)
 	const [deleteUserTarget, setDeleteUserTarget] = useState<UserSummary | null>(
 		null,
 	);
-
-	// ── Profile panel state ─────────────────────────────────────────────────────
-	const [profileFormOpen, setProfileFormOpen] = useState(false);
-	const [editProfile, setEditProfile] = useState<ProfileSummary | null>(null);
 	const [deleteProfileTarget, setDeleteProfileTarget] =
 		useState<ProfileSummary | null>(null);
 
-	const panelVisible =
-		userFormOpen ||
-		editUser !== null ||
-		profileFormOpen ||
-		editProfile !== null;
+	const openCreateUser = useCallback(
+		() => setPanelMode({ kind: "createUser" }),
+		[],
+	);
+	const openEditUser = useCallback(
+		(user: UserSummary) => setPanelMode({ kind: "editUser", item: user }),
+		[],
+	);
+	const openCreateProfile = useCallback(
+		() => setPanelMode({ kind: "createProfile" }),
+		[],
+	);
+	const openEditProfile = useCallback(
+		(profile: ProfileSummary) =>
+			setPanelMode({ kind: "editProfile", item: profile }),
+		[],
+	);
 
-	function openCreateUser() {
-		setEditUser(null);
-		setEditProfile(null);
-		setProfileFormOpen(false);
-		setUserFormOpen(true);
-	}
-	function openEditUser(user: UserSummary) {
-		setUserFormOpen(false);
-		setEditProfile(null);
-		setProfileFormOpen(false);
-		setEditUser(user);
-	}
-	function openCreateProfile() {
-		setEditProfile(null);
-		setEditUser(null);
-		setUserFormOpen(false);
-		setProfileFormOpen(true);
-	}
-	function openEditProfile(profile: ProfileSummary) {
-		setProfileFormOpen(false);
-		setEditUser(null);
-		setUserFormOpen(false);
-		setEditProfile(profile);
-	}
-
-	const closePanel = useCallback(() => {
-		setUserFormOpen(false);
-		setEditUser(null);
-		setProfileFormOpen(false);
-		setEditProfile(null);
-	}, []);
+	const closePanel = useCallback(() => setPanelMode({ kind: "none" }), []);
 
 	// Sync debounced search + profileIds to URL (users tab only)
 	// biome-ignore lint/correctness/useExhaustiveDependencies: intentional
@@ -237,31 +234,41 @@ function UsersProfilesPage() {
 	const allUsers = usersData?.result ?? [];
 	const allProfiles = profilesData?.result ?? [];
 
-	const filteredProfiles = debouncedQ.trim()
-		? allProfiles.filter(
-				(p) =>
-					p.name.toLowerCase().includes(debouncedQ.toLowerCase()) ||
-					p.description.toLowerCase().includes(debouncedQ.toLowerCase()),
-			)
-		: allProfiles;
+	// Memoize lower-cased query to avoid repeated .toLowerCase() calls
+	const lowerDebouncedQ = debouncedQ.toLowerCase();
 
-	const hasFilters =
-		!!debouncedQ.trim() || !!q?.trim() || selectedProfileId !== "all";
+	const filteredProfiles = useMemo(() => {
+		if (!debouncedQ.trim()) return allProfiles;
+		return allProfiles.filter(
+			(p) =>
+				p.name.toLowerCase().includes(lowerDebouncedQ) ||
+				p.description.toLowerCase().includes(lowerDebouncedQ),
+		);
+	}, [allProfiles, debouncedQ, lowerDebouncedQ]);
+
+	// hasFilters: use only the URL param (q) — debouncedQ is the local input
+	// mirror before it syncs to URL, so using both was redundant.
+	const hasFilters = !!q?.trim() || selectedProfileId !== "all";
 	const activeFiltersCount = selectedProfileId !== "all" ? 1 : 0;
 
-	const profileOptions = allProfiles.map((p) => ({
-		value: p.id,
-		label: p.name,
-	}));
+	const profileOptions = useMemo(
+		() => allProfiles.map((p) => ({ value: p.id, label: p.name })),
+		[allProfiles],
+	);
 
 	// ── Mutations ────────────────────────────────────────────────────────────────
 
-	const invalidateUsers = () =>
-		queryClient.invalidateQueries({ queryKey: ["users", "list"] });
-	const invalidateUserRelations = (userId: string) =>
-		queryClient.invalidateQueries({
-			queryKey: userRelationsQueryOptions(userId).queryKey,
-		});
+	const invalidateUsers = useCallback(
+		() => queryClient.invalidateQueries({ queryKey: ["users", "list"] }),
+		[queryClient],
+	);
+	const invalidateUserRelations = useCallback(
+		(userId: string) =>
+			queryClient.invalidateQueries({
+				queryKey: userRelationsQueryOptions(userId).queryKey,
+			}),
+		[queryClient],
+	);
 
 	const createUserMutation = useMutation({
 		mutationFn: createUser,
@@ -293,12 +300,17 @@ function UsersProfilesPage() {
 		onError: (err: Error) => toast.error(err.message),
 	});
 
-	const invalidateProfiles = () =>
-		queryClient.invalidateQueries({ queryKey: profilesQueryKeys.all });
-	const invalidateProfileRelations = (profileId: string) =>
-		queryClient.invalidateQueries({
-			queryKey: profileRelationsQueryOptions(profileId).queryKey,
-		});
+	const invalidateProfiles = useCallback(
+		() => queryClient.invalidateQueries({ queryKey: profilesQueryKeys.all }),
+		[queryClient],
+	);
+	const invalidateProfileRelations = useCallback(
+		(profileId: string) =>
+			queryClient.invalidateQueries({
+				queryKey: profileRelationsQueryOptions(profileId).queryKey,
+			}),
+		[queryClient],
+	);
 
 	const createProfileMutation = useMutation({
 		mutationFn: createProfile,
@@ -330,23 +342,37 @@ function UsersProfilesPage() {
 		onError: (err: Error) => toast.error(err.message),
 	});
 
-	// ── Panel header ─────────────────────────────────────────────────────────────
+	// ── Panel header (memoized) ───────────────────────────────────────────────────
 
-	function getPanelTitle() {
-		if (userFormOpen) return "Novo Usuario";
-		if (editUser) return "Editar Usuario";
-		if (profileFormOpen) return "Novo Perfil";
-		if (editProfile) return "Editar Perfil";
-		return "";
-	}
-	function getPanelSubtitle() {
-		if (userFormOpen) return "Preencha os dados para criar um novo usuario.";
-		if (editUser) return "Altere os dados do usuario abaixo.";
-		if (profileFormOpen)
-			return "Preencha os dados para criar um novo perfil de acesso.";
-		if (editProfile) return "Altere os dados do perfil abaixo.";
-		return "";
-	}
+	const panelTitle = useMemo(() => {
+		switch (panelMode.kind) {
+			case "createUser":
+				return "Novo Usuario";
+			case "editUser":
+				return "Editar Usuario";
+			case "createProfile":
+				return "Novo Perfil";
+			case "editProfile":
+				return "Editar Perfil";
+			default:
+				return "";
+		}
+	}, [panelMode.kind]);
+
+	const panelSubtitle = useMemo(() => {
+		switch (panelMode.kind) {
+			case "createUser":
+				return "Preencha os dados para criar um novo usuario.";
+			case "editUser":
+				return "Altere os dados do usuario abaixo.";
+			case "createProfile":
+				return "Preencha os dados para criar um novo perfil.";
+			case "editProfile":
+				return "Altere os dados do perfil abaixo.";
+			default:
+				return "";
+		}
+	}, [panelMode.kind]);
 
 	// ── Render ───────────────────────────────────────────────────────────────────
 
@@ -501,8 +527,8 @@ function UsersProfilesPage() {
 
 					<SplitViewPanel className="flex flex-col">
 						<SplitViewPanelHeader
-							title={getPanelTitle()}
-							subtitle={getPanelSubtitle()}
+							title={panelTitle}
+							subtitle={panelSubtitle}
 							onClose={closePanel}
 						/>
 						<div className="flex-1 overflow-y-auto py-6">

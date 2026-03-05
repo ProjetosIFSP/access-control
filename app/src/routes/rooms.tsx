@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, redirect } from "@tanstack/react-router";
 import { Building2, DoorOpen, Plus, Tag } from "lucide-react";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 
 import { BlockDeleteDialog } from "@/components/blocks/block-delete-dialog";
@@ -139,86 +139,68 @@ function RoomsManagePage() {
 		blockIdsParam?.[0] ?? "all",
 	);
 
-	const [roomFormOpen, setRoomFormOpen] = useState(false);
-	const [editRoom, setEditRoom] = useState<RoomSummaryAdmin | null>(null);
+	// ── Panel state — single "active panel" discriminated union ─────────────────
+	type PanelMode =
+		| { kind: "none" }
+		| { kind: "createRoom" }
+		| { kind: "editRoom"; item: RoomSummaryAdmin }
+		| { kind: "createBlock" }
+		| { kind: "editBlock"; item: BlockSummary }
+		| { kind: "createRoomType" }
+		| { kind: "editRoomType"; item: RoomType };
+
+	const [panelMode, setPanelMode] = useState<PanelMode>({ kind: "none" });
+
+	const panelVisible = panelMode.kind !== "none";
+
+	const roomFormOpen =
+		panelMode.kind === "createRoom" || panelMode.kind === "editRoom";
+	const editRoom = panelMode.kind === "editRoom" ? panelMode.item : null;
+
+	const blockFormOpen =
+		panelMode.kind === "createBlock" || panelMode.kind === "editBlock";
+	const editBlock = panelMode.kind === "editBlock" ? panelMode.item : null;
+
+	const roomTypeFormOpen =
+		panelMode.kind === "createRoomType" || panelMode.kind === "editRoomType";
+	const editRoomType =
+		panelMode.kind === "editRoomType" ? panelMode.item : null;
+
+	// Delete targets remain independent (dialogs can be open alongside panel)
 	const [deleteRoomTarget, setDeleteRoomTarget] =
 		useState<RoomSummaryAdmin | null>(null);
-
-	const [blockFormOpen, setBlockFormOpen] = useState(false);
-	const [editBlock, setEditBlock] = useState<BlockSummary | null>(null);
 	const [deleteBlockTarget, setDeleteBlockTarget] =
 		useState<BlockSummary | null>(null);
-
-	const [roomTypeFormOpen, setRoomTypeFormOpen] = useState(false);
-	const [editRoomType, setEditRoomType] = useState<RoomType | null>(null);
 	const [deleteRoomTypeTarget, setDeleteRoomTypeTarget] =
 		useState<RoomType | null>(null);
 
-	const panelVisible =
-		roomFormOpen ||
-		editRoom !== null ||
-		blockFormOpen ||
-		editBlock !== null ||
-		roomTypeFormOpen ||
-		editRoomType !== null;
+	const openCreateRoom = useCallback(
+		() => setPanelMode({ kind: "createRoom" }),
+		[],
+	);
+	const openEditRoom = useCallback(
+		(room: RoomSummaryAdmin) => setPanelMode({ kind: "editRoom", item: room }),
+		[],
+	);
+	const openCreateBlock = useCallback(
+		() => setPanelMode({ kind: "createBlock" }),
+		[],
+	);
+	const openEditBlock = useCallback(
+		(block: BlockSummary) => setPanelMode({ kind: "editBlock", item: block }),
+		[],
+	);
+	const openCreateRoomType = useCallback(
+		() => setPanelMode({ kind: "createRoomType" }),
+		[],
+	);
+	const openEditRoomType = useCallback(
+		(roomType: RoomType) =>
+			setPanelMode({ kind: "editRoomType", item: roomType }),
+		[],
+	);
 
-	function openCreateRoom() {
-		setEditRoom(null);
-		setEditBlock(null);
-		setBlockFormOpen(false);
-		setRoomTypeFormOpen(false);
-		setEditRoomType(null);
-		setRoomFormOpen(true);
-	}
-	function openEditRoom(room: RoomSummaryAdmin) {
-		setRoomFormOpen(false);
-		setEditBlock(null);
-		setBlockFormOpen(false);
-		setRoomTypeFormOpen(false);
-		setEditRoomType(null);
-		setEditRoom(room);
-	}
-	function openCreateBlock() {
-		setEditBlock(null);
-		setEditRoom(null);
-		setRoomFormOpen(false);
-		setRoomTypeFormOpen(false);
-		setEditRoomType(null);
-		setBlockFormOpen(true);
-	}
-	function openEditBlock(block: BlockSummary) {
-		setBlockFormOpen(false);
-		setEditRoom(null);
-		setRoomFormOpen(false);
-		setRoomTypeFormOpen(false);
-		setEditRoomType(null);
-		setEditBlock(block);
-	}
-	function openCreateRoomType() {
-		setEditRoomType(null);
-		setEditRoom(null);
-		setRoomFormOpen(false);
-		setEditBlock(null);
-		setBlockFormOpen(false);
-		setRoomTypeFormOpen(true);
-	}
-	function openEditRoomType(roomType: RoomType) {
-		setRoomTypeFormOpen(false);
-		setEditRoom(null);
-		setRoomFormOpen(false);
-		setEditBlock(null);
-		setBlockFormOpen(false);
-		setEditRoomType(roomType);
-	}
-
-	const closePanel = useCallback(() => {
-		setRoomFormOpen(false);
-		setEditRoom(null);
-		setBlockFormOpen(false);
-		setEditBlock(null);
-		setRoomTypeFormOpen(false);
-		setEditRoomType(null);
-	}, []);
+	const closePanel = useCallback(() => setPanelMode({ kind: "none" }), []);
 
 	useEffect(() => {
 		const handleKeyDown = (e: KeyboardEvent) => {
@@ -303,37 +285,51 @@ function RoomsManagePage() {
 	const allBlocks = blocksData?.result ?? [];
 	const roomTypes = roomTypesData?.result ?? [];
 
-	// Blocks tab and types tab filter client-side
-	const filteredBlocks = debouncedQ.trim()
-		? allBlocks.filter((b) =>
-				b.name.toLowerCase().includes(debouncedQ.toLowerCase()),
-			)
-		: allBlocks;
+	// Blocks tab and types tab filter client-side (memoized)
+	const lowerDebouncedQ = debouncedQ.toLowerCase();
 
-	const filteredRoomTypes = debouncedQ.trim()
-		? roomTypes.filter(
-				(t) =>
-					t.name.toLowerCase().includes(debouncedQ.toLowerCase()) ||
-					t.abbreviation.toLowerCase().includes(debouncedQ.toLowerCase()),
-			)
-		: roomTypes;
+	const filteredBlocks = useMemo(() => {
+		if (!debouncedQ.trim()) return allBlocks;
+		return allBlocks.filter((b) =>
+			b.name.toLowerCase().includes(lowerDebouncedQ),
+		);
+	}, [allBlocks, debouncedQ, lowerDebouncedQ]);
+
+	const filteredRoomTypes = useMemo(() => {
+		if (!debouncedQ.trim()) return roomTypes;
+		return roomTypes.filter(
+			(t) =>
+				t.name.toLowerCase().includes(lowerDebouncedQ) ||
+				t.abbreviation.toLowerCase().includes(lowerDebouncedQ),
+		);
+	}, [roomTypes, debouncedQ, lowerDebouncedQ]);
 
 	const hasRoomsFilters =
 		!!qParam?.trim() || selectedTypeId !== "all" || selectedBlockId !== "all";
 	const activeRoomsFilterCount =
 		(selectedTypeId !== "all" ? 1 : 0) + (selectedBlockId !== "all" ? 1 : 0);
 
-	const invalidateRooms = () =>
-		queryClient.invalidateQueries({ queryKey: roomsQueryKeys.adminList() });
-	const invalidateBlocks = () =>
-		queryClient.invalidateQueries({ queryKey: roomsQueryKeys.blocks });
-	const invalidateRoomTypes = () =>
-		queryClient.invalidateQueries({ queryKey: roomsQueryKeys.types });
+	const invalidateRooms = useCallback(
+		() =>
+			queryClient.invalidateQueries({ queryKey: roomsQueryKeys.adminList() }),
+		[queryClient],
+	);
+	const invalidateBlocks = useCallback(
+		() => queryClient.invalidateQueries({ queryKey: roomsQueryKeys.blocks }),
+		[queryClient],
+	);
+	const invalidateRoomTypes = useCallback(
+		() => queryClient.invalidateQueries({ queryKey: roomsQueryKeys.types }),
+		[queryClient],
+	);
 
-	const invalidateRoomRelations = (roomId: string) =>
-		queryClient.invalidateQueries({
-			queryKey: roomRelationsQueryOptions(roomId).queryKey,
-		});
+	const invalidateRoomRelations = useCallback(
+		(roomId: string) =>
+			queryClient.invalidateQueries({
+				queryKey: roomRelationsQueryOptions(roomId).queryKey,
+			}),
+		[queryClient],
+	);
 
 	const createRoomMutation = useMutation({
 		mutationFn: createRoom,
@@ -420,32 +416,57 @@ function RoomsManagePage() {
 		onError: (err: Error) => toast.error(err.message),
 	});
 
-	function getPanelTitle() {
-		if (roomFormOpen) return "Nova Sala";
-		if (editRoom) return "Editar Sala";
-		if (blockFormOpen) return "Novo Bloco";
-		if (editBlock) return "Editar Bloco";
-		if (roomTypeFormOpen) return "Novo Tipo de Sala";
-		if (editRoomType) return "Editar Tipo de Sala";
-		return "";
-	}
-	function getPanelSubtitle() {
-		if (roomFormOpen) return "Preencha os dados para criar uma nova sala.";
-		if (editRoom) return "Altere os dados da sala abaixo.";
-		if (blockFormOpen) return "Preencha os dados para criar um novo bloco.";
-		if (editBlock) return "Altere o nome do bloco abaixo.";
-		if (roomTypeFormOpen)
-			return "Preencha os dados para criar um novo tipo de sala.";
-		if (editRoomType) return "Altere os dados do tipo de sala abaixo.";
-		return "";
-	}
+	const panelTitle = useMemo(() => {
+		switch (panelMode.kind) {
+			case "createRoom":
+				return "Nova Sala";
+			case "editRoom":
+				return "Editar Sala";
+			case "createBlock":
+				return "Novo Bloco";
+			case "editBlock":
+				return "Editar Bloco";
+			case "createRoomType":
+				return "Novo Tipo de Sala";
+			case "editRoomType":
+				return "Editar Tipo de Sala";
+			default:
+				return "";
+		}
+	}, [panelMode.kind]);
 
-	const blockOptions = allBlocks.map((b) => ({ value: b.id, label: b.name }));
-	const typeOptions = roomTypes.map((t) => ({
-		value: t.id,
-		label: t.name,
-		sublabel: t.abbreviation,
-	}));
+	const panelSubtitle = useMemo(() => {
+		switch (panelMode.kind) {
+			case "createRoom":
+				return "Preencha os dados para criar uma nova sala.";
+			case "editRoom":
+				return "Altere os dados da sala abaixo.";
+			case "createBlock":
+				return "Preencha os dados para criar um novo bloco.";
+			case "editBlock":
+				return "Altere o nome do bloco abaixo.";
+			case "createRoomType":
+				return "Preencha os dados para criar um novo tipo de sala.";
+			case "editRoomType":
+				return "Altere os dados do tipo de sala abaixo.";
+			default:
+				return "";
+		}
+	}, [panelMode.kind]);
+
+	const blockOptions = useMemo(
+		() => allBlocks.map((b) => ({ value: b.id, label: b.name })),
+		[allBlocks],
+	);
+	const typeOptions = useMemo(
+		() =>
+			roomTypes.map((t) => ({
+				value: t.id,
+				label: t.name,
+				sublabel: t.abbreviation,
+			})),
+		[roomTypes],
+	);
 
 	return (
 		<>
@@ -659,8 +680,8 @@ function RoomsManagePage() {
 
 					<SplitViewPanel className="flex flex-col">
 						<SplitViewPanelHeader
-							title={getPanelTitle()}
-							subtitle={getPanelSubtitle()}
+							title={panelTitle}
+							subtitle={panelSubtitle}
 							onClose={closePanel}
 						/>
 						<div className="flex-1 overflow-y-auto py-6">

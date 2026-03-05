@@ -1,5 +1,5 @@
 import gsap from "gsap";
-import { useRef } from "react";
+import { memo, useCallback, useRef } from "react";
 import { RoomCard, type RoomCardItem } from "./room-card";
 
 interface BlockSectionProps {
@@ -8,7 +8,7 @@ interface BlockSectionProps {
 	authenticated: boolean;
 }
 
-export function BlockSection({
+export const BlockSection = memo(function BlockSection({
 	blockName,
 	rooms,
 	authenticated,
@@ -22,7 +22,7 @@ export function BlockSection({
 	const velocity = useRef(0);
 	const inertiaTween = useRef<gsap.core.Tween | null>(null);
 
-	function handleMouseDown(e: React.MouseEvent<HTMLDivElement>) {
+	const handleMouseDown = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
 		inertiaTween.current?.kill();
 		isDragging.current = true;
 		startX.current = e.pageX - (scrollRef.current?.offsetLeft ?? 0);
@@ -30,9 +30,9 @@ export function BlockSection({
 		lastX.current = e.pageX;
 		lastTime.current = Date.now();
 		velocity.current = 0;
-	}
+	}, []);
 
-	function handleMouseMove(e: React.MouseEvent<HTMLDivElement>) {
+	const handleMouseMove = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
 		if (!isDragging.current) return;
 		e.preventDefault();
 
@@ -48,9 +48,9 @@ export function BlockSection({
 		if (scrollRef.current) {
 			scrollRef.current.scrollLeft = scrollLeft.current - (x - startX.current);
 		}
-	}
+	}, []);
 
-	function stopDragging() {
+	const stopDragging = useCallback(() => {
 		if (!isDragging.current) return;
 		isDragging.current = false;
 
@@ -68,7 +68,7 @@ export function BlockSection({
 				el.scrollLeft = proxy.value;
 			},
 		});
-	}
+	}, []);
 
 	return (
 		<section className="flex flex-col gap-2">
@@ -93,4 +93,4 @@ export function BlockSection({
 			</section>
 		</section>
 	);
-}
+});

@@ -77,6 +77,11 @@ export async function getRoomsSummary(
 		.where(whereClause)
 		.orderBy(block.name, room.name);
 
+	// Collect the room IDs returned by the main query so we can scope the
+	// access_log lookup to only those rooms (avoids a full-table scan when
+	// there are many access log rows).
+	const relevantRoomIds = rows.map((r) => r.roomId);
+
 	// If authenticated, fetch last GRANTED access per room (one query, DISTINCT ON)
 	type LastAccessRow = {
 		room_id: string;
@@ -87,7 +92,9 @@ export async function getRoomsSummary(
 
 	const lastAccessMap = new Map<string, UserInfo>();
 
-	if (authenticated) {
+	if (authenticated && relevantRoomIds.length > 0) {
+		// Pass the relevant room IDs as a postgres array literal so the DB can
+		// use an index on access_log.room_id instead of scanning the full table.
 		const lastAccess = await client<LastAccessRow[]>`
 			SELECT DISTINCT ON (al.room_id)
 				al.room_id,
@@ -98,6 +105,7 @@ export async function getRoomsSummary(
 			LEFT JOIN "user" u ON u.id = al.user_id
 			WHERE al.status = 'GRANTED'
 			  AND al.user_id IS NOT NULL
+			  AND al.room_id = ANY(${relevantRoomIds})
 			ORDER BY al.room_id, al.timestamp DESC
 		`;
 
