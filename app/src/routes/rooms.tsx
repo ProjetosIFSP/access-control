@@ -14,17 +14,12 @@ import { RoomDeleteDialog } from "@/components/rooms-admin/room-delete-dialog";
 import { RoomFormPanel } from "@/components/rooms-admin/room-form-panel";
 import { RoomsTable } from "@/components/rooms-admin/rooms-table";
 import { Button } from "@/components/ui/button";
+import { TabButton } from "@/components/ui/tab-button";
 import { CrudPageHeader } from "@/components/ui/crud-page-header";
 import { EmptyState } from "@/components/ui/empty-state";
 import { FilterBar } from "@/components/ui/filter-bar";
 import { SearchToolbar } from "@/components/ui/search-toolbar";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+import { SelectFilter } from "@/components/ui/select-filter";
 import {
   SplitView,
   SplitViewMain,
@@ -63,9 +58,9 @@ type ActiveTab = "rooms" | "blocks" | "types";
 
 export const Route = createFileRoute("/rooms")({
   validateSearch: (search: Record<string, unknown>) => ({
-    tab: (["rooms", "blocks", "types"].includes(search.tab as string)
+    tab: (search.tab === "blocks" || search.tab === "types"
       ? search.tab
-      : "rooms") as ActiveTab,
+      : undefined) as ActiveTab | undefined,
     q: typeof search.q === "string" ? search.q : undefined,
     typeIds: Array.isArray(search.typeIds)
       ? (search.typeIds as string[]).filter(Boolean)
@@ -128,7 +123,8 @@ function RoomsManagePage() {
   } = Route.useSearch();
   const navigate = Route.useNavigate();
 
-  const [activeTab, setActiveTab] = useState<ActiveTab>(tabParam ?? "rooms");
+  const activeTabResolved: ActiveTab = tabParam ?? "rooms";
+  const [activeTab, setActiveTab] = useState<ActiveTab>(activeTabResolved);
   const [inputValue, setInputValue] = useState(qParam ?? "");
   const debouncedQ = useDebounce(inputValue, 400);
   const syncMounted = useRef(false);
@@ -268,7 +264,7 @@ function RoomsManagePage() {
     navigate({
       search: (prev) => ({
         ...prev,
-        tab: activeTab,
+        tab: activeTab === "rooms" ? undefined : activeTab,
         q: undefined,
         typeIds: undefined,
         blockIds: undefined,
@@ -324,14 +320,8 @@ function RoomsManagePage() {
 
   const hasRoomsFilters =
     !!qParam?.trim() || selectedTypeId !== "all" || selectedBlockId !== "all";
-  const roomsFilterActiveCount =
+  const activeRoomsFilterCount =
     (selectedTypeId !== "all" ? 1 : 0) + (selectedBlockId !== "all" ? 1 : 0);
-
-  function clearRoomsFilters() {
-    setSelectedTypeId("all");
-    setSelectedBlockId("all");
-    setInputValue("");
-  }
 
   const invalidateRooms = () =>
     queryClient.invalidateQueries({ queryKey: roomsQueryKeys.adminList() });
@@ -472,25 +462,22 @@ function RoomsManagePage() {
               />
 
               {/* Tabs */}
-              <div className="flex items-center gap-1 border-b">
+              <div className="flex items-center gap-1">
                 <TabButton
                   active={activeTab === "rooms"}
                   onClick={() => setActiveTab("rooms")}
-                  icon={<DoorOpen className="size-3.5" />}
                   label="Salas"
                   count={allRooms.length}
                 />
                 <TabButton
                   active={activeTab === "blocks"}
                   onClick={() => setActiveTab("blocks")}
-                  icon={<Building2 className="size-3.5" />}
                   label="Blocos"
                   count={allBlocks.length}
                 />
                 <TabButton
                   active={activeTab === "types"}
                   onClick={() => setActiveTab("types")}
-                  icon={<Tag className="size-3.5" />}
                   label="Tipos"
                   count={roomTypes.length}
                 />
@@ -513,55 +500,26 @@ function RoomsManagePage() {
 
                   {/* Rooms filters */}
                   {activeTab === "rooms" &&
-                    (blockOptions.length > 0 || typeOptions.length > 0) && (
+                    (typeOptions.length > 0 || blockOptions.length > 0) && (
                       <FilterBar
-                        activeCount={roomsFilterActiveCount}
+                        activeCount={activeRoomsFilterCount}
                         panelOpen={panelVisible}
-                        onClear={clearRoomsFilters}
                       >
                         {typeOptions.length > 0 && (
-                          <div className="min-w-[170px]">
-                            <Select
-                              value={selectedTypeId}
-                              onValueChange={setSelectedTypeId}
-                            >
-                              <SelectTrigger className="w-full">
-                                <SelectValue placeholder="Tipos de sala" />
-                              </SelectTrigger>
-                              <SelectContent>
-                                <SelectItem value="all">
-                                  Todos os tipos
-                                </SelectItem>
-                                {typeOptions.map((opt) => (
-                                  <SelectItem key={opt.value} value={opt.value}>
-                                    {opt.label}
-                                  </SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
-                          </div>
+                          <SelectFilter
+                            value={selectedTypeId}
+                            onValueChange={setSelectedTypeId}
+                            placeholder="Tipos"
+                            options={typeOptions}
+                          />
                         )}
                         {blockOptions.length > 0 && (
-                          <div className="min-w-[170px]">
-                            <Select
-                              value={selectedBlockId}
-                              onValueChange={setSelectedBlockId}
-                            >
-                              <SelectTrigger className="w-full">
-                                <SelectValue placeholder="Blocos" />
-                              </SelectTrigger>
-                              <SelectContent>
-                                <SelectItem value="all">
-                                  Todos os blocos
-                                </SelectItem>
-                                {blockOptions.map((opt) => (
-                                  <SelectItem key={opt.value} value={opt.value}>
-                                    {opt.label}
-                                  </SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
-                          </div>
+                          <SelectFilter
+                            value={selectedBlockId}
+                            onValueChange={setSelectedBlockId}
+                            placeholder="Blocos"
+                            options={blockOptions}
+                          />
                         )}
                       </FilterBar>
                     )}
@@ -805,43 +763,5 @@ function RoomsManagePage() {
         }}
       />
     </>
-  );
-}
-
-function TabButton({
-  active,
-  onClick,
-  icon,
-  label,
-  count,
-}: {
-  active: boolean;
-  onClick: () => void;
-  icon: React.ReactNode;
-  label: string;
-  count: number;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={`flex items-center gap-1.5 px-3 py-2 text-sm font-medium border-b-2 -mb-px transition-colors ${
-        active
-          ? "border-zinc-900 text-zinc-900 dark:border-zinc-100 dark:text-zinc-100"
-          : "border-transparent text-zinc-500 hover:text-zinc-700 dark:text-zinc-400 dark:hover:text-zinc-200"
-      }`}
-    >
-      {icon}
-      {label}
-      <span
-        className={`rounded-full px-1.5 py-0.5 text-[10px] font-semibold leading-none ${
-          active
-            ? "bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900"
-            : "bg-zinc-100 text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400"
-        }`}
-      >
-        {count}
-      </span>
-    </button>
   );
 }

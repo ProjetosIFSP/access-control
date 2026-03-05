@@ -7,17 +7,12 @@ import { ProfileDeleteDialog } from "@/components/profiles/profile-delete-dialog
 import { ProfileFormPanel } from "@/components/profiles/profile-form-panel";
 import { ProfilesTable } from "@/components/profiles/profiles-table";
 import { Button } from "@/components/ui/button";
+import { TabButton } from "@/components/ui/tab-button";
 import { CrudPageHeader } from "@/components/ui/crud-page-header";
 import { EmptyState } from "@/components/ui/empty-state";
 import { FilterBar } from "@/components/ui/filter-bar";
 import { SearchToolbar } from "@/components/ui/search-toolbar";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+import { SelectFilter } from "@/components/ui/select-filter";
 import {
   SplitView,
   SplitViewMain,
@@ -252,7 +247,8 @@ function UsersProfilesPage() {
 
   const hasFilters =
     !!debouncedQ.trim() || !!q?.trim() || selectedProfileId !== "all";
-  const activeUserFiltersCount = selectedProfileId !== "all" ? 1 : 0;
+  const activeFiltersCount = selectedProfileId !== "all" ? 1 : 0;
+
   const profileOptions = allProfiles.map((p) => ({
     value: p.id,
     label: p.name,
@@ -369,18 +365,16 @@ function UsersProfilesPage() {
               />
 
               {/* Tabs */}
-              <div className="flex items-center gap-1 border-b">
+              <div className="flex items-center gap-1">
                 <TabButton
                   active={activeTab === "users"}
                   onClick={() => setActiveTab("users")}
-                  icon={<Users className="size-3.5" />}
                   label="Usuarios"
                   count={allUsers.length}
                 />
                 <TabButton
                   active={activeTab === "profiles"}
                   onClick={() => setActiveTab("profiles")}
-                  icon={<ShieldCheck className="size-3.5" />}
                   label="Perfis"
                   count={allProfiles.length}
                 />
@@ -400,28 +394,15 @@ function UsersProfilesPage() {
                   />
                   {activeTab === "users" && profileOptions.length > 0 && (
                     <FilterBar
-                      activeCount={activeUserFiltersCount}
+                      activeCount={activeFiltersCount}
                       panelOpen={panelVisible}
-                      onClear={() => setSelectedProfileId("all")}
                     >
-                      <div className="min-w-[170px]">
-                        <Select
-                          value={selectedProfileId}
-                          onValueChange={setSelectedProfileId}
-                        >
-                          <SelectTrigger className="w-full">
-                            <SelectValue placeholder="Perfil de acesso" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="all">Todos os perfis</SelectItem>
-                            {profileOptions.map((opt) => (
-                              <SelectItem key={opt.value} value={opt.value}>
-                                {opt.label}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      </div>
+                      <SelectFilter
+                        value={selectedProfileId}
+                        onValueChange={setSelectedProfileId}
+                        placeholder="Perfil de acesso"
+                        options={profileOptions}
+                      />
                     </FilterBar>
                   )}
                 </div>
@@ -592,43 +573,5 @@ function UsersProfilesPage() {
         }}
       />
     </>
-  );
-}
-
-function TabButton({
-  active,
-  onClick,
-  icon,
-  label,
-  count,
-}: {
-  active: boolean;
-  onClick: () => void;
-  icon: React.ReactNode;
-  label: string;
-  count: number;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={`flex items-center gap-1.5 px-3 py-2 text-sm font-medium border-b-2 -mb-px transition-colors ${
-        active
-          ? "border-zinc-900 text-zinc-900 dark:border-zinc-100 dark:text-zinc-100"
-          : "border-transparent text-zinc-500 hover:text-zinc-700 dark:text-zinc-400 dark:hover:text-zinc-200"
-      }`}
-    >
-      {icon}
-      {label}
-      <span
-        className={`rounded-full px-1.5 py-0.5 text-[10px] font-semibold leading-none ${
-          active
-            ? "bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900"
-            : "bg-zinc-100 text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400"
-        }`}
-      >
-        {count}
-      </span>
-    </button>
   );
 }
