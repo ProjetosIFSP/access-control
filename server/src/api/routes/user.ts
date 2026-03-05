@@ -1,19 +1,21 @@
 import type { FastifyPluginAsyncZod } from "fastify-type-provider-zod";
 
-type AdminReply = { status: (code: number) => { send: (body: unknown) => void } };
-import type { SchemaWithExamples } from "@/api/openapi";
-import { z } from "@/lib/zod";
-import { auth } from "@/lib/auth";
-import { getUsers } from "@/services/user/get-user";
-import { createUser } from "@/services/user/create-user";
-import { updateUser } from "@/services/user/update-user";
-import { deleteUser } from "@/services/user/delete-user";
-import { db } from "@/db";
-import { userProfile } from "@/db/schema/profile";
-import { userRoomPermission, userRoomTypePermission } from "@/db/schema/access";
-import { profile } from "@/db/schema/profile";
-import { room, roomType } from "@/db/schema/room";
+type AdminReply = {
+	status: (code: number) => { send: (body: unknown) => void };
+};
+
 import { eq } from "drizzle-orm";
+import type { SchemaWithExamples } from "@/api/openapi";
+import { db } from "@/db";
+import { userRoomPermission, userRoomTypePermission } from "@/db/schema/access";
+import { profile, userProfile } from "@/db/schema/profile";
+import { room, roomType } from "@/db/schema/room";
+import { auth } from "@/lib/auth";
+import { z } from "@/lib/zod";
+import { createUser } from "@/services/user/create-user";
+import { deleteUser } from "@/services/user/delete-user";
+import { getUsers } from "@/services/user/get-user";
+import { updateUser } from "@/services/user/update-user";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -128,7 +130,9 @@ export const userRoute: FastifyPluginAsyncZod = async (app) => {
 		async (request, reply) => {
 			const session = await resolveSession(request);
 			if (!session?.user) {
-				return (reply as unknown as AdminReply).status(401).send({ message: "Autenticação necessária." });
+				return (reply as unknown as AdminReply)
+					.status(401)
+					.send({ message: "Autenticação necessária." });
 			}
 			const u = session.user as Record<string, unknown>;
 			return reply.status(200).send({
@@ -141,7 +145,7 @@ export const userRoute: FastifyPluginAsyncZod = async (app) => {
 		},
 	);
 
-	// GET /users?q=  (admin only)
+	// GET /users?q=&profileIds=  (admin only)
 	app.get(
 		"/",
 		{
@@ -153,6 +157,10 @@ export const userRoute: FastifyPluginAsyncZod = async (app) => {
 				security: [{ sessionCookie: [] }],
 				querystring: z.object({
 					q: z.string().optional(),
+					profileIds: z
+						.string()
+						.optional()
+						.describe("IDs de perfis separados por vírgula"),
 				}),
 				response: {
 					200: listUsersResponseSchema,
@@ -163,9 +171,19 @@ export const userRoute: FastifyPluginAsyncZod = async (app) => {
 			} satisfies SchemaWithExamples,
 		},
 		async (request, reply) => {
-			if (!(await requireAdmin(request, reply as unknown as AdminReply))) return;
-			const { q } = request.query as { q?: string };
-			const users = await getUsers(q);
+			if (!(await requireAdmin(request, reply as unknown as AdminReply)))
+				return;
+			const { q, profileIds } = request.query as {
+				q?: string;
+				profileIds?: string;
+			};
+			const profileIdsArray = profileIds?.trim()
+				? profileIds
+						.split(",")
+						.map((id) => id.trim())
+						.filter(Boolean)
+				: undefined;
+			const users = await getUsers({ q, profileIds: profileIdsArray });
 			const payload: z.infer<typeof listUsersResponseSchema> = {
 				result: users.result.map((user) => ({
 					...user,
@@ -192,7 +210,8 @@ export const userRoute: FastifyPluginAsyncZod = async (app) => {
 			},
 		},
 		async (request, reply) => {
-			if (!(await requireAdmin(request, reply as unknown as AdminReply))) return;
+			if (!(await requireAdmin(request, reply as unknown as AdminReply)))
+				return;
 
 			const { id: userId } = request.params as { id: string };
 
@@ -227,7 +246,10 @@ export const userRoute: FastifyPluginAsyncZod = async (app) => {
 						abbreviation: roomType.abbreviation,
 					})
 					.from(userRoomTypePermission)
-					.innerJoin(roomType, eq(userRoomTypePermission.roomTypeId, roomType.id))
+					.innerJoin(
+						roomType,
+						eq(userRoomTypePermission.roomTypeId, roomType.id),
+					)
 					.where(eq(userRoomTypePermission.userId, userId)),
 			]);
 
@@ -268,17 +290,25 @@ export const userRoute: FastifyPluginAsyncZod = async (app) => {
 			},
 		},
 		async (request, reply) => {
-			if (!(await requireAdmin(request, reply as unknown as AdminReply))) return;
-			const { name, email, isAdmin, password, profileIds, roomIds, roomTypeIds } =
-				request.body as {
-					name: string;
-					email: string;
-					isAdmin: boolean;
-					password?: string;
-					profileIds?: string[];
-					roomIds?: string[];
-					roomTypeIds?: string[];
-				};
+			if (!(await requireAdmin(request, reply as unknown as AdminReply)))
+				return;
+			const {
+				name,
+				email,
+				isAdmin,
+				password,
+				profileIds,
+				roomIds,
+				roomTypeIds,
+			} = request.body as {
+				name: string;
+				email: string;
+				isAdmin: boolean;
+				password?: string;
+				profileIds?: string[];
+				roomIds?: string[];
+				roomTypeIds?: string[];
+			};
 			const created = await createUser({
 				name,
 				email,
@@ -329,7 +359,8 @@ export const userRoute: FastifyPluginAsyncZod = async (app) => {
 			},
 		},
 		async (request, reply) => {
-			if (!(await requireAdmin(request, reply as unknown as AdminReply))) return;
+			if (!(await requireAdmin(request, reply as unknown as AdminReply)))
+				return;
 			const { id } = request.params as { id: string };
 			const { name, email, isAdmin, profileIds, roomIds, roomTypeIds } =
 				request.body as {
@@ -373,7 +404,8 @@ export const userRoute: FastifyPluginAsyncZod = async (app) => {
 			},
 		},
 		async (request, reply) => {
-			if (!(await requireAdmin(request, reply as unknown as AdminReply))) return;
+			if (!(await requireAdmin(request, reply as unknown as AdminReply)))
+				return;
 			const { id } = request.params as { id: string };
 			await deleteUser(id);
 			return reply.status(204).send();

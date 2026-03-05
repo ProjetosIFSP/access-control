@@ -1,24 +1,27 @@
 import type { FastifyPluginAsyncZod } from "fastify-type-provider-zod";
 
-type AdminReply = { status: (code: number) => { send: (body: unknown) => void } };
-import type { SchemaWithExamples } from "@/api/openapi";
-import { z } from "@/lib/zod";
-import { auth } from "@/lib/auth";
-import { db } from "@/db";
-import { doorStateEnum } from "@/db/schema/enums";
-import { room } from "@/db/schema/room";
-import { profile, profileRoomPermission } from "@/db/schema/profile";
-import { user } from "@/db/schema/auth";
-import { userRoomPermission } from "@/db/schema/access";
-import { eq, and, inArray } from "drizzle-orm";
+type AdminReply = {
+	status: (code: number) => { send: (body: unknown) => void };
+};
+
+import { and, eq, inArray } from "drizzle-orm";
 import { v7 as uuidv7 } from "uuid";
-import { getRooms } from "@/services/room/get-room";
-import { getRoomsSummary } from "@/services/room/get-rooms-summary";
-import { createRoom } from "@/services/room/create-room";
-import { updateRoom } from "@/services/room/update-room";
-import { deleteRoom } from "@/services/room/delete-room";
+import type { SchemaWithExamples } from "@/api/openapi";
+import { db } from "@/db";
+import { userRoomPermission } from "@/db/schema/access";
+import { user } from "@/db/schema/auth";
+import { doorStateEnum } from "@/db/schema/enums";
+import { profile, profileRoomPermission } from "@/db/schema/profile";
+import { room } from "@/db/schema/room";
+import { auth } from "@/lib/auth";
+import { z } from "@/lib/zod";
 import { addUserRoomPermission } from "@/services/permissions/add-user-room-permission";
 import { removeUserRoomPermission } from "@/services/permissions/remove-user-room-permission";
+import { createRoom } from "@/services/room/create-room";
+import { deleteRoom } from "@/services/room/delete-room";
+import { getRooms } from "@/services/room/get-room";
+import { getRoomsSummary } from "@/services/room/get-rooms-summary";
+import { updateRoom } from "@/services/room/update-room";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -251,8 +254,7 @@ export const roomRoute: FastifyPluginAsyncZod = async (app) => {
 
 			const authenticated = !!session?.user;
 			const isAdmin =
-				authenticated &&
-				!!((session?.user as Record<string, unknown>)?.isAdmin);
+				authenticated && !!(session?.user as Record<string, unknown>)?.isAdmin;
 			const { q, type, state } = request.query;
 			const summary = await getRoomsSummary(authenticated, isAdmin, {
 				q,
@@ -274,6 +276,17 @@ export const roomRoute: FastifyPluginAsyncZod = async (app) => {
 				description:
 					"Retorna as salas cadastradas, incluindo estado atual da porta e informações do bloco.",
 				security: [{ sessionCookie: [] }],
+				querystring: z.object({
+					q: z.string().optional().describe("Filtrar por nome da sala"),
+					typeIds: z
+						.string()
+						.optional()
+						.describe("IDs de tipos separados por vírgula"),
+					blockIds: z
+						.string()
+						.optional()
+						.describe("IDs de blocos separados por vírgula"),
+				}),
 				response: {
 					200: listRoomsResponseSchema,
 				},
@@ -283,9 +296,32 @@ export const roomRoute: FastifyPluginAsyncZod = async (app) => {
 			} satisfies SchemaWithExamples,
 		},
 		async (request, reply) => {
-			if (!(await requireAdmin(request, reply as unknown as AdminReply))) return;
+			if (!(await requireAdmin(request, reply as unknown as AdminReply)))
+				return;
 
-			const rooms = await getRooms();
+			const { q, typeIds, blockIds } = request.query as {
+				q?: string;
+				typeIds?: string;
+				blockIds?: string;
+			};
+			const typeIdsArray = typeIds?.trim()
+				? typeIds
+						.split(",")
+						.map((id) => id.trim())
+						.filter(Boolean)
+				: undefined;
+			const blockIdsArray = blockIds?.trim()
+				? blockIds
+						.split(",")
+						.map((id) => id.trim())
+						.filter(Boolean)
+				: undefined;
+
+			const rooms = await getRooms({
+				q,
+				typeIds: typeIdsArray,
+				blockIds: blockIdsArray,
+			});
 			const payload: z.infer<typeof listRoomsResponseSchema> = {
 				result: rooms.result.map(({ room, block }) => ({
 					room: {
@@ -317,7 +353,8 @@ export const roomRoute: FastifyPluginAsyncZod = async (app) => {
 			},
 		},
 		async (request, reply) => {
-			if (!(await requireAdmin(request, reply as unknown as AdminReply))) return;
+			if (!(await requireAdmin(request, reply as unknown as AdminReply)))
+				return;
 
 			const { id: roomId } = request.params as { id: string };
 
@@ -364,7 +401,8 @@ export const roomRoute: FastifyPluginAsyncZod = async (app) => {
 			},
 		},
 		async (request, reply) => {
-			if (!(await requireAdmin(request, reply as unknown as AdminReply))) return;
+			if (!(await requireAdmin(request, reply as unknown as AdminReply)))
+				return;
 
 			const {
 				name,
@@ -414,7 +452,8 @@ export const roomRoute: FastifyPluginAsyncZod = async (app) => {
 			},
 		},
 		async (request, reply) => {
-			if (!(await requireAdmin(request, reply as unknown as AdminReply))) return;
+			if (!(await requireAdmin(request, reply as unknown as AdminReply)))
+				return;
 
 			const { id } = request.params as { id: string };
 			const {
@@ -462,7 +501,8 @@ export const roomRoute: FastifyPluginAsyncZod = async (app) => {
 			},
 		},
 		async (request, reply) => {
-			if (!(await requireAdmin(request, reply as unknown as AdminReply))) return;
+			if (!(await requireAdmin(request, reply as unknown as AdminReply)))
+				return;
 
 			const { id } = request.params as { id: string };
 			await deleteRoom(id);
@@ -484,7 +524,8 @@ export const roomRoute: FastifyPluginAsyncZod = async (app) => {
 			},
 		},
 		async (request, reply) => {
-			if (!(await requireAdmin(request, reply as unknown as AdminReply))) return;
+			if (!(await requireAdmin(request, reply as unknown as AdminReply)))
+				return;
 
 			const { id: roomId } = request.params as { id: string };
 			const { profileId } = request.body as { profileId: string };
@@ -514,7 +555,8 @@ export const roomRoute: FastifyPluginAsyncZod = async (app) => {
 			},
 		},
 		async (request, reply) => {
-			if (!(await requireAdmin(request, reply as unknown as AdminReply))) return;
+			if (!(await requireAdmin(request, reply as unknown as AdminReply)))
+				return;
 
 			const { id: roomId, profileId } = request.params as {
 				id: string;
@@ -551,7 +593,8 @@ export const roomRoute: FastifyPluginAsyncZod = async (app) => {
 			},
 		},
 		async (request, reply) => {
-			if (!(await requireAdmin(request, reply as unknown as AdminReply))) return;
+			if (!(await requireAdmin(request, reply as unknown as AdminReply)))
+				return;
 
 			const { id: roomId } = request.params as { id: string };
 			const { userId, expiresAt } = request.body as {
@@ -584,7 +627,8 @@ export const roomRoute: FastifyPluginAsyncZod = async (app) => {
 			},
 		},
 		async (request, reply) => {
-			if (!(await requireAdmin(request, reply as unknown as AdminReply))) return;
+			if (!(await requireAdmin(request, reply as unknown as AdminReply)))
+				return;
 
 			const { id: roomId, userId } = request.params as {
 				id: string;
@@ -612,7 +656,8 @@ export const roomRoute: FastifyPluginAsyncZod = async (app) => {
 			},
 		},
 		async (request, reply) => {
-			if (!(await requireAdmin(request, reply as unknown as AdminReply))) return;
+			if (!(await requireAdmin(request, reply as unknown as AdminReply)))
+				return;
 
 			const { id: roomId } = request.params as { id: string };
 			const { userIds } = request.body as { userIds: string[] };
@@ -666,7 +711,8 @@ export const roomRoute: FastifyPluginAsyncZod = async (app) => {
 			},
 		},
 		async (request, reply) => {
-			if (!(await requireAdmin(request, reply as unknown as AdminReply))) return;
+			if (!(await requireAdmin(request, reply as unknown as AdminReply)))
+				return;
 
 			const { id: roomId } = request.params as { id: string };
 			const { profileIds } = request.body as { profileIds: string[] };

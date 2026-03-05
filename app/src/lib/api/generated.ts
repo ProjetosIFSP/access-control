@@ -5,722 +5,753 @@
  * API REST para gerenciamento de usuários, salas e integrações IoT do sistema de controle de acesso.
  * OpenAPI spec version: 1.0.0
  */
-import mutator from './mutator';
+import mutator from "./mutator";
 
 const fetch = async (path: string, options?: RequestInit) => {
-  const method = options?.method ?? 'GET';
-  let body: any = undefined;
-  if (options && ('body' in options) && options.body !== undefined) {
-    try {
-      body = typeof options.body === 'string' ? JSON.parse(options.body as string) : (options.body as any);
-    } catch {
-      body = options.body;
-    }
-  }
-  const result = await mutator({ path, method, body, headers: (options as any)?.headers });
-  return {
-    status: result?.status ?? 200,
-    headers: new Headers(result?.headers ?? {}),
-    text: async () => (typeof result?.data === 'string' ? result.data : JSON.stringify(result?.data ?? {})),
-  } as unknown as Response;
+	const method = options?.method ?? "GET";
+	let body: any;
+	if (options && "body" in options && options.body !== undefined) {
+		try {
+			body =
+				typeof options.body === "string"
+					? JSON.parse(options.body as string)
+					: (options.body as any);
+		} catch {
+			body = options.body;
+		}
+	}
+	const result = await mutator({
+		path,
+		method,
+		body,
+		headers: (options as any)?.headers,
+	});
+	return {
+		status: result?.status ?? 200,
+		headers: new Headers(result?.headers ?? {}),
+		text: async () =>
+			typeof result?.data === "string"
+				? result.data
+				: JSON.stringify(result?.data ?? {}),
+	} as unknown as Response;
 };
 
 export interface Profile {
-  id?: string;
-  name?: string;
-  description?: string;
-  createdAt?: string;
+	id?: string;
+	name?: string;
+	description?: string;
+	createdAt?: string;
 }
 
 export type GetUsers200ResultItem = {
-  /** @pattern ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$ */
-  id: string;
-  name: string;
-  /** @pattern ^(?!\.)(?!.*\.\.)([A-Za-z0-9_'+\-\.]*)[A-Za-z0-9_+-]@([A-Za-z0-9][A-Za-z0-9\-]*\.)+[A-Za-z]{2,}$ */
-  email: string;
-  /** @nullable */
-  image: string | null;
-  isAdmin: boolean;
-  /** @pattern ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d(?::[0-5]\d(?:\.\d+)?)?(?:Z))$ */
-  createdAt: string;
-  /** @pattern ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d(?::[0-5]\d(?:\.\d+)?)?(?:Z))$ */
-  updatedAt: string;
-  hasCredentials: boolean;
+	/** @pattern ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$ */
+	id: string;
+	name: string;
+	/** @pattern ^(?!\.)(?!.*\.\.)([A-Za-z0-9_'+\-\.]*)[A-Za-z0-9_+-]@([A-Za-z0-9][A-Za-z0-9\-]*\.)+[A-Za-z]{2,}$ */
+	email: string;
+	/** @nullable */
+	image: string | null;
+	isAdmin: boolean;
+	/** @pattern ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d(?::[0-5]\d(?:\.\d+)?)?(?:Z))$ */
+	createdAt: string;
+	/** @pattern ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d(?::[0-5]\d(?:\.\d+)?)?(?:Z))$ */
+	updatedAt: string;
+	hasCredentials: boolean;
 };
 
 export type GetUsers200 = {
-  result: GetUsers200ResultItem[];
+	result: GetUsers200ResultItem[];
 };
 
-export type GetRooms200ResultItemRoomDoorState = typeof GetRooms200ResultItemRoomDoorState[keyof typeof GetRooms200ResultItemRoomDoorState];
-
+export type GetRooms200ResultItemRoomDoorState =
+	(typeof GetRooms200ResultItemRoomDoorState)[keyof typeof GetRooms200ResultItemRoomDoorState];
 
 export const GetRooms200ResultItemRoomDoorState = {
-  OPEN: 'OPEN',
-  CLOSED: 'CLOSED',
-  UNKNOWN: 'UNKNOWN',
+	OPEN: "OPEN",
+	CLOSED: "CLOSED",
+	UNKNOWN: "UNKNOWN",
 } as const;
 
 export type GetRooms200ResultItemRoom = {
-  /** @pattern ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$ */
-  id: string;
-  name: string;
-  /** @pattern ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$ */
-  blockId: string;
-  /** @nullable */
-  isLocked: boolean | null;
-  doorState: GetRooms200ResultItemRoomDoorState;
-  /**
-   * @nullable
-   * @pattern ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d(?::[0-5]\d(?:\.\d+)?)?(?:Z))$
-   */
-  lastStatusUpdateAt: string | null;
-  /** @pattern ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d(?::[0-5]\d(?:\.\d+)?)?(?:Z))$ */
-  createdAt: string;
+	/** @pattern ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$ */
+	id: string;
+	name: string;
+	/** @pattern ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$ */
+	blockId: string;
+	/** @nullable */
+	isLocked: boolean | null;
+	doorState: GetRooms200ResultItemRoomDoorState;
+	/**
+	 * @nullable
+	 * @pattern ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d(?::[0-5]\d(?:\.\d+)?)?(?:Z))$
+	 */
+	lastStatusUpdateAt: string | null;
+	/** @pattern ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d(?::[0-5]\d(?:\.\d+)?)?(?:Z))$ */
+	createdAt: string;
 };
 
 export type GetRooms200ResultItemBlock = {
-  /** @pattern ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$ */
-  id: string;
-  name: string;
+	/** @pattern ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$ */
+	id: string;
+	name: string;
 };
 
 export type GetRooms200ResultItem = {
-  room: GetRooms200ResultItemRoom;
-  block: GetRooms200ResultItemBlock;
+	room: GetRooms200ResultItemRoom;
+	block: GetRooms200ResultItemBlock;
 };
 
 export type GetRooms200 = {
-  result: GetRooms200ResultItem[];
+	result: GetRooms200ResultItem[];
 };
 
 export type GetDoors200 = { [key: string]: unknown };
 
 export type GetProfiles200 = {
-  result?: Profile[];
+	result?: Profile[];
 };
 
 export type PostProfilesBody = {
-  name?: string;
-  description?: string;
+	name?: string;
+	description?: string;
 };
 
 export type PostUsersUserIdProfilesBody = {
-  profileId?: string;
+	profileId?: string;
 };
 
 export type PostRoomsRoomIdProfilesBody = {
-  profileId?: string;
+	profileId?: string;
 };
 
-export type PostAccessVerifyBodyType = typeof PostAccessVerifyBodyType[keyof typeof PostAccessVerifyBodyType];
-
+export type PostAccessVerifyBodyType =
+	(typeof PostAccessVerifyBodyType)[keyof typeof PostAccessVerifyBodyType];
 
 export const PostAccessVerifyBodyType = {
-  BIOMETRY: 'BIOMETRY',
-  RFID: 'RFID',
+	BIOMETRY: "BIOMETRY",
+	RFID: "RFID",
 } as const;
 
 export type PostAccessVerifyBody = {
-  roomId?: string;
-  credentialValue?: string;
-  type?: PostAccessVerifyBodyType;
+	roomId?: string;
+	credentialValue?: string;
+	type?: PostAccessVerifyBodyType;
 };
 
 export type PostAccessVerify200 = {
-  granted?: boolean;
-  reason?: string;
+	granted?: boolean;
+	reason?: string;
 };
 
 export type GetDoorsControllerIdCommandsParams = {
-/**
- * @minimum 1
- * @maximum 100
- */
-limit?: number;
+	/**
+	 * @minimum 1
+	 * @maximum 100
+	 */
+	limit?: number;
 };
 
-export type GetDoorsControllerIdCommands200CommandsItemType = typeof GetDoorsControllerIdCommands200CommandsItemType[keyof typeof GetDoorsControllerIdCommands200CommandsItemType];
-
+export type GetDoorsControllerIdCommands200CommandsItemType =
+	(typeof GetDoorsControllerIdCommands200CommandsItemType)[keyof typeof GetDoorsControllerIdCommands200CommandsItemType];
 
 export const GetDoorsControllerIdCommands200CommandsItemType = {
-  UNLOCK: 'UNLOCK',
-  LOCK: 'LOCK',
-  SYNC_STATE: 'SYNC_STATE',
+	UNLOCK: "UNLOCK",
+	LOCK: "LOCK",
+	SYNC_STATE: "SYNC_STATE",
 } as const;
 
-export type GetDoorsControllerIdCommands200CommandsItemStatus = typeof GetDoorsControllerIdCommands200CommandsItemStatus[keyof typeof GetDoorsControllerIdCommands200CommandsItemStatus];
-
+export type GetDoorsControllerIdCommands200CommandsItemStatus =
+	(typeof GetDoorsControllerIdCommands200CommandsItemStatus)[keyof typeof GetDoorsControllerIdCommands200CommandsItemStatus];
 
 export const GetDoorsControllerIdCommands200CommandsItemStatus = {
-  PENDING: 'PENDING',
-  SENT: 'SENT',
-  COMPLETED: 'COMPLETED',
-  FAILED: 'FAILED',
-  EXPIRED: 'EXPIRED',
+	PENDING: "PENDING",
+	SENT: "SENT",
+	COMPLETED: "COMPLETED",
+	FAILED: "FAILED",
+	EXPIRED: "EXPIRED",
 } as const;
 
-export type GetDoorsControllerIdCommands200CommandsItemPayload = {[key: string]: unknown};
+export type GetDoorsControllerIdCommands200CommandsItemPayload = {
+	[key: string]: unknown;
+};
 
 /**
  * @nullable
  */
-export type GetDoorsControllerIdCommands200CommandsItemResultPayload = {[key: string]: unknown} | null;
+export type GetDoorsControllerIdCommands200CommandsItemResultPayload = {
+	[key: string]: unknown;
+} | null;
 
 export type GetDoorsControllerIdCommands200CommandsItem = {
-  /** @pattern ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$ */
-  id: string;
-  type: GetDoorsControllerIdCommands200CommandsItemType;
-  status: GetDoorsControllerIdCommands200CommandsItemStatus;
-  payload: GetDoorsControllerIdCommands200CommandsItemPayload;
-  /** @nullable */
-  resultPayload: GetDoorsControllerIdCommands200CommandsItemResultPayload;
-  /** @nullable */
-  errorMessage: string | null;
-  /**
-   * @nullable
-   * @pattern ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d(?::[0-5]\d(?:\.\d+)?)?(?:Z))$
-   */
-  expiresAt: string | null;
-  /**
-   * @nullable
-   * @pattern ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d(?::[0-5]\d(?:\.\d+)?)?(?:Z))$
-   */
-  sentAt: string | null;
-  /**
-   * @nullable
-   * @pattern ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d(?::[0-5]\d(?:\.\d+)?)?(?:Z))$
-   */
-  processedAt: string | null;
-  /** @pattern ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d(?::[0-5]\d(?:\.\d+)?)?(?:Z))$ */
-  createdAt: string;
-  /** @pattern ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d(?::[0-5]\d(?:\.\d+)?)?(?:Z))$ */
-  updatedAt: string;
+	/** @pattern ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$ */
+	id: string;
+	type: GetDoorsControllerIdCommands200CommandsItemType;
+	status: GetDoorsControllerIdCommands200CommandsItemStatus;
+	payload: GetDoorsControllerIdCommands200CommandsItemPayload;
+	/** @nullable */
+	resultPayload: GetDoorsControllerIdCommands200CommandsItemResultPayload;
+	/** @nullable */
+	errorMessage: string | null;
+	/**
+	 * @nullable
+	 * @pattern ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d(?::[0-5]\d(?:\.\d+)?)?(?:Z))$
+	 */
+	expiresAt: string | null;
+	/**
+	 * @nullable
+	 * @pattern ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d(?::[0-5]\d(?:\.\d+)?)?(?:Z))$
+	 */
+	sentAt: string | null;
+	/**
+	 * @nullable
+	 * @pattern ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d(?::[0-5]\d(?:\.\d+)?)?(?:Z))$
+	 */
+	processedAt: string | null;
+	/** @pattern ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d(?::[0-5]\d(?:\.\d+)?)?(?:Z))$ */
+	createdAt: string;
+	/** @pattern ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d(?::[0-5]\d(?:\.\d+)?)?(?:Z))$ */
+	updatedAt: string;
 };
 
 export type GetDoorsControllerIdCommands200 = {
-  commands: GetDoorsControllerIdCommands200CommandsItem[];
+	commands: GetDoorsControllerIdCommands200CommandsItem[];
 };
 
-export type GetDoorsControllerIdCommands404Error = typeof GetDoorsControllerIdCommands404Error[keyof typeof GetDoorsControllerIdCommands404Error];
-
+export type GetDoorsControllerIdCommands404Error =
+	(typeof GetDoorsControllerIdCommands404Error)[keyof typeof GetDoorsControllerIdCommands404Error];
 
 export const GetDoorsControllerIdCommands404Error = {
-  Controller_not_found: 'Controller not found',
+	Controller_not_found: "Controller not found",
 } as const;
 
-export type GetDoorsControllerIdCommands404Code = typeof GetDoorsControllerIdCommands404Code[keyof typeof GetDoorsControllerIdCommands404Code];
-
+export type GetDoorsControllerIdCommands404Code =
+	(typeof GetDoorsControllerIdCommands404Code)[keyof typeof GetDoorsControllerIdCommands404Code];
 
 export const GetDoorsControllerIdCommands404Code = {
-  CONTROLLER_NOT_FOUND: 'CONTROLLER_NOT_FOUND',
+	CONTROLLER_NOT_FOUND: "CONTROLLER_NOT_FOUND",
 } as const;
 
 export type GetDoorsControllerIdCommands404 = {
-  error: GetDoorsControllerIdCommands404Error;
-  code: GetDoorsControllerIdCommands404Code;
+	error: GetDoorsControllerIdCommands404Error;
+	code: GetDoorsControllerIdCommands404Code;
 };
 
-export type PostDoorsControllerIdCommandsBodyType = typeof PostDoorsControllerIdCommandsBodyType[keyof typeof PostDoorsControllerIdCommandsBodyType];
-
+export type PostDoorsControllerIdCommandsBodyType =
+	(typeof PostDoorsControllerIdCommandsBodyType)[keyof typeof PostDoorsControllerIdCommandsBodyType];
 
 export const PostDoorsControllerIdCommandsBodyType = {
-  UNLOCK: 'UNLOCK',
-  LOCK: 'LOCK',
-  SYNC_STATE: 'SYNC_STATE',
+	UNLOCK: "UNLOCK",
+	LOCK: "LOCK",
+	SYNC_STATE: "SYNC_STATE",
 } as const;
 
-export type PostDoorsControllerIdCommandsBodyPayload = {[key: string]: unknown};
-
-export type PostDoorsControllerIdCommandsBody = {
-  type: PostDoorsControllerIdCommandsBodyType;
-  payload?: PostDoorsControllerIdCommandsBodyPayload;
-  /** @maximum 9007199254740991 */
-  expiresInSeconds?: number;
+export type PostDoorsControllerIdCommandsBodyPayload = {
+	[key: string]: unknown;
 };
 
-export type PostDoorsControllerIdCommands201CommandType = typeof PostDoorsControllerIdCommands201CommandType[keyof typeof PostDoorsControllerIdCommands201CommandType];
+export type PostDoorsControllerIdCommandsBody = {
+	type: PostDoorsControllerIdCommandsBodyType;
+	payload?: PostDoorsControllerIdCommandsBodyPayload;
+	/** @maximum 9007199254740991 */
+	expiresInSeconds?: number;
+};
 
+export type PostDoorsControllerIdCommands201CommandType =
+	(typeof PostDoorsControllerIdCommands201CommandType)[keyof typeof PostDoorsControllerIdCommands201CommandType];
 
 export const PostDoorsControllerIdCommands201CommandType = {
-  UNLOCK: 'UNLOCK',
-  LOCK: 'LOCK',
-  SYNC_STATE: 'SYNC_STATE',
+	UNLOCK: "UNLOCK",
+	LOCK: "LOCK",
+	SYNC_STATE: "SYNC_STATE",
 } as const;
 
-export type PostDoorsControllerIdCommands201CommandStatus = typeof PostDoorsControllerIdCommands201CommandStatus[keyof typeof PostDoorsControllerIdCommands201CommandStatus];
-
+export type PostDoorsControllerIdCommands201CommandStatus =
+	(typeof PostDoorsControllerIdCommands201CommandStatus)[keyof typeof PostDoorsControllerIdCommands201CommandStatus];
 
 export const PostDoorsControllerIdCommands201CommandStatus = {
-  PENDING: 'PENDING',
-  SENT: 'SENT',
-  COMPLETED: 'COMPLETED',
-  FAILED: 'FAILED',
-  EXPIRED: 'EXPIRED',
+	PENDING: "PENDING",
+	SENT: "SENT",
+	COMPLETED: "COMPLETED",
+	FAILED: "FAILED",
+	EXPIRED: "EXPIRED",
 } as const;
 
-export type PostDoorsControllerIdCommands201CommandPayload = {[key: string]: unknown};
+export type PostDoorsControllerIdCommands201CommandPayload = {
+	[key: string]: unknown;
+};
 
 /**
  * @nullable
  */
-export type PostDoorsControllerIdCommands201CommandResultPayload = {[key: string]: unknown} | null;
+export type PostDoorsControllerIdCommands201CommandResultPayload = {
+	[key: string]: unknown;
+} | null;
 
 export type PostDoorsControllerIdCommands201Command = {
-  /** @pattern ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$ */
-  id: string;
-  type: PostDoorsControllerIdCommands201CommandType;
-  status: PostDoorsControllerIdCommands201CommandStatus;
-  payload: PostDoorsControllerIdCommands201CommandPayload;
-  /** @nullable */
-  resultPayload: PostDoorsControllerIdCommands201CommandResultPayload;
-  /** @nullable */
-  errorMessage: string | null;
-  /**
-   * @nullable
-   * @pattern ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d(?::[0-5]\d(?:\.\d+)?)?(?:Z))$
-   */
-  expiresAt: string | null;
-  /**
-   * @nullable
-   * @pattern ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d(?::[0-5]\d(?:\.\d+)?)?(?:Z))$
-   */
-  sentAt: string | null;
-  /**
-   * @nullable
-   * @pattern ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d(?::[0-5]\d(?:\.\d+)?)?(?:Z))$
-   */
-  processedAt: string | null;
-  /** @pattern ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d(?::[0-5]\d(?:\.\d+)?)?(?:Z))$ */
-  createdAt: string;
-  /** @pattern ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d(?::[0-5]\d(?:\.\d+)?)?(?:Z))$ */
-  updatedAt: string;
+	/** @pattern ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$ */
+	id: string;
+	type: PostDoorsControllerIdCommands201CommandType;
+	status: PostDoorsControllerIdCommands201CommandStatus;
+	payload: PostDoorsControllerIdCommands201CommandPayload;
+	/** @nullable */
+	resultPayload: PostDoorsControllerIdCommands201CommandResultPayload;
+	/** @nullable */
+	errorMessage: string | null;
+	/**
+	 * @nullable
+	 * @pattern ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d(?::[0-5]\d(?:\.\d+)?)?(?:Z))$
+	 */
+	expiresAt: string | null;
+	/**
+	 * @nullable
+	 * @pattern ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d(?::[0-5]\d(?:\.\d+)?)?(?:Z))$
+	 */
+	sentAt: string | null;
+	/**
+	 * @nullable
+	 * @pattern ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d(?::[0-5]\d(?:\.\d+)?)?(?:Z))$
+	 */
+	processedAt: string | null;
+	/** @pattern ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d(?::[0-5]\d(?:\.\d+)?)?(?:Z))$ */
+	createdAt: string;
+	/** @pattern ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d(?::[0-5]\d(?:\.\d+)?)?(?:Z))$ */
+	updatedAt: string;
 };
 
 export type PostDoorsControllerIdCommands201 = {
-  command: PostDoorsControllerIdCommands201Command;
+	command: PostDoorsControllerIdCommands201Command;
 };
 
-export type PostDoorsControllerIdCommands404Error = typeof PostDoorsControllerIdCommands404Error[keyof typeof PostDoorsControllerIdCommands404Error];
-
+export type PostDoorsControllerIdCommands404Error =
+	(typeof PostDoorsControllerIdCommands404Error)[keyof typeof PostDoorsControllerIdCommands404Error];
 
 export const PostDoorsControllerIdCommands404Error = {
-  Controller_not_found: 'Controller not found',
+	Controller_not_found: "Controller not found",
 } as const;
 
-export type PostDoorsControllerIdCommands404Code = typeof PostDoorsControllerIdCommands404Code[keyof typeof PostDoorsControllerIdCommands404Code];
-
+export type PostDoorsControllerIdCommands404Code =
+	(typeof PostDoorsControllerIdCommands404Code)[keyof typeof PostDoorsControllerIdCommands404Code];
 
 export const PostDoorsControllerIdCommands404Code = {
-  CONTROLLER_NOT_FOUND: 'CONTROLLER_NOT_FOUND',
+	CONTROLLER_NOT_FOUND: "CONTROLLER_NOT_FOUND",
 } as const;
 
 export type PostDoorsControllerIdCommands404 = {
-  error: PostDoorsControllerIdCommands404Error;
-  code: PostDoorsControllerIdCommands404Code;
+	error: PostDoorsControllerIdCommands404Error;
+	code: PostDoorsControllerIdCommands404Code;
 };
 
 export type GetDoorsControllerIdAccessLogsParams = {
-/**
- * @minimum 1
- * @maximum 200
- */
-limit?: number;
+	/**
+	 * @minimum 1
+	 * @maximum 200
+	 */
+	limit?: number;
 };
 
-export type GetDoorsControllerIdAccessLogs200LogsItemStatus = typeof GetDoorsControllerIdAccessLogs200LogsItemStatus[keyof typeof GetDoorsControllerIdAccessLogs200LogsItemStatus];
-
+export type GetDoorsControllerIdAccessLogs200LogsItemStatus =
+	(typeof GetDoorsControllerIdAccessLogs200LogsItemStatus)[keyof typeof GetDoorsControllerIdAccessLogs200LogsItemStatus];
 
 export const GetDoorsControllerIdAccessLogs200LogsItemStatus = {
-  GRANTED: 'GRANTED',
-  DENIED: 'DENIED',
+	GRANTED: "GRANTED",
+	DENIED: "DENIED",
 } as const;
 
 export type GetDoorsControllerIdAccessLogs200LogsItem = {
-  /** @pattern ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$ */
-  id: string;
-  status: GetDoorsControllerIdAccessLogs200LogsItemStatus;
-  /** @nullable */
-  reason: string | null;
-  /** @pattern ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d(?::[0-5]\d(?:\.\d+)?)?(?:Z))$ */
-  timestamp: string;
-  /**
-   * @nullable
-   * @pattern ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
-   */
-  userId: string | null;
-  /**
-   * @nullable
-   * @pattern ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
-   */
-  credentialId: string | null;
-  /** @nullable */
-  credentialValueUsed: string | null;
-  /** @nullable */
-  userName: string | null;
+	/** @pattern ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$ */
+	id: string;
+	status: GetDoorsControllerIdAccessLogs200LogsItemStatus;
+	/** @nullable */
+	reason: string | null;
+	/** @pattern ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d(?::[0-5]\d(?:\.\d+)?)?(?:Z))$ */
+	timestamp: string;
+	/**
+	 * @nullable
+	 * @pattern ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+	 */
+	userId: string | null;
+	/**
+	 * @nullable
+	 * @pattern ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+	 */
+	credentialId: string | null;
+	/** @nullable */
+	credentialValueUsed: string | null;
+	/** @nullable */
+	userName: string | null;
 };
 
 export type GetDoorsControllerIdAccessLogs200 = {
-  /** @pattern ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$ */
-  roomId: string;
-  logs: GetDoorsControllerIdAccessLogs200LogsItem[];
+	/** @pattern ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$ */
+	roomId: string;
+	logs: GetDoorsControllerIdAccessLogs200LogsItem[];
 };
 
-export type GetDoorsControllerIdAccessLogs404Error = typeof GetDoorsControllerIdAccessLogs404Error[keyof typeof GetDoorsControllerIdAccessLogs404Error];
-
+export type GetDoorsControllerIdAccessLogs404Error =
+	(typeof GetDoorsControllerIdAccessLogs404Error)[keyof typeof GetDoorsControllerIdAccessLogs404Error];
 
 export const GetDoorsControllerIdAccessLogs404Error = {
-  Controller_not_found: 'Controller not found',
+	Controller_not_found: "Controller not found",
 } as const;
 
-export type GetDoorsControllerIdAccessLogs404Code = typeof GetDoorsControllerIdAccessLogs404Code[keyof typeof GetDoorsControllerIdAccessLogs404Code];
-
+export type GetDoorsControllerIdAccessLogs404Code =
+	(typeof GetDoorsControllerIdAccessLogs404Code)[keyof typeof GetDoorsControllerIdAccessLogs404Code];
 
 export const GetDoorsControllerIdAccessLogs404Code = {
-  CONTROLLER_NOT_FOUND: 'CONTROLLER_NOT_FOUND',
+	CONTROLLER_NOT_FOUND: "CONTROLLER_NOT_FOUND",
 } as const;
 
 export type GetDoorsControllerIdAccessLogs404 = {
-  error: GetDoorsControllerIdAccessLogs404Error;
-  code: GetDoorsControllerIdAccessLogs404Code;
+	error: GetDoorsControllerIdAccessLogs404Error;
+	code: GetDoorsControllerIdAccessLogs404Code;
 };
 
 export type PutIotDevicesControllerIdBody = {
-  /** @minLength 1 */
-  roomId: string;
-  /** @minLength 1 */
-  firmwareVersion?: string;
+	/** @minLength 1 */
+	roomId: string;
+	/** @minLength 1 */
+	firmwareVersion?: string;
 };
 
 export type PutIotDevicesControllerId200Controller = {
-  id: string;
-  /** @pattern ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$ */
-  roomId: string;
-  /** @nullable */
-  firmwareVersion: string | null;
-  /** @pattern ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d(?::[0-5]\d(?:\.\d+)?)?(?:Z))$ */
-  lastSeenAt: string;
+	id: string;
+	/** @pattern ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$ */
+	roomId: string;
+	/** @nullable */
+	firmwareVersion: string | null;
+	/** @pattern ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d(?::[0-5]\d(?:\.\d+)?)?(?:Z))$ */
+	lastSeenAt: string;
 };
 
 export type PutIotDevicesControllerId200 = {
-  controller: PutIotDevicesControllerId200Controller;
+	controller: PutIotDevicesControllerId200Controller;
 };
 
 export type PatchIotDevicesControllerIdHeartbeatBody = {
-  /** @minLength 1 */
-  firmwareVersion?: string;
+	/** @minLength 1 */
+	firmwareVersion?: string;
 };
 
 export type PatchIotDevicesControllerIdHeartbeat200Controller = {
-  id: string;
-  /** @pattern ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$ */
-  roomId: string;
-  /** @nullable */
-  firmwareVersion: string | null;
-  /** @pattern ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d(?::[0-5]\d(?:\.\d+)?)?(?:Z))$ */
-  lastSeenAt: string;
+	id: string;
+	/** @pattern ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$ */
+	roomId: string;
+	/** @nullable */
+	firmwareVersion: string | null;
+	/** @pattern ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d(?::[0-5]\d(?:\.\d+)?)?(?:Z))$ */
+	lastSeenAt: string;
 };
 
 export type PatchIotDevicesControllerIdHeartbeat200 = {
-  controller: PatchIotDevicesControllerIdHeartbeat200Controller;
+	controller: PatchIotDevicesControllerIdHeartbeat200Controller;
 };
 
-export type PatchIotDevicesControllerIdHeartbeat404Error = typeof PatchIotDevicesControllerIdHeartbeat404Error[keyof typeof PatchIotDevicesControllerIdHeartbeat404Error];
-
+export type PatchIotDevicesControllerIdHeartbeat404Error =
+	(typeof PatchIotDevicesControllerIdHeartbeat404Error)[keyof typeof PatchIotDevicesControllerIdHeartbeat404Error];
 
 export const PatchIotDevicesControllerIdHeartbeat404Error = {
-  Controller_not_registered: 'Controller not registered',
+	Controller_not_registered: "Controller not registered",
 } as const;
 
-export type PatchIotDevicesControllerIdHeartbeat404Code = typeof PatchIotDevicesControllerIdHeartbeat404Code[keyof typeof PatchIotDevicesControllerIdHeartbeat404Code];
-
+export type PatchIotDevicesControllerIdHeartbeat404Code =
+	(typeof PatchIotDevicesControllerIdHeartbeat404Code)[keyof typeof PatchIotDevicesControllerIdHeartbeat404Code];
 
 export const PatchIotDevicesControllerIdHeartbeat404Code = {
-  CONTROLLER_NOT_FOUND: 'CONTROLLER_NOT_FOUND',
+	CONTROLLER_NOT_FOUND: "CONTROLLER_NOT_FOUND",
 } as const;
 
 export type PatchIotDevicesControllerIdHeartbeat404 = {
-  error: PatchIotDevicesControllerIdHeartbeat404Error;
-  code: PatchIotDevicesControllerIdHeartbeat404Code;
+	error: PatchIotDevicesControllerIdHeartbeat404Error;
+	code: PatchIotDevicesControllerIdHeartbeat404Code;
 };
 
-export type PutIotDevicesControllerIdStatusBodyDoorState = typeof PutIotDevicesControllerIdStatusBodyDoorState[keyof typeof PutIotDevicesControllerIdStatusBodyDoorState];
-
+export type PutIotDevicesControllerIdStatusBodyDoorState =
+	(typeof PutIotDevicesControllerIdStatusBodyDoorState)[keyof typeof PutIotDevicesControllerIdStatusBodyDoorState];
 
 export const PutIotDevicesControllerIdStatusBodyDoorState = {
-  OPEN: 'OPEN',
-  CLOSED: 'CLOSED',
-  UNKNOWN: 'UNKNOWN',
+	OPEN: "OPEN",
+	CLOSED: "CLOSED",
+	UNKNOWN: "UNKNOWN",
 } as const;
 
 export type PutIotDevicesControllerIdStatusBody = {
-  doorState: PutIotDevicesControllerIdStatusBodyDoorState;
-  isLocked: boolean;
-  /** @minLength 1 */
-  firmwareVersion?: string;
+	doorState: PutIotDevicesControllerIdStatusBodyDoorState;
+	isLocked: boolean;
+	/** @minLength 1 */
+	firmwareVersion?: string;
 };
 
-export type PutIotDevicesControllerIdStatus200RoomDoorState = typeof PutIotDevicesControllerIdStatus200RoomDoorState[keyof typeof PutIotDevicesControllerIdStatus200RoomDoorState];
-
+export type PutIotDevicesControllerIdStatus200RoomDoorState =
+	(typeof PutIotDevicesControllerIdStatus200RoomDoorState)[keyof typeof PutIotDevicesControllerIdStatus200RoomDoorState];
 
 export const PutIotDevicesControllerIdStatus200RoomDoorState = {
-  OPEN: 'OPEN',
-  CLOSED: 'CLOSED',
-  UNKNOWN: 'UNKNOWN',
+	OPEN: "OPEN",
+	CLOSED: "CLOSED",
+	UNKNOWN: "UNKNOWN",
 } as const;
 
 export type PutIotDevicesControllerIdStatus200Room = {
-  /** @pattern ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$ */
-  id: string;
-  name: string;
-  doorState: PutIotDevicesControllerIdStatus200RoomDoorState;
-  /** @nullable */
-  isLocked: boolean | null;
-  /**
-   * @nullable
-   * @pattern ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d(?::[0-5]\d(?:\.\d+)?)?(?:Z))$
-   */
-  lastStatusUpdateAt: string | null;
+	/** @pattern ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$ */
+	id: string;
+	name: string;
+	doorState: PutIotDevicesControllerIdStatus200RoomDoorState;
+	/** @nullable */
+	isLocked: boolean | null;
+	/**
+	 * @nullable
+	 * @pattern ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d(?::[0-5]\d(?:\.\d+)?)?(?:Z))$
+	 */
+	lastStatusUpdateAt: string | null;
 };
 
 export type PutIotDevicesControllerIdStatus200 = {
-  room: PutIotDevicesControllerIdStatus200Room;
+	room: PutIotDevicesControllerIdStatus200Room;
 };
 
-export type PutIotDevicesControllerIdStatus404Error = typeof PutIotDevicesControllerIdStatus404Error[keyof typeof PutIotDevicesControllerIdStatus404Error];
-
+export type PutIotDevicesControllerIdStatus404Error =
+	(typeof PutIotDevicesControllerIdStatus404Error)[keyof typeof PutIotDevicesControllerIdStatus404Error];
 
 export const PutIotDevicesControllerIdStatus404Error = {
-  Controller_not_registered: 'Controller not registered',
+	Controller_not_registered: "Controller not registered",
 } as const;
 
-export type PutIotDevicesControllerIdStatus404Code = typeof PutIotDevicesControllerIdStatus404Code[keyof typeof PutIotDevicesControllerIdStatus404Code];
-
+export type PutIotDevicesControllerIdStatus404Code =
+	(typeof PutIotDevicesControllerIdStatus404Code)[keyof typeof PutIotDevicesControllerIdStatus404Code];
 
 export const PutIotDevicesControllerIdStatus404Code = {
-  CONTROLLER_NOT_FOUND: 'CONTROLLER_NOT_FOUND',
+	CONTROLLER_NOT_FOUND: "CONTROLLER_NOT_FOUND",
 } as const;
 
 export type PutIotDevicesControllerIdStatus404 = {
-  error: PutIotDevicesControllerIdStatus404Error;
-  code: PutIotDevicesControllerIdStatus404Code;
+	error: PutIotDevicesControllerIdStatus404Error;
+	code: PutIotDevicesControllerIdStatus404Code;
 };
 
-export type PostIotDevicesControllerIdAccessAttemptsBodyCredentialType = typeof PostIotDevicesControllerIdAccessAttemptsBodyCredentialType[keyof typeof PostIotDevicesControllerIdAccessAttemptsBodyCredentialType];
-
+export type PostIotDevicesControllerIdAccessAttemptsBodyCredentialType =
+	(typeof PostIotDevicesControllerIdAccessAttemptsBodyCredentialType)[keyof typeof PostIotDevicesControllerIdAccessAttemptsBodyCredentialType];
 
 export const PostIotDevicesControllerIdAccessAttemptsBodyCredentialType = {
-  FINGERPRINT: 'FINGERPRINT',
-  NFC_TAG: 'NFC_TAG',
+	FINGERPRINT: "FINGERPRINT",
+	NFC_TAG: "NFC_TAG",
 } as const;
 
 export type PostIotDevicesControllerIdAccessAttemptsBody = {
-  credentialType: PostIotDevicesControllerIdAccessAttemptsBodyCredentialType;
-  /** @minLength 1 */
-  credentialValue: string;
-  /** @minLength 1 */
-  requestId?: string;
+	credentialType: PostIotDevicesControllerIdAccessAttemptsBodyCredentialType;
+	/** @minLength 1 */
+	credentialValue: string;
+	/** @minLength 1 */
+	requestId?: string;
 };
 
-export type PostIotDevicesControllerIdAccessAttempts200Status = typeof PostIotDevicesControllerIdAccessAttempts200Status[keyof typeof PostIotDevicesControllerIdAccessAttempts200Status];
-
+export type PostIotDevicesControllerIdAccessAttempts200Status =
+	(typeof PostIotDevicesControllerIdAccessAttempts200Status)[keyof typeof PostIotDevicesControllerIdAccessAttempts200Status];
 
 export const PostIotDevicesControllerIdAccessAttempts200Status = {
-  GRANTED: 'GRANTED',
-  DENIED: 'DENIED',
+	GRANTED: "GRANTED",
+	DENIED: "DENIED",
 } as const;
 
 export type PostIotDevicesControllerIdAccessAttempts200User = {
-  /** @pattern ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$ */
-  id: string;
-  name: string;
-  isAdmin: boolean;
+	/** @pattern ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$ */
+	id: string;
+	name: string;
+	isAdmin: boolean;
 };
 
 export type PostIotDevicesControllerIdAccessAttempts200Room = {
-  /** @pattern ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$ */
-  id: string;
-  name: string;
+	/** @pattern ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$ */
+	id: string;
+	name: string;
 };
 
 export type PostIotDevicesControllerIdAccessAttempts200 = {
-  status: PostIotDevicesControllerIdAccessAttempts200Status;
-  /** @nullable */
-  reason: string | null;
-  user?: PostIotDevicesControllerIdAccessAttempts200User;
-  room?: PostIotDevicesControllerIdAccessAttempts200Room;
-  requestId?: string;
+	status: PostIotDevicesControllerIdAccessAttempts200Status;
+	/** @nullable */
+	reason: string | null;
+	user?: PostIotDevicesControllerIdAccessAttempts200User;
+	room?: PostIotDevicesControllerIdAccessAttempts200Room;
+	requestId?: string;
 };
 
-export type PostIotDevicesControllerIdCommandsBodyType = typeof PostIotDevicesControllerIdCommandsBodyType[keyof typeof PostIotDevicesControllerIdCommandsBodyType];
-
+export type PostIotDevicesControllerIdCommandsBodyType =
+	(typeof PostIotDevicesControllerIdCommandsBodyType)[keyof typeof PostIotDevicesControllerIdCommandsBodyType];
 
 export const PostIotDevicesControllerIdCommandsBodyType = {
-  UNLOCK: 'UNLOCK',
-  LOCK: 'LOCK',
-  SYNC_STATE: 'SYNC_STATE',
+	UNLOCK: "UNLOCK",
+	LOCK: "LOCK",
+	SYNC_STATE: "SYNC_STATE",
 } as const;
 
-export type PostIotDevicesControllerIdCommandsBodyPayload = {[key: string]: unknown};
-
-export type PostIotDevicesControllerIdCommandsBody = {
-  type: PostIotDevicesControllerIdCommandsBodyType;
-  payload?: PostIotDevicesControllerIdCommandsBodyPayload;
-  /** @maximum 9007199254740991 */
-  expiresInSeconds?: number;
+export type PostIotDevicesControllerIdCommandsBodyPayload = {
+	[key: string]: unknown;
 };
 
-export type PostIotDevicesControllerIdCommands201CommandType = typeof PostIotDevicesControllerIdCommands201CommandType[keyof typeof PostIotDevicesControllerIdCommands201CommandType];
+export type PostIotDevicesControllerIdCommandsBody = {
+	type: PostIotDevicesControllerIdCommandsBodyType;
+	payload?: PostIotDevicesControllerIdCommandsBodyPayload;
+	/** @maximum 9007199254740991 */
+	expiresInSeconds?: number;
+};
 
+export type PostIotDevicesControllerIdCommands201CommandType =
+	(typeof PostIotDevicesControllerIdCommands201CommandType)[keyof typeof PostIotDevicesControllerIdCommands201CommandType];
 
 export const PostIotDevicesControllerIdCommands201CommandType = {
-  UNLOCK: 'UNLOCK',
-  LOCK: 'LOCK',
-  SYNC_STATE: 'SYNC_STATE',
+	UNLOCK: "UNLOCK",
+	LOCK: "LOCK",
+	SYNC_STATE: "SYNC_STATE",
 } as const;
 
-export type PostIotDevicesControllerIdCommands201CommandStatus = typeof PostIotDevicesControllerIdCommands201CommandStatus[keyof typeof PostIotDevicesControllerIdCommands201CommandStatus];
-
+export type PostIotDevicesControllerIdCommands201CommandStatus =
+	(typeof PostIotDevicesControllerIdCommands201CommandStatus)[keyof typeof PostIotDevicesControllerIdCommands201CommandStatus];
 
 export const PostIotDevicesControllerIdCommands201CommandStatus = {
-  PENDING: 'PENDING',
-  SENT: 'SENT',
-  COMPLETED: 'COMPLETED',
-  FAILED: 'FAILED',
-  EXPIRED: 'EXPIRED',
+	PENDING: "PENDING",
+	SENT: "SENT",
+	COMPLETED: "COMPLETED",
+	FAILED: "FAILED",
+	EXPIRED: "EXPIRED",
 } as const;
 
-export type PostIotDevicesControllerIdCommands201CommandPayload = {[key: string]: unknown};
+export type PostIotDevicesControllerIdCommands201CommandPayload = {
+	[key: string]: unknown;
+};
 
 export type PostIotDevicesControllerIdCommands201Command = {
-  /** @pattern ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$ */
-  id: string;
-  type: PostIotDevicesControllerIdCommands201CommandType;
-  status: PostIotDevicesControllerIdCommands201CommandStatus;
-  payload: PostIotDevicesControllerIdCommands201CommandPayload;
-  /**
-   * @nullable
-   * @pattern ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d(?::[0-5]\d(?:\.\d+)?)?(?:Z))$
-   */
-  expiresAt: string | null;
-  /** @pattern ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d(?::[0-5]\d(?:\.\d+)?)?(?:Z))$ */
-  createdAt?: string;
-  /**
-   * @nullable
-   * @pattern ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d(?::[0-5]\d(?:\.\d+)?)?(?:Z))$
-   */
-  sentAt?: string | null;
+	/** @pattern ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$ */
+	id: string;
+	type: PostIotDevicesControllerIdCommands201CommandType;
+	status: PostIotDevicesControllerIdCommands201CommandStatus;
+	payload: PostIotDevicesControllerIdCommands201CommandPayload;
+	/**
+	 * @nullable
+	 * @pattern ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d(?::[0-5]\d(?:\.\d+)?)?(?:Z))$
+	 */
+	expiresAt: string | null;
+	/** @pattern ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d(?::[0-5]\d(?:\.\d+)?)?(?:Z))$ */
+	createdAt?: string;
+	/**
+	 * @nullable
+	 * @pattern ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d(?::[0-5]\d(?:\.\d+)?)?(?:Z))$
+	 */
+	sentAt?: string | null;
 };
 
 export type PostIotDevicesControllerIdCommands201 = {
-  command: PostIotDevicesControllerIdCommands201Command;
+	command: PostIotDevicesControllerIdCommands201Command;
 };
 
 export type GetIotDevicesControllerIdCommandsParams = {
-/**
- * @minimum 1
- * @maximum 50
- */
-limit?: number;
+	/**
+	 * @minimum 1
+	 * @maximum 50
+	 */
+	limit?: number;
 };
 
-export type GetIotDevicesControllerIdCommands200CommandsItemType = typeof GetIotDevicesControllerIdCommands200CommandsItemType[keyof typeof GetIotDevicesControllerIdCommands200CommandsItemType];
-
+export type GetIotDevicesControllerIdCommands200CommandsItemType =
+	(typeof GetIotDevicesControllerIdCommands200CommandsItemType)[keyof typeof GetIotDevicesControllerIdCommands200CommandsItemType];
 
 export const GetIotDevicesControllerIdCommands200CommandsItemType = {
-  UNLOCK: 'UNLOCK',
-  LOCK: 'LOCK',
-  SYNC_STATE: 'SYNC_STATE',
+	UNLOCK: "UNLOCK",
+	LOCK: "LOCK",
+	SYNC_STATE: "SYNC_STATE",
 } as const;
 
-export type GetIotDevicesControllerIdCommands200CommandsItemStatus = typeof GetIotDevicesControllerIdCommands200CommandsItemStatus[keyof typeof GetIotDevicesControllerIdCommands200CommandsItemStatus];
-
+export type GetIotDevicesControllerIdCommands200CommandsItemStatus =
+	(typeof GetIotDevicesControllerIdCommands200CommandsItemStatus)[keyof typeof GetIotDevicesControllerIdCommands200CommandsItemStatus];
 
 export const GetIotDevicesControllerIdCommands200CommandsItemStatus = {
-  PENDING: 'PENDING',
-  SENT: 'SENT',
-  COMPLETED: 'COMPLETED',
-  FAILED: 'FAILED',
-  EXPIRED: 'EXPIRED',
+	PENDING: "PENDING",
+	SENT: "SENT",
+	COMPLETED: "COMPLETED",
+	FAILED: "FAILED",
+	EXPIRED: "EXPIRED",
 } as const;
 
-export type GetIotDevicesControllerIdCommands200CommandsItemPayload = {[key: string]: unknown};
+export type GetIotDevicesControllerIdCommands200CommandsItemPayload = {
+	[key: string]: unknown;
+};
 
 export type GetIotDevicesControllerIdCommands200CommandsItem = {
-  /** @pattern ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$ */
-  id: string;
-  type: GetIotDevicesControllerIdCommands200CommandsItemType;
-  status: GetIotDevicesControllerIdCommands200CommandsItemStatus;
-  payload: GetIotDevicesControllerIdCommands200CommandsItemPayload;
-  /**
-   * @nullable
-   * @pattern ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d(?::[0-5]\d(?:\.\d+)?)?(?:Z))$
-   */
-  expiresAt: string | null;
-  /** @pattern ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d(?::[0-5]\d(?:\.\d+)?)?(?:Z))$ */
-  createdAt?: string;
-  /**
-   * @nullable
-   * @pattern ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d(?::[0-5]\d(?:\.\d+)?)?(?:Z))$
-   */
-  sentAt?: string | null;
+	/** @pattern ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$ */
+	id: string;
+	type: GetIotDevicesControllerIdCommands200CommandsItemType;
+	status: GetIotDevicesControllerIdCommands200CommandsItemStatus;
+	payload: GetIotDevicesControllerIdCommands200CommandsItemPayload;
+	/**
+	 * @nullable
+	 * @pattern ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d(?::[0-5]\d(?:\.\d+)?)?(?:Z))$
+	 */
+	expiresAt: string | null;
+	/** @pattern ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d(?::[0-5]\d(?:\.\d+)?)?(?:Z))$ */
+	createdAt?: string;
+	/**
+	 * @nullable
+	 * @pattern ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d(?::[0-5]\d(?:\.\d+)?)?(?:Z))$
+	 */
+	sentAt?: string | null;
 };
 
 export type GetIotDevicesControllerIdCommands200 = {
-  commands: GetIotDevicesControllerIdCommands200CommandsItem[];
+	commands: GetIotDevicesControllerIdCommands200CommandsItem[];
 };
 
-export const PatchIotDevicesControllerIdCommandsCommandIdAckBodyStatus = {  COMPLETED: 'COMPLETED',
-  FAILED: 'FAILED',
-} as const
+export const PatchIotDevicesControllerIdCommandsCommandIdAckBodyStatus = {
+	COMPLETED: "COMPLETED",
+	FAILED: "FAILED",
+} as const;
 /**
  * @nullable
  */
-export type PatchIotDevicesControllerIdCommandsCommandIdAckBodyResultPayload = {[key: string]: unknown} | null;
+export type PatchIotDevicesControllerIdCommandsCommandIdAckBodyResultPayload = {
+	[key: string]: unknown;
+} | null;
 
 export type PatchIotDevicesControllerIdCommandsCommandIdAckBody = {
-  status: typeof PatchIotDevicesControllerIdCommandsCommandIdAckBodyStatus[keyof typeof PatchIotDevicesControllerIdCommandsCommandIdAckBodyStatus];
-  /** @nullable */
-  resultPayload?: PatchIotDevicesControllerIdCommandsCommandIdAckBodyResultPayload;
-  /** @nullable */
-  errorMessage?: string | null;
+	status: (typeof PatchIotDevicesControllerIdCommandsCommandIdAckBodyStatus)[keyof typeof PatchIotDevicesControllerIdCommandsCommandIdAckBodyStatus];
+	/** @nullable */
+	resultPayload?: PatchIotDevicesControllerIdCommandsCommandIdAckBodyResultPayload;
+	/** @nullable */
+	errorMessage?: string | null;
 };
 
-export const PatchIotDevicesControllerIdCommandsCommandIdAck200CommandStatus = {  COMPLETED: 'COMPLETED',
-  FAILED: 'FAILED',
-} as const
+export const PatchIotDevicesControllerIdCommandsCommandIdAck200CommandStatus = {
+	COMPLETED: "COMPLETED",
+	FAILED: "FAILED",
+} as const;
 export type PatchIotDevicesControllerIdCommandsCommandIdAck200Command = {
-  /** @pattern ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$ */
-  id: string;
-  status: typeof PatchIotDevicesControllerIdCommandsCommandIdAck200CommandStatus[keyof typeof PatchIotDevicesControllerIdCommandsCommandIdAck200CommandStatus];
-  /**
-   * @nullable
-   * @pattern ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d(?::[0-5]\d(?:\.\d+)?)?(?:Z))$
-   */
-  processedAt: string | null;
+	/** @pattern ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$ */
+	id: string;
+	status: (typeof PatchIotDevicesControllerIdCommandsCommandIdAck200CommandStatus)[keyof typeof PatchIotDevicesControllerIdCommandsCommandIdAck200CommandStatus];
+	/**
+	 * @nullable
+	 * @pattern ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d(?::[0-5]\d(?:\.\d+)?)?(?:Z))$
+	 */
+	processedAt: string | null;
 };
 
 export type PatchIotDevicesControllerIdCommandsCommandIdAck200 = {
-  command: PatchIotDevicesControllerIdCommandsCommandIdAck200Command;
+	command: PatchIotDevicesControllerIdCommandsCommandIdAck200Command;
 };
 
-export type PatchIotDevicesControllerIdCommandsCommandIdAck404Error = typeof PatchIotDevicesControllerIdCommandsCommandIdAck404Error[keyof typeof PatchIotDevicesControllerIdCommandsCommandIdAck404Error];
-
+export type PatchIotDevicesControllerIdCommandsCommandIdAck404Error =
+	(typeof PatchIotDevicesControllerIdCommandsCommandIdAck404Error)[keyof typeof PatchIotDevicesControllerIdCommandsCommandIdAck404Error];
 
 export const PatchIotDevicesControllerIdCommandsCommandIdAck404Error = {
-  Command_not_found: 'Command not found',
+	Command_not_found: "Command not found",
 } as const;
 
-export type PatchIotDevicesControllerIdCommandsCommandIdAck404Code = typeof PatchIotDevicesControllerIdCommandsCommandIdAck404Code[keyof typeof PatchIotDevicesControllerIdCommandsCommandIdAck404Code];
-
+export type PatchIotDevicesControllerIdCommandsCommandIdAck404Code =
+	(typeof PatchIotDevicesControllerIdCommandsCommandIdAck404Code)[keyof typeof PatchIotDevicesControllerIdCommandsCommandIdAck404Code];
 
 export const PatchIotDevicesControllerIdCommandsCommandIdAck404Code = {
-  COMMAND_NOT_FOUND: 'COMMAND_NOT_FOUND',
+	COMMAND_NOT_FOUND: "COMMAND_NOT_FOUND",
 } as const;
 
 export type PatchIotDevicesControllerIdCommandsCommandIdAck404 = {
-  error: PatchIotDevicesControllerIdCommandsCommandIdAck404Error;
-  code: PatchIotDevicesControllerIdCommandsCommandIdAck404Code;
+	error: PatchIotDevicesControllerIdCommandsCommandIdAck404Error;
+	code: PatchIotDevicesControllerIdCommandsCommandIdAck404Code;
 };
 
 /**
@@ -728,1025 +759,1038 @@ export type PatchIotDevicesControllerIdCommandsCommandIdAck404 = {
  * @summary Delegar operações de autenticação
  */
 export type getAuthAuthResponse200 = {
-  data: void
-  status: 200
-}
-
-export type getAuthAuthResponseSuccess = (getAuthAuthResponse200) & {
-  headers: Headers;
+	data: undefined;
+	status: 200;
 };
-;
 
-export type getAuthAuthResponse = (getAuthAuthResponseSuccess)
+export type getAuthAuthResponseSuccess = getAuthAuthResponse200 & {
+	headers: Headers;
+};
 
-export const getGetAuthAuthUrl = (path: string,) => {
+export type getAuthAuthResponse = getAuthAuthResponseSuccess;
 
+export const getGetAuthAuthUrl = (path: string) => {
+	return `/auth/auth/${path}`;
+};
 
-  
+export const getAuthAuth = async (
+	path: string,
+	options?: RequestInit,
+): Promise<getAuthAuthResponse> => {
+	const res = await fetch(getGetAuthAuthUrl(path), {
+		...options,
+		method: "GET",
+	});
 
-  return `/auth/auth/${path}`
-}
+	const body = [204, 205, 304].includes(res.status) ? null : await res.text();
 
-export const getAuthAuth = async (path: string, options?: RequestInit): Promise<getAuthAuthResponse> => {
-  
-  const res = await fetch(getGetAuthAuthUrl(path),
-  {      
-    ...options,
-    method: 'GET'
-    
-    
-  }
-)
-
-  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-  
-  const data: getAuthAuthResponse['data'] = body ? JSON.parse(body) : {}
-  return { data, status: res.status, headers: res.headers } as getAuthAuthResponse
-}
-  
-
+	const data: getAuthAuthResponse["data"] = body ? JSON.parse(body) : {};
+	return {
+		data,
+		status: res.status,
+		headers: res.headers,
+	} as getAuthAuthResponse;
+};
 
 /**
  * Proxy reverso para o Auth.js, responsável pelos fluxos de login, callback de provedores e sessões baseadas em cookie.
  * @summary Delegar operações de autenticação
  */
 export type postAuthAuthResponse200 = {
-  data: void
-  status: 200
-}
-
-export type postAuthAuthResponseSuccess = (postAuthAuthResponse200) & {
-  headers: Headers;
+	data: undefined;
+	status: 200;
 };
-;
 
-export type postAuthAuthResponse = (postAuthAuthResponseSuccess)
+export type postAuthAuthResponseSuccess = postAuthAuthResponse200 & {
+	headers: Headers;
+};
 
-export const getPostAuthAuthUrl = (path: string,) => {
+export type postAuthAuthResponse = postAuthAuthResponseSuccess;
 
+export const getPostAuthAuthUrl = (path: string) => {
+	return `/auth/auth/${path}`;
+};
 
-  
+export const postAuthAuth = async (
+	path: string,
+	options?: RequestInit,
+): Promise<postAuthAuthResponse> => {
+	const res = await fetch(getPostAuthAuthUrl(path), {
+		...options,
+		method: "POST",
+	});
 
-  return `/auth/auth/${path}`
-}
+	const body = [204, 205, 304].includes(res.status) ? null : await res.text();
 
-export const postAuthAuth = async (path: string, options?: RequestInit): Promise<postAuthAuthResponse> => {
-  
-  const res = await fetch(getPostAuthAuthUrl(path),
-  {      
-    ...options,
-    method: 'POST'
-    
-    
-  }
-)
-
-  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-  
-  const data: postAuthAuthResponse['data'] = body ? JSON.parse(body) : {}
-  return { data, status: res.status, headers: res.headers } as postAuthAuthResponse
-}
-  
-
+	const data: postAuthAuthResponse["data"] = body ? JSON.parse(body) : {};
+	return {
+		data,
+		status: res.status,
+		headers: res.headers,
+	} as postAuthAuthResponse;
+};
 
 /**
  * Retorna os usuários cadastrados e indica se possuem credencial física associada.
  * @summary Listar usuários
  */
 export type getUsersResponse200 = {
-  data: GetUsers200
-  status: 200
-}
-
-export type getUsersResponseSuccess = (getUsersResponse200) & {
-  headers: Headers;
+	data: GetUsers200;
+	status: 200;
 };
-;
 
-export type getUsersResponse = (getUsersResponseSuccess)
+export type getUsersResponseSuccess = getUsersResponse200 & {
+	headers: Headers;
+};
+
+export type getUsersResponse = getUsersResponseSuccess;
 
 export const getGetUsersUrl = () => {
+	return `/users/`;
+};
 
+export const getUsers = async (
+	options?: RequestInit,
+): Promise<getUsersResponse> => {
+	const res = await fetch(getGetUsersUrl(), {
+		...options,
+		method: "GET",
+	});
 
-  
+	const body = [204, 205, 304].includes(res.status) ? null : await res.text();
 
-  return `/users/`
-}
-
-export const getUsers = async ( options?: RequestInit): Promise<getUsersResponse> => {
-  
-  const res = await fetch(getGetUsersUrl(),
-  {      
-    ...options,
-    method: 'GET'
-    
-    
-  }
-)
-
-  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-  
-  const data: getUsersResponse['data'] = body ? JSON.parse(body) : {}
-  return { data, status: res.status, headers: res.headers } as getUsersResponse
-}
-  
-
+	const data: getUsersResponse["data"] = body ? JSON.parse(body) : {};
+	return { data, status: res.status, headers: res.headers } as getUsersResponse;
+};
 
 /**
  * Retorna as salas cadastradas, incluindo estado atual da porta e informações do bloco.
  * @summary Listar salas e blocos
  */
 export type getRoomsResponse200 = {
-  data: GetRooms200
-  status: 200
-}
-
-export type getRoomsResponseSuccess = (getRoomsResponse200) & {
-  headers: Headers;
+	data: GetRooms200;
+	status: 200;
 };
-;
 
-export type getRoomsResponse = (getRoomsResponseSuccess)
+export type getRoomsResponseSuccess = getRoomsResponse200 & {
+	headers: Headers;
+};
+
+export type getRoomsResponse = getRoomsResponseSuccess;
 
 export const getGetRoomsUrl = () => {
+	return `/rooms/`;
+};
 
+export const getRooms = async (
+	options?: RequestInit,
+): Promise<getRoomsResponse> => {
+	const res = await fetch(getGetRoomsUrl(), {
+		...options,
+		method: "GET",
+	});
 
-  
+	const body = [204, 205, 304].includes(res.status) ? null : await res.text();
 
-  return `/rooms/`
-}
-
-export const getRooms = async ( options?: RequestInit): Promise<getRoomsResponse> => {
-  
-  const res = await fetch(getGetRoomsUrl(),
-  {      
-    ...options,
-    method: 'GET'
-    
-    
-  }
-)
-
-  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-  
-  const data: getRoomsResponse['data'] = body ? JSON.parse(body) : {}
-  return { data, status: res.status, headers: res.headers } as getRoomsResponse
-}
-  
-
+	const data: getRoomsResponse["data"] = body ? JSON.parse(body) : {};
+	return { data, status: res.status, headers: res.headers } as getRoomsResponse;
+};
 
 /**
  * Retorna todos os controladores físicos cadastrados, status atual e último comando enviado.
  * @summary Listar controladores de porta
  */
 export type getDoorsResponse200 = {
-  data: GetDoors200
-  status: 200
-}
-
-export type getDoorsResponseSuccess = (getDoorsResponse200) & {
-  headers: Headers;
+	data: GetDoors200;
+	status: 200;
 };
-;
 
-export type getDoorsResponse = (getDoorsResponseSuccess)
+export type getDoorsResponseSuccess = getDoorsResponse200 & {
+	headers: Headers;
+};
+
+export type getDoorsResponse = getDoorsResponseSuccess;
 
 export const getGetDoorsUrl = () => {
+	return `/doors/`;
+};
 
+export const getDoors = async (
+	options?: RequestInit,
+): Promise<getDoorsResponse> => {
+	const res = await fetch(getGetDoorsUrl(), {
+		...options,
+		method: "GET",
+	});
 
-  
+	const body = [204, 205, 304].includes(res.status) ? null : await res.text();
 
-  return `/doors/`
-}
-
-export const getDoors = async ( options?: RequestInit): Promise<getDoorsResponse> => {
-  
-  const res = await fetch(getGetDoorsUrl(),
-  {      
-    ...options,
-    method: 'GET'
-    
-    
-  }
-)
-
-  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-  
-  const data: getDoorsResponse['data'] = body ? JSON.parse(body) : {}
-  return { data, status: res.status, headers: res.headers } as getDoorsResponse
-}
-  
-
+	const data: getDoorsResponse["data"] = body ? JSON.parse(body) : {};
+	return { data, status: res.status, headers: res.headers } as getDoorsResponse;
+};
 
 /**
  * @summary Listar perfis
  */
 export type getProfilesResponse200 = {
-  data: GetProfiles200
-  status: 200
-}
-
-export type getProfilesResponseSuccess = (getProfilesResponse200) & {
-  headers: Headers;
+	data: GetProfiles200;
+	status: 200;
 };
-;
 
-export type getProfilesResponse = (getProfilesResponseSuccess)
+export type getProfilesResponseSuccess = getProfilesResponse200 & {
+	headers: Headers;
+};
+
+export type getProfilesResponse = getProfilesResponseSuccess;
 
 export const getGetProfilesUrl = () => {
+	return `/profiles/`;
+};
 
+export const getProfiles = async (
+	options?: RequestInit,
+): Promise<getProfilesResponse> => {
+	const res = await fetch(getGetProfilesUrl(), {
+		...options,
+		method: "GET",
+	});
 
-  
+	const body = [204, 205, 304].includes(res.status) ? null : await res.text();
 
-  return `/profiles/`
-}
-
-export const getProfiles = async ( options?: RequestInit): Promise<getProfilesResponse> => {
-  
-  const res = await fetch(getGetProfilesUrl(),
-  {      
-    ...options,
-    method: 'GET'
-    
-    
-  }
-)
-
-  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-  
-  const data: getProfilesResponse['data'] = body ? JSON.parse(body) : {}
-  return { data, status: res.status, headers: res.headers } as getProfilesResponse
-}
-  
-
+	const data: getProfilesResponse["data"] = body ? JSON.parse(body) : {};
+	return {
+		data,
+		status: res.status,
+		headers: res.headers,
+	} as getProfilesResponse;
+};
 
 /**
  * @summary Criar perfil
  */
 export type postProfilesResponse201 = {
-  data: Profile
-  status: 201
-}
-
-export type postProfilesResponseSuccess = (postProfilesResponse201) & {
-  headers: Headers;
+	data: Profile;
+	status: 201;
 };
-;
 
-export type postProfilesResponse = (postProfilesResponseSuccess)
+export type postProfilesResponseSuccess = postProfilesResponse201 & {
+	headers: Headers;
+};
+
+export type postProfilesResponse = postProfilesResponseSuccess;
 
 export const getPostProfilesUrl = () => {
+	return `/profiles/`;
+};
 
+export const postProfiles = async (
+	postProfilesBody: PostProfilesBody,
+	options?: RequestInit,
+): Promise<postProfilesResponse> => {
+	const res = await fetch(getPostProfilesUrl(), {
+		...options,
+		method: "POST",
+		headers: { "Content-Type": "application/json", ...options?.headers },
+		body: JSON.stringify(postProfilesBody),
+	});
 
-  
+	const body = [204, 205, 304].includes(res.status) ? null : await res.text();
 
-  return `/profiles/`
-}
-
-export const postProfiles = async (postProfilesBody: PostProfilesBody, options?: RequestInit): Promise<postProfilesResponse> => {
-  
-  const res = await fetch(getPostProfilesUrl(),
-  {      
-    ...options,
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...options?.headers },
-    body: JSON.stringify(
-      postProfilesBody,)
-  }
-)
-
-  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-  
-  const data: postProfilesResponse['data'] = body ? JSON.parse(body) : {}
-  return { data, status: res.status, headers: res.headers } as postProfilesResponse
-}
-  
-
+	const data: postProfilesResponse["data"] = body ? JSON.parse(body) : {};
+	return {
+		data,
+		status: res.status,
+		headers: res.headers,
+	} as postProfilesResponse;
+};
 
 /**
  * @summary Listar perfis de um usuário
  */
 export type getUsersUserIdProfilesResponse200 = {
-  data: void
-  status: 200
-}
-
-export type getUsersUserIdProfilesResponseSuccess = (getUsersUserIdProfilesResponse200) & {
-  headers: Headers;
+	data: undefined;
+	status: 200;
 };
-;
 
-export type getUsersUserIdProfilesResponse = (getUsersUserIdProfilesResponseSuccess)
+export type getUsersUserIdProfilesResponseSuccess =
+	getUsersUserIdProfilesResponse200 & {
+		headers: Headers;
+	};
 
-export const getGetUsersUserIdProfilesUrl = (userId: string,) => {
+export type getUsersUserIdProfilesResponse =
+	getUsersUserIdProfilesResponseSuccess;
 
+export const getGetUsersUserIdProfilesUrl = (userId: string) => {
+	return `/users/${userId}/profiles`;
+};
 
-  
+export const getUsersUserIdProfiles = async (
+	userId: string,
+	options?: RequestInit,
+): Promise<getUsersUserIdProfilesResponse> => {
+	const res = await fetch(getGetUsersUserIdProfilesUrl(userId), {
+		...options,
+		method: "GET",
+	});
 
-  return `/users/${userId}/profiles`
-}
+	const body = [204, 205, 304].includes(res.status) ? null : await res.text();
 
-export const getUsersUserIdProfiles = async (userId: string, options?: RequestInit): Promise<getUsersUserIdProfilesResponse> => {
-  
-  const res = await fetch(getGetUsersUserIdProfilesUrl(userId),
-  {      
-    ...options,
-    method: 'GET'
-    
-    
-  }
-)
-
-  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-  
-  const data: getUsersUserIdProfilesResponse['data'] = body ? JSON.parse(body) : {}
-  return { data, status: res.status, headers: res.headers } as getUsersUserIdProfilesResponse
-}
-  
-
+	const data: getUsersUserIdProfilesResponse["data"] = body
+		? JSON.parse(body)
+		: {};
+	return {
+		data,
+		status: res.status,
+		headers: res.headers,
+	} as getUsersUserIdProfilesResponse;
+};
 
 /**
  * @summary Atribuir perfil ao usuário
  */
 export type postUsersUserIdProfilesResponse204 = {
-  data: void
-  status: 204
-}
-
-export type postUsersUserIdProfilesResponseSuccess = (postUsersUserIdProfilesResponse204) & {
-  headers: Headers;
+	data: undefined;
+	status: 204;
 };
-;
 
-export type postUsersUserIdProfilesResponse = (postUsersUserIdProfilesResponseSuccess)
+export type postUsersUserIdProfilesResponseSuccess =
+	postUsersUserIdProfilesResponse204 & {
+		headers: Headers;
+	};
 
-export const getPostUsersUserIdProfilesUrl = (userId: string,) => {
+export type postUsersUserIdProfilesResponse =
+	postUsersUserIdProfilesResponseSuccess;
 
+export const getPostUsersUserIdProfilesUrl = (userId: string) => {
+	return `/users/${userId}/profiles`;
+};
 
-  
+export const postUsersUserIdProfiles = async (
+	userId: string,
+	postUsersUserIdProfilesBody: PostUsersUserIdProfilesBody,
+	options?: RequestInit,
+): Promise<postUsersUserIdProfilesResponse> => {
+	const res = await fetch(getPostUsersUserIdProfilesUrl(userId), {
+		...options,
+		method: "POST",
+		headers: { "Content-Type": "application/json", ...options?.headers },
+		body: JSON.stringify(postUsersUserIdProfilesBody),
+	});
 
-  return `/users/${userId}/profiles`
-}
+	const body = [204, 205, 304].includes(res.status) ? null : await res.text();
 
-export const postUsersUserIdProfiles = async (userId: string,
-    postUsersUserIdProfilesBody: PostUsersUserIdProfilesBody, options?: RequestInit): Promise<postUsersUserIdProfilesResponse> => {
-  
-  const res = await fetch(getPostUsersUserIdProfilesUrl(userId),
-  {      
-    ...options,
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...options?.headers },
-    body: JSON.stringify(
-      postUsersUserIdProfilesBody,)
-  }
-)
-
-  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-  
-  const data: postUsersUserIdProfilesResponse['data'] = body ? JSON.parse(body) : {}
-  return { data, status: res.status, headers: res.headers } as postUsersUserIdProfilesResponse
-}
-  
-
+	const data: postUsersUserIdProfilesResponse["data"] = body
+		? JSON.parse(body)
+		: {};
+	return {
+		data,
+		status: res.status,
+		headers: res.headers,
+	} as postUsersUserIdProfilesResponse;
+};
 
 /**
  * @summary Listar perfis com acesso à sala
  */
 export type getRoomsRoomIdProfilesResponse200 = {
-  data: void
-  status: 200
-}
-
-export type getRoomsRoomIdProfilesResponseSuccess = (getRoomsRoomIdProfilesResponse200) & {
-  headers: Headers;
+	data: undefined;
+	status: 200;
 };
-;
 
-export type getRoomsRoomIdProfilesResponse = (getRoomsRoomIdProfilesResponseSuccess)
+export type getRoomsRoomIdProfilesResponseSuccess =
+	getRoomsRoomIdProfilesResponse200 & {
+		headers: Headers;
+	};
 
-export const getGetRoomsRoomIdProfilesUrl = (roomId: string,) => {
+export type getRoomsRoomIdProfilesResponse =
+	getRoomsRoomIdProfilesResponseSuccess;
 
+export const getGetRoomsRoomIdProfilesUrl = (roomId: string) => {
+	return `/rooms/${roomId}/profiles`;
+};
 
-  
+export const getRoomsRoomIdProfiles = async (
+	roomId: string,
+	options?: RequestInit,
+): Promise<getRoomsRoomIdProfilesResponse> => {
+	const res = await fetch(getGetRoomsRoomIdProfilesUrl(roomId), {
+		...options,
+		method: "GET",
+	});
 
-  return `/rooms/${roomId}/profiles`
-}
+	const body = [204, 205, 304].includes(res.status) ? null : await res.text();
 
-export const getRoomsRoomIdProfiles = async (roomId: string, options?: RequestInit): Promise<getRoomsRoomIdProfilesResponse> => {
-  
-  const res = await fetch(getGetRoomsRoomIdProfilesUrl(roomId),
-  {      
-    ...options,
-    method: 'GET'
-    
-    
-  }
-)
-
-  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-  
-  const data: getRoomsRoomIdProfilesResponse['data'] = body ? JSON.parse(body) : {}
-  return { data, status: res.status, headers: res.headers } as getRoomsRoomIdProfilesResponse
-}
-  
-
+	const data: getRoomsRoomIdProfilesResponse["data"] = body
+		? JSON.parse(body)
+		: {};
+	return {
+		data,
+		status: res.status,
+		headers: res.headers,
+	} as getRoomsRoomIdProfilesResponse;
+};
 
 /**
  * @summary Atribuir perfil à sala
  */
 export type postRoomsRoomIdProfilesResponse204 = {
-  data: void
-  status: 204
-}
-
-export type postRoomsRoomIdProfilesResponseSuccess = (postRoomsRoomIdProfilesResponse204) & {
-  headers: Headers;
+	data: undefined;
+	status: 204;
 };
-;
 
-export type postRoomsRoomIdProfilesResponse = (postRoomsRoomIdProfilesResponseSuccess)
+export type postRoomsRoomIdProfilesResponseSuccess =
+	postRoomsRoomIdProfilesResponse204 & {
+		headers: Headers;
+	};
 
-export const getPostRoomsRoomIdProfilesUrl = (roomId: string,) => {
+export type postRoomsRoomIdProfilesResponse =
+	postRoomsRoomIdProfilesResponseSuccess;
 
+export const getPostRoomsRoomIdProfilesUrl = (roomId: string) => {
+	return `/rooms/${roomId}/profiles`;
+};
 
-  
+export const postRoomsRoomIdProfiles = async (
+	roomId: string,
+	postRoomsRoomIdProfilesBody: PostRoomsRoomIdProfilesBody,
+	options?: RequestInit,
+): Promise<postRoomsRoomIdProfilesResponse> => {
+	const res = await fetch(getPostRoomsRoomIdProfilesUrl(roomId), {
+		...options,
+		method: "POST",
+		headers: { "Content-Type": "application/json", ...options?.headers },
+		body: JSON.stringify(postRoomsRoomIdProfilesBody),
+	});
 
-  return `/rooms/${roomId}/profiles`
-}
+	const body = [204, 205, 304].includes(res.status) ? null : await res.text();
 
-export const postRoomsRoomIdProfiles = async (roomId: string,
-    postRoomsRoomIdProfilesBody: PostRoomsRoomIdProfilesBody, options?: RequestInit): Promise<postRoomsRoomIdProfilesResponse> => {
-  
-  const res = await fetch(getPostRoomsRoomIdProfilesUrl(roomId),
-  {      
-    ...options,
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...options?.headers },
-    body: JSON.stringify(
-      postRoomsRoomIdProfilesBody,)
-  }
-)
-
-  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-  
-  const data: postRoomsRoomIdProfilesResponse['data'] = body ? JSON.parse(body) : {}
-  return { data, status: res.status, headers: res.headers } as postRoomsRoomIdProfilesResponse
-}
-  
-
+	const data: postRoomsRoomIdProfilesResponse["data"] = body
+		? JSON.parse(body)
+		: {};
+	return {
+		data,
+		status: res.status,
+		headers: res.headers,
+	} as postRoomsRoomIdProfilesResponse;
+};
 
 /**
  * @summary Verificar permissão multimodal (usado por controladores)
  */
 export type postAccessVerifyResponse200 = {
-  data: PostAccessVerify200
-  status: 200
-}
-
-export type postAccessVerifyResponseSuccess = (postAccessVerifyResponse200) & {
-  headers: Headers;
+	data: PostAccessVerify200;
+	status: 200;
 };
-;
 
-export type postAccessVerifyResponse = (postAccessVerifyResponseSuccess)
+export type postAccessVerifyResponseSuccess = postAccessVerifyResponse200 & {
+	headers: Headers;
+};
+
+export type postAccessVerifyResponse = postAccessVerifyResponseSuccess;
 
 export const getPostAccessVerifyUrl = () => {
+	return `/access/verify`;
+};
 
+export const postAccessVerify = async (
+	postAccessVerifyBody: PostAccessVerifyBody,
+	options?: RequestInit,
+): Promise<postAccessVerifyResponse> => {
+	const res = await fetch(getPostAccessVerifyUrl(), {
+		...options,
+		method: "POST",
+		headers: { "Content-Type": "application/json", ...options?.headers },
+		body: JSON.stringify(postAccessVerifyBody),
+	});
 
-  
+	const body = [204, 205, 304].includes(res.status) ? null : await res.text();
 
-  return `/access/verify`
-}
-
-export const postAccessVerify = async (postAccessVerifyBody: PostAccessVerifyBody, options?: RequestInit): Promise<postAccessVerifyResponse> => {
-  
-  const res = await fetch(getPostAccessVerifyUrl(),
-  {      
-    ...options,
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...options?.headers },
-    body: JSON.stringify(
-      postAccessVerifyBody,)
-  }
-)
-
-  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-  
-  const data: postAccessVerifyResponse['data'] = body ? JSON.parse(body) : {}
-  return { data, status: res.status, headers: res.headers } as postAccessVerifyResponse
-}
-  
-
+	const data: postAccessVerifyResponse["data"] = body ? JSON.parse(body) : {};
+	return {
+		data,
+		status: res.status,
+		headers: res.headers,
+	} as postAccessVerifyResponse;
+};
 
 /**
  * Consulta os comandos emitidos para um controlador específico.
  * @summary Histórico de comandos
  */
 export type getDoorsControllerIdCommandsResponse200 = {
-  data: GetDoorsControllerIdCommands200
-  status: 200
-}
+	data: GetDoorsControllerIdCommands200;
+	status: 200;
+};
 
 export type getDoorsControllerIdCommandsResponse404 = {
-  data: GetDoorsControllerIdCommands404
-  status: 404
-}
-
-export type getDoorsControllerIdCommandsResponseSuccess = (getDoorsControllerIdCommandsResponse200) & {
-  headers: Headers;
-};
-export type getDoorsControllerIdCommandsResponseError = (getDoorsControllerIdCommandsResponse404) & {
-  headers: Headers;
+	data: GetDoorsControllerIdCommands404;
+	status: 404;
 };
 
-export type getDoorsControllerIdCommandsResponse = (getDoorsControllerIdCommandsResponseSuccess | getDoorsControllerIdCommandsResponseError)
+export type getDoorsControllerIdCommandsResponseSuccess =
+	getDoorsControllerIdCommandsResponse200 & {
+		headers: Headers;
+	};
+export type getDoorsControllerIdCommandsResponseError =
+	getDoorsControllerIdCommandsResponse404 & {
+		headers: Headers;
+	};
 
-export const getGetDoorsControllerIdCommandsUrl = (controllerId: string,
-    params?: GetDoorsControllerIdCommandsParams,) => {
-  const normalizedParams = new URLSearchParams();
+export type getDoorsControllerIdCommandsResponse =
+	| getDoorsControllerIdCommandsResponseSuccess
+	| getDoorsControllerIdCommandsResponseError;
 
-  Object.entries(params || {}).forEach(([key, value]) => {
-    
-    if (value !== undefined) {
-      normalizedParams.append(key, value === null ? 'null' : value.toString())
-    }
-  });
+export const getGetDoorsControllerIdCommandsUrl = (
+	controllerId: string,
+	params?: GetDoorsControllerIdCommandsParams,
+) => {
+	const normalizedParams = new URLSearchParams();
 
-  const stringifiedParams = normalizedParams.toString();
+	Object.entries(params || {}).forEach(([key, value]) => {
+		if (value !== undefined) {
+			normalizedParams.append(key, value === null ? "null" : value.toString());
+		}
+	});
 
-  return stringifiedParams.length > 0 ? `/doors/${controllerId}/commands?${stringifiedParams}` : `/doors/${controllerId}/commands`
-}
+	const stringifiedParams = normalizedParams.toString();
 
-export const getDoorsControllerIdCommands = async (controllerId: string,
-    params?: GetDoorsControllerIdCommandsParams, options?: RequestInit): Promise<getDoorsControllerIdCommandsResponse> => {
-  
-  const res = await fetch(getGetDoorsControllerIdCommandsUrl(controllerId,params),
-  {      
-    ...options,
-    method: 'GET'
-    
-    
-  }
-)
+	return stringifiedParams.length > 0
+		? `/doors/${controllerId}/commands?${stringifiedParams}`
+		: `/doors/${controllerId}/commands`;
+};
 
-  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-  
-  const data: getDoorsControllerIdCommandsResponse['data'] = body ? JSON.parse(body) : {}
-  return { data, status: res.status, headers: res.headers } as getDoorsControllerIdCommandsResponse
-}
-  
+export const getDoorsControllerIdCommands = async (
+	controllerId: string,
+	params?: GetDoorsControllerIdCommandsParams,
+	options?: RequestInit,
+): Promise<getDoorsControllerIdCommandsResponse> => {
+	const res = await fetch(
+		getGetDoorsControllerIdCommandsUrl(controllerId, params),
+		{
+			...options,
+			method: "GET",
+		},
+	);
 
+	const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+	const data: getDoorsControllerIdCommandsResponse["data"] = body
+		? JSON.parse(body)
+		: {};
+	return {
+		data,
+		status: res.status,
+		headers: res.headers,
+	} as getDoorsControllerIdCommandsResponse;
+};
 
 /**
  * Agenda um novo comando administrativo (trava, destrava, sincronização de estado) para o controlador informado.
  * @summary Enviar comando para controlador
  */
 export type postDoorsControllerIdCommandsResponse201 = {
-  data: PostDoorsControllerIdCommands201
-  status: 201
-}
+	data: PostDoorsControllerIdCommands201;
+	status: 201;
+};
 
 export type postDoorsControllerIdCommandsResponse404 = {
-  data: PostDoorsControllerIdCommands404
-  status: 404
-}
-
-export type postDoorsControllerIdCommandsResponseSuccess = (postDoorsControllerIdCommandsResponse201) & {
-  headers: Headers;
-};
-export type postDoorsControllerIdCommandsResponseError = (postDoorsControllerIdCommandsResponse404) & {
-  headers: Headers;
+	data: PostDoorsControllerIdCommands404;
+	status: 404;
 };
 
-export type postDoorsControllerIdCommandsResponse = (postDoorsControllerIdCommandsResponseSuccess | postDoorsControllerIdCommandsResponseError)
+export type postDoorsControllerIdCommandsResponseSuccess =
+	postDoorsControllerIdCommandsResponse201 & {
+		headers: Headers;
+	};
+export type postDoorsControllerIdCommandsResponseError =
+	postDoorsControllerIdCommandsResponse404 & {
+		headers: Headers;
+	};
 
-export const getPostDoorsControllerIdCommandsUrl = (controllerId: string,) => {
+export type postDoorsControllerIdCommandsResponse =
+	| postDoorsControllerIdCommandsResponseSuccess
+	| postDoorsControllerIdCommandsResponseError;
 
+export const getPostDoorsControllerIdCommandsUrl = (controllerId: string) => {
+	return `/doors/${controllerId}/commands`;
+};
 
-  
+export const postDoorsControllerIdCommands = async (
+	controllerId: string,
+	postDoorsControllerIdCommandsBody: PostDoorsControllerIdCommandsBody,
+	options?: RequestInit,
+): Promise<postDoorsControllerIdCommandsResponse> => {
+	const res = await fetch(getPostDoorsControllerIdCommandsUrl(controllerId), {
+		...options,
+		method: "POST",
+		headers: { "Content-Type": "application/json", ...options?.headers },
+		body: JSON.stringify(postDoorsControllerIdCommandsBody),
+	});
 
-  return `/doors/${controllerId}/commands`
-}
+	const body = [204, 205, 304].includes(res.status) ? null : await res.text();
 
-export const postDoorsControllerIdCommands = async (controllerId: string,
-    postDoorsControllerIdCommandsBody: PostDoorsControllerIdCommandsBody, options?: RequestInit): Promise<postDoorsControllerIdCommandsResponse> => {
-  
-  const res = await fetch(getPostDoorsControllerIdCommandsUrl(controllerId),
-  {      
-    ...options,
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...options?.headers },
-    body: JSON.stringify(
-      postDoorsControllerIdCommandsBody,)
-  }
-)
-
-  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-  
-  const data: postDoorsControllerIdCommandsResponse['data'] = body ? JSON.parse(body) : {}
-  return { data, status: res.status, headers: res.headers } as postDoorsControllerIdCommandsResponse
-}
-  
-
+	const data: postDoorsControllerIdCommandsResponse["data"] = body
+		? JSON.parse(body)
+		: {};
+	return {
+		data,
+		status: res.status,
+		headers: res.headers,
+	} as postDoorsControllerIdCommandsResponse;
+};
 
 /**
  * Retorna o histórico recente de tentativas de acesso registradas para a sala vinculada ao controlador.
  * @summary Consultar logs de acesso
  */
 export type getDoorsControllerIdAccessLogsResponse200 = {
-  data: GetDoorsControllerIdAccessLogs200
-  status: 200
-}
+	data: GetDoorsControllerIdAccessLogs200;
+	status: 200;
+};
 
 export type getDoorsControllerIdAccessLogsResponse404 = {
-  data: GetDoorsControllerIdAccessLogs404
-  status: 404
-}
-
-export type getDoorsControllerIdAccessLogsResponseSuccess = (getDoorsControllerIdAccessLogsResponse200) & {
-  headers: Headers;
-};
-export type getDoorsControllerIdAccessLogsResponseError = (getDoorsControllerIdAccessLogsResponse404) & {
-  headers: Headers;
+	data: GetDoorsControllerIdAccessLogs404;
+	status: 404;
 };
 
-export type getDoorsControllerIdAccessLogsResponse = (getDoorsControllerIdAccessLogsResponseSuccess | getDoorsControllerIdAccessLogsResponseError)
+export type getDoorsControllerIdAccessLogsResponseSuccess =
+	getDoorsControllerIdAccessLogsResponse200 & {
+		headers: Headers;
+	};
+export type getDoorsControllerIdAccessLogsResponseError =
+	getDoorsControllerIdAccessLogsResponse404 & {
+		headers: Headers;
+	};
 
-export const getGetDoorsControllerIdAccessLogsUrl = (controllerId: string,
-    params?: GetDoorsControllerIdAccessLogsParams,) => {
-  const normalizedParams = new URLSearchParams();
+export type getDoorsControllerIdAccessLogsResponse =
+	| getDoorsControllerIdAccessLogsResponseSuccess
+	| getDoorsControllerIdAccessLogsResponseError;
 
-  Object.entries(params || {}).forEach(([key, value]) => {
-    
-    if (value !== undefined) {
-      normalizedParams.append(key, value === null ? 'null' : value.toString())
-    }
-  });
+export const getGetDoorsControllerIdAccessLogsUrl = (
+	controllerId: string,
+	params?: GetDoorsControllerIdAccessLogsParams,
+) => {
+	const normalizedParams = new URLSearchParams();
 
-  const stringifiedParams = normalizedParams.toString();
+	Object.entries(params || {}).forEach(([key, value]) => {
+		if (value !== undefined) {
+			normalizedParams.append(key, value === null ? "null" : value.toString());
+		}
+	});
 
-  return stringifiedParams.length > 0 ? `/doors/${controllerId}/access-logs?${stringifiedParams}` : `/doors/${controllerId}/access-logs`
-}
+	const stringifiedParams = normalizedParams.toString();
 
-export const getDoorsControllerIdAccessLogs = async (controllerId: string,
-    params?: GetDoorsControllerIdAccessLogsParams, options?: RequestInit): Promise<getDoorsControllerIdAccessLogsResponse> => {
-  
-  const res = await fetch(getGetDoorsControllerIdAccessLogsUrl(controllerId,params),
-  {      
-    ...options,
-    method: 'GET'
-    
-    
-  }
-)
+	return stringifiedParams.length > 0
+		? `/doors/${controllerId}/access-logs?${stringifiedParams}`
+		: `/doors/${controllerId}/access-logs`;
+};
 
-  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-  
-  const data: getDoorsControllerIdAccessLogsResponse['data'] = body ? JSON.parse(body) : {}
-  return { data, status: res.status, headers: res.headers } as getDoorsControllerIdAccessLogsResponse
-}
-  
+export const getDoorsControllerIdAccessLogs = async (
+	controllerId: string,
+	params?: GetDoorsControllerIdAccessLogsParams,
+	options?: RequestInit,
+): Promise<getDoorsControllerIdAccessLogsResponse> => {
+	const res = await fetch(
+		getGetDoorsControllerIdAccessLogsUrl(controllerId, params),
+		{
+			...options,
+			method: "GET",
+		},
+	);
 
+	const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+	const data: getDoorsControllerIdAccessLogsResponse["data"] = body
+		? JSON.parse(body)
+		: {};
+	return {
+		data,
+		status: res.status,
+		headers: res.headers,
+	} as getDoorsControllerIdAccessLogsResponse;
+};
 
 /**
  * Usado pelo dispositivo IoT para criar ou atualizar seu cadastro junto à API usando PUT idempotente.
  * @summary Registrar ou atualizar controlador
  */
 export type putIotDevicesControllerIdResponse200 = {
-  data: PutIotDevicesControllerId200
-  status: 200
-}
-
-export type putIotDevicesControllerIdResponseSuccess = (putIotDevicesControllerIdResponse200) & {
-  headers: Headers;
+	data: PutIotDevicesControllerId200;
+	status: 200;
 };
-;
 
-export type putIotDevicesControllerIdResponse = (putIotDevicesControllerIdResponseSuccess)
+export type putIotDevicesControllerIdResponseSuccess =
+	putIotDevicesControllerIdResponse200 & {
+		headers: Headers;
+	};
 
-export const getPutIotDevicesControllerIdUrl = (controllerId: string,) => {
+export type putIotDevicesControllerIdResponse =
+	putIotDevicesControllerIdResponseSuccess;
 
+export const getPutIotDevicesControllerIdUrl = (controllerId: string) => {
+	return `/iot/devices/${controllerId}`;
+};
 
-  
+export const putIotDevicesControllerId = async (
+	controllerId: string,
+	putIotDevicesControllerIdBody: PutIotDevicesControllerIdBody,
+	options?: RequestInit,
+): Promise<putIotDevicesControllerIdResponse> => {
+	const res = await fetch(getPutIotDevicesControllerIdUrl(controllerId), {
+		...options,
+		method: "PUT",
+		headers: { "Content-Type": "application/json", ...options?.headers },
+		body: JSON.stringify(putIotDevicesControllerIdBody),
+	});
 
-  return `/iot/devices/${controllerId}`
-}
+	const body = [204, 205, 304].includes(res.status) ? null : await res.text();
 
-export const putIotDevicesControllerId = async (controllerId: string,
-    putIotDevicesControllerIdBody: PutIotDevicesControllerIdBody, options?: RequestInit): Promise<putIotDevicesControllerIdResponse> => {
-  
-  const res = await fetch(getPutIotDevicesControllerIdUrl(controllerId),
-  {      
-    ...options,
-    method: 'PUT',
-    headers: { 'Content-Type': 'application/json', ...options?.headers },
-    body: JSON.stringify(
-      putIotDevicesControllerIdBody,)
-  }
-)
-
-  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-  
-  const data: putIotDevicesControllerIdResponse['data'] = body ? JSON.parse(body) : {}
-  return { data, status: res.status, headers: res.headers } as putIotDevicesControllerIdResponse
-}
-  
-
+	const data: putIotDevicesControllerIdResponse["data"] = body
+		? JSON.parse(body)
+		: {};
+	return {
+		data,
+		status: res.status,
+		headers: res.headers,
+	} as putIotDevicesControllerIdResponse;
+};
 
 /**
  * Atualiza o timestamp de últimos sinais de vida do dispositivo e opcionalmente a versão do firmware.
  * @summary Heartbeat do controlador
  */
 export type patchIotDevicesControllerIdHeartbeatResponse200 = {
-  data: PatchIotDevicesControllerIdHeartbeat200
-  status: 200
-}
+	data: PatchIotDevicesControllerIdHeartbeat200;
+	status: 200;
+};
 
 export type patchIotDevicesControllerIdHeartbeatResponse404 = {
-  data: PatchIotDevicesControllerIdHeartbeat404
-  status: 404
-}
-
-export type patchIotDevicesControllerIdHeartbeatResponseSuccess = (patchIotDevicesControllerIdHeartbeatResponse200) & {
-  headers: Headers;
-};
-export type patchIotDevicesControllerIdHeartbeatResponseError = (patchIotDevicesControllerIdHeartbeatResponse404) & {
-  headers: Headers;
+	data: PatchIotDevicesControllerIdHeartbeat404;
+	status: 404;
 };
 
-export type patchIotDevicesControllerIdHeartbeatResponse = (patchIotDevicesControllerIdHeartbeatResponseSuccess | patchIotDevicesControllerIdHeartbeatResponseError)
+export type patchIotDevicesControllerIdHeartbeatResponseSuccess =
+	patchIotDevicesControllerIdHeartbeatResponse200 & {
+		headers: Headers;
+	};
+export type patchIotDevicesControllerIdHeartbeatResponseError =
+	patchIotDevicesControllerIdHeartbeatResponse404 & {
+		headers: Headers;
+	};
 
-export const getPatchIotDevicesControllerIdHeartbeatUrl = (controllerId: string,) => {
+export type patchIotDevicesControllerIdHeartbeatResponse =
+	| patchIotDevicesControllerIdHeartbeatResponseSuccess
+	| patchIotDevicesControllerIdHeartbeatResponseError;
 
+export const getPatchIotDevicesControllerIdHeartbeatUrl = (
+	controllerId: string,
+) => {
+	return `/iot/devices/${controllerId}/heartbeat`;
+};
 
-  
+export const patchIotDevicesControllerIdHeartbeat = async (
+	controllerId: string,
+	patchIotDevicesControllerIdHeartbeatBody: PatchIotDevicesControllerIdHeartbeatBody,
+	options?: RequestInit,
+): Promise<patchIotDevicesControllerIdHeartbeatResponse> => {
+	const res = await fetch(
+		getPatchIotDevicesControllerIdHeartbeatUrl(controllerId),
+		{
+			...options,
+			method: "PATCH",
+			headers: { "Content-Type": "application/json", ...options?.headers },
+			body: JSON.stringify(patchIotDevicesControllerIdHeartbeatBody),
+		},
+	);
 
-  return `/iot/devices/${controllerId}/heartbeat`
-}
+	const body = [204, 205, 304].includes(res.status) ? null : await res.text();
 
-export const patchIotDevicesControllerIdHeartbeat = async (controllerId: string,
-    patchIotDevicesControllerIdHeartbeatBody: PatchIotDevicesControllerIdHeartbeatBody, options?: RequestInit): Promise<patchIotDevicesControllerIdHeartbeatResponse> => {
-  
-  const res = await fetch(getPatchIotDevicesControllerIdHeartbeatUrl(controllerId),
-  {      
-    ...options,
-    method: 'PATCH',
-    headers: { 'Content-Type': 'application/json', ...options?.headers },
-    body: JSON.stringify(
-      patchIotDevicesControllerIdHeartbeatBody,)
-  }
-)
-
-  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-  
-  const data: patchIotDevicesControllerIdHeartbeatResponse['data'] = body ? JSON.parse(body) : {}
-  return { data, status: res.status, headers: res.headers } as patchIotDevicesControllerIdHeartbeatResponse
-}
-  
-
+	const data: patchIotDevicesControllerIdHeartbeatResponse["data"] = body
+		? JSON.parse(body)
+		: {};
+	return {
+		data,
+		status: res.status,
+		headers: res.headers,
+	} as patchIotDevicesControllerIdHeartbeatResponse;
+};
 
 /**
  * Persistir o estado atual detectado pelo controlador (fechada/aberta, trancada/destrancada).
  * @summary Atualizar status da porta
  */
 export type putIotDevicesControllerIdStatusResponse200 = {
-  data: PutIotDevicesControllerIdStatus200
-  status: 200
-}
+	data: PutIotDevicesControllerIdStatus200;
+	status: 200;
+};
 
 export type putIotDevicesControllerIdStatusResponse404 = {
-  data: PutIotDevicesControllerIdStatus404
-  status: 404
-}
-
-export type putIotDevicesControllerIdStatusResponseSuccess = (putIotDevicesControllerIdStatusResponse200) & {
-  headers: Headers;
-};
-export type putIotDevicesControllerIdStatusResponseError = (putIotDevicesControllerIdStatusResponse404) & {
-  headers: Headers;
+	data: PutIotDevicesControllerIdStatus404;
+	status: 404;
 };
 
-export type putIotDevicesControllerIdStatusResponse = (putIotDevicesControllerIdStatusResponseSuccess | putIotDevicesControllerIdStatusResponseError)
+export type putIotDevicesControllerIdStatusResponseSuccess =
+	putIotDevicesControllerIdStatusResponse200 & {
+		headers: Headers;
+	};
+export type putIotDevicesControllerIdStatusResponseError =
+	putIotDevicesControllerIdStatusResponse404 & {
+		headers: Headers;
+	};
 
-export const getPutIotDevicesControllerIdStatusUrl = (controllerId: string,) => {
+export type putIotDevicesControllerIdStatusResponse =
+	| putIotDevicesControllerIdStatusResponseSuccess
+	| putIotDevicesControllerIdStatusResponseError;
 
+export const getPutIotDevicesControllerIdStatusUrl = (controllerId: string) => {
+	return `/iot/devices/${controllerId}/status`;
+};
 
-  
+export const putIotDevicesControllerIdStatus = async (
+	controllerId: string,
+	putIotDevicesControllerIdStatusBody: PutIotDevicesControllerIdStatusBody,
+	options?: RequestInit,
+): Promise<putIotDevicesControllerIdStatusResponse> => {
+	const res = await fetch(getPutIotDevicesControllerIdStatusUrl(controllerId), {
+		...options,
+		method: "PUT",
+		headers: { "Content-Type": "application/json", ...options?.headers },
+		body: JSON.stringify(putIotDevicesControllerIdStatusBody),
+	});
 
-  return `/iot/devices/${controllerId}/status`
-}
+	const body = [204, 205, 304].includes(res.status) ? null : await res.text();
 
-export const putIotDevicesControllerIdStatus = async (controllerId: string,
-    putIotDevicesControllerIdStatusBody: PutIotDevicesControllerIdStatusBody, options?: RequestInit): Promise<putIotDevicesControllerIdStatusResponse> => {
-  
-  const res = await fetch(getPutIotDevicesControllerIdStatusUrl(controllerId),
-  {      
-    ...options,
-    method: 'PUT',
-    headers: { 'Content-Type': 'application/json', ...options?.headers },
-    body: JSON.stringify(
-      putIotDevicesControllerIdStatusBody,)
-  }
-)
-
-  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-  
-  const data: putIotDevicesControllerIdStatusResponse['data'] = body ? JSON.parse(body) : {}
-  return { data, status: res.status, headers: res.headers } as putIotDevicesControllerIdStatusResponse
-}
-  
-
+	const data: putIotDevicesControllerIdStatusResponse["data"] = body
+		? JSON.parse(body)
+		: {};
+	return {
+		data,
+		status: res.status,
+		headers: res.headers,
+	} as putIotDevicesControllerIdStatusResponse;
+};
 
 /**
  * Avalia uma credencial apresentada ao controlador e retorna a decisão (permitido ou negado).
  * @summary Registrar tentativa de acesso
  */
 export type postIotDevicesControllerIdAccessAttemptsResponse200 = {
-  data: PostIotDevicesControllerIdAccessAttempts200
-  status: 200
-}
-
-export type postIotDevicesControllerIdAccessAttemptsResponseSuccess = (postIotDevicesControllerIdAccessAttemptsResponse200) & {
-  headers: Headers;
+	data: PostIotDevicesControllerIdAccessAttempts200;
+	status: 200;
 };
-;
 
-export type postIotDevicesControllerIdAccessAttemptsResponse = (postIotDevicesControllerIdAccessAttemptsResponseSuccess)
+export type postIotDevicesControllerIdAccessAttemptsResponseSuccess =
+	postIotDevicesControllerIdAccessAttemptsResponse200 & {
+		headers: Headers;
+	};
 
-export const getPostIotDevicesControllerIdAccessAttemptsUrl = (controllerId: string,) => {
+export type postIotDevicesControllerIdAccessAttemptsResponse =
+	postIotDevicesControllerIdAccessAttemptsResponseSuccess;
 
+export const getPostIotDevicesControllerIdAccessAttemptsUrl = (
+	controllerId: string,
+) => {
+	return `/iot/devices/${controllerId}/access-attempts`;
+};
 
-  
+export const postIotDevicesControllerIdAccessAttempts = async (
+	controllerId: string,
+	postIotDevicesControllerIdAccessAttemptsBody: PostIotDevicesControllerIdAccessAttemptsBody,
+	options?: RequestInit,
+): Promise<postIotDevicesControllerIdAccessAttemptsResponse> => {
+	const res = await fetch(
+		getPostIotDevicesControllerIdAccessAttemptsUrl(controllerId),
+		{
+			...options,
+			method: "POST",
+			headers: { "Content-Type": "application/json", ...options?.headers },
+			body: JSON.stringify(postIotDevicesControllerIdAccessAttemptsBody),
+		},
+	);
 
-  return `/iot/devices/${controllerId}/access-attempts`
-}
+	const body = [204, 205, 304].includes(res.status) ? null : await res.text();
 
-export const postIotDevicesControllerIdAccessAttempts = async (controllerId: string,
-    postIotDevicesControllerIdAccessAttemptsBody: PostIotDevicesControllerIdAccessAttemptsBody, options?: RequestInit): Promise<postIotDevicesControllerIdAccessAttemptsResponse> => {
-  
-  const res = await fetch(getPostIotDevicesControllerIdAccessAttemptsUrl(controllerId),
-  {      
-    ...options,
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...options?.headers },
-    body: JSON.stringify(
-      postIotDevicesControllerIdAccessAttemptsBody,)
-  }
-)
-
-  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-  
-  const data: postIotDevicesControllerIdAccessAttemptsResponse['data'] = body ? JSON.parse(body) : {}
-  return { data, status: res.status, headers: res.headers } as postIotDevicesControllerIdAccessAttemptsResponse
-}
-  
-
+	const data: postIotDevicesControllerIdAccessAttemptsResponse["data"] = body
+		? JSON.parse(body)
+		: {};
+	return {
+		data,
+		status: res.status,
+		headers: res.headers,
+	} as postIotDevicesControllerIdAccessAttemptsResponse;
+};
 
 /**
  * Permite que o controlador solicite um comando imediato (por exemplo, destravar temporariamente a porta).
  * @summary Criar comando emergencial
  */
 export type postIotDevicesControllerIdCommandsResponse201 = {
-  data: PostIotDevicesControllerIdCommands201
-  status: 201
-}
-
-export type postIotDevicesControllerIdCommandsResponseSuccess = (postIotDevicesControllerIdCommandsResponse201) & {
-  headers: Headers;
+	data: PostIotDevicesControllerIdCommands201;
+	status: 201;
 };
-;
 
-export type postIotDevicesControllerIdCommandsResponse = (postIotDevicesControllerIdCommandsResponseSuccess)
+export type postIotDevicesControllerIdCommandsResponseSuccess =
+	postIotDevicesControllerIdCommandsResponse201 & {
+		headers: Headers;
+	};
 
-export const getPostIotDevicesControllerIdCommandsUrl = (controllerId: string,) => {
+export type postIotDevicesControllerIdCommandsResponse =
+	postIotDevicesControllerIdCommandsResponseSuccess;
 
+export const getPostIotDevicesControllerIdCommandsUrl = (
+	controllerId: string,
+) => {
+	return `/iot/devices/${controllerId}/commands`;
+};
 
-  
+export const postIotDevicesControllerIdCommands = async (
+	controllerId: string,
+	postIotDevicesControllerIdCommandsBody: PostIotDevicesControllerIdCommandsBody,
+	options?: RequestInit,
+): Promise<postIotDevicesControllerIdCommandsResponse> => {
+	const res = await fetch(
+		getPostIotDevicesControllerIdCommandsUrl(controllerId),
+		{
+			...options,
+			method: "POST",
+			headers: { "Content-Type": "application/json", ...options?.headers },
+			body: JSON.stringify(postIotDevicesControllerIdCommandsBody),
+		},
+	);
 
-  return `/iot/devices/${controllerId}/commands`
-}
+	const body = [204, 205, 304].includes(res.status) ? null : await res.text();
 
-export const postIotDevicesControllerIdCommands = async (controllerId: string,
-    postIotDevicesControllerIdCommandsBody: PostIotDevicesControllerIdCommandsBody, options?: RequestInit): Promise<postIotDevicesControllerIdCommandsResponse> => {
-  
-  const res = await fetch(getPostIotDevicesControllerIdCommandsUrl(controllerId),
-  {      
-    ...options,
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...options?.headers },
-    body: JSON.stringify(
-      postIotDevicesControllerIdCommandsBody,)
-  }
-)
-
-  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-  
-  const data: postIotDevicesControllerIdCommandsResponse['data'] = body ? JSON.parse(body) : {}
-  return { data, status: res.status, headers: res.headers } as postIotDevicesControllerIdCommandsResponse
-}
-  
-
+	const data: postIotDevicesControllerIdCommandsResponse["data"] = body
+		? JSON.parse(body)
+		: {};
+	return {
+		data,
+		status: res.status,
+		headers: res.headers,
+	} as postIotDevicesControllerIdCommandsResponse;
+};
 
 /**
  * Entrega ao controlador os comandos na fila que ainda não foram enviados ou expirados.
  * @summary Buscar comandos pendentes
  */
 export type getIotDevicesControllerIdCommandsResponse200 = {
-  data: GetIotDevicesControllerIdCommands200
-  status: 200
-}
-
-export type getIotDevicesControllerIdCommandsResponseSuccess = (getIotDevicesControllerIdCommandsResponse200) & {
-  headers: Headers;
+	data: GetIotDevicesControllerIdCommands200;
+	status: 200;
 };
-;
 
-export type getIotDevicesControllerIdCommandsResponse = (getIotDevicesControllerIdCommandsResponseSuccess)
+export type getIotDevicesControllerIdCommandsResponseSuccess =
+	getIotDevicesControllerIdCommandsResponse200 & {
+		headers: Headers;
+	};
 
-export const getGetIotDevicesControllerIdCommandsUrl = (controllerId: string,
-    params?: GetIotDevicesControllerIdCommandsParams,) => {
-  const normalizedParams = new URLSearchParams();
+export type getIotDevicesControllerIdCommandsResponse =
+	getIotDevicesControllerIdCommandsResponseSuccess;
 
-  Object.entries(params || {}).forEach(([key, value]) => {
-    
-    if (value !== undefined) {
-      normalizedParams.append(key, value === null ? 'null' : value.toString())
-    }
-  });
+export const getGetIotDevicesControllerIdCommandsUrl = (
+	controllerId: string,
+	params?: GetIotDevicesControllerIdCommandsParams,
+) => {
+	const normalizedParams = new URLSearchParams();
 
-  const stringifiedParams = normalizedParams.toString();
+	Object.entries(params || {}).forEach(([key, value]) => {
+		if (value !== undefined) {
+			normalizedParams.append(key, value === null ? "null" : value.toString());
+		}
+	});
 
-  return stringifiedParams.length > 0 ? `/iot/devices/${controllerId}/commands?${stringifiedParams}` : `/iot/devices/${controllerId}/commands`
-}
+	const stringifiedParams = normalizedParams.toString();
 
-export const getIotDevicesControllerIdCommands = async (controllerId: string,
-    params?: GetIotDevicesControllerIdCommandsParams, options?: RequestInit): Promise<getIotDevicesControllerIdCommandsResponse> => {
-  
-  const res = await fetch(getGetIotDevicesControllerIdCommandsUrl(controllerId,params),
-  {      
-    ...options,
-    method: 'GET'
-    
-    
-  }
-)
+	return stringifiedParams.length > 0
+		? `/iot/devices/${controllerId}/commands?${stringifiedParams}`
+		: `/iot/devices/${controllerId}/commands`;
+};
 
-  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-  
-  const data: getIotDevicesControllerIdCommandsResponse['data'] = body ? JSON.parse(body) : {}
-  return { data, status: res.status, headers: res.headers } as getIotDevicesControllerIdCommandsResponse
-}
-  
+export const getIotDevicesControllerIdCommands = async (
+	controllerId: string,
+	params?: GetIotDevicesControllerIdCommandsParams,
+	options?: RequestInit,
+): Promise<getIotDevicesControllerIdCommandsResponse> => {
+	const res = await fetch(
+		getGetIotDevicesControllerIdCommandsUrl(controllerId, params),
+		{
+			...options,
+			method: "GET",
+		},
+	);
 
+	const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+	const data: getIotDevicesControllerIdCommandsResponse["data"] = body
+		? JSON.parse(body)
+		: {};
+	return {
+		data,
+		status: res.status,
+		headers: res.headers,
+	} as getIotDevicesControllerIdCommandsResponse;
+};
 
 /**
  * Atualiza o status de um comando após processamento pelo controlador, incluindo payload de resultado ou erro.
  * @summary Confirmar execução de comando
  */
 export type patchIotDevicesControllerIdCommandsCommandIdAckResponse200 = {
-  data: PatchIotDevicesControllerIdCommandsCommandIdAck200
-  status: 200
-}
+	data: PatchIotDevicesControllerIdCommandsCommandIdAck200;
+	status: 200;
+};
 
 export type patchIotDevicesControllerIdCommandsCommandIdAckResponse404 = {
-  data: PatchIotDevicesControllerIdCommandsCommandIdAck404
-  status: 404
-}
-
-export type patchIotDevicesControllerIdCommandsCommandIdAckResponseSuccess = (patchIotDevicesControllerIdCommandsCommandIdAckResponse200) & {
-  headers: Headers;
-};
-export type patchIotDevicesControllerIdCommandsCommandIdAckResponseError = (patchIotDevicesControllerIdCommandsCommandIdAckResponse404) & {
-  headers: Headers;
+	data: PatchIotDevicesControllerIdCommandsCommandIdAck404;
+	status: 404;
 };
 
-export type patchIotDevicesControllerIdCommandsCommandIdAckResponse = (patchIotDevicesControllerIdCommandsCommandIdAckResponseSuccess | patchIotDevicesControllerIdCommandsCommandIdAckResponseError)
+export type patchIotDevicesControllerIdCommandsCommandIdAckResponseSuccess =
+	patchIotDevicesControllerIdCommandsCommandIdAckResponse200 & {
+		headers: Headers;
+	};
+export type patchIotDevicesControllerIdCommandsCommandIdAckResponseError =
+	patchIotDevicesControllerIdCommandsCommandIdAckResponse404 & {
+		headers: Headers;
+	};
 
-export const getPatchIotDevicesControllerIdCommandsCommandIdAckUrl = (controllerId: string,
-    commandId: string,) => {
+export type patchIotDevicesControllerIdCommandsCommandIdAckResponse =
+	| patchIotDevicesControllerIdCommandsCommandIdAckResponseSuccess
+	| patchIotDevicesControllerIdCommandsCommandIdAckResponseError;
 
+export const getPatchIotDevicesControllerIdCommandsCommandIdAckUrl = (
+	controllerId: string,
+	commandId: string,
+) => {
+	return `/iot/devices/${controllerId}/commands/${commandId}/ack`;
+};
 
-  
+export const patchIotDevicesControllerIdCommandsCommandIdAck = async (
+	controllerId: string,
+	commandId: string,
+	patchIotDevicesControllerIdCommandsCommandIdAckBody: PatchIotDevicesControllerIdCommandsCommandIdAckBody,
+	options?: RequestInit,
+): Promise<patchIotDevicesControllerIdCommandsCommandIdAckResponse> => {
+	const res = await fetch(
+		getPatchIotDevicesControllerIdCommandsCommandIdAckUrl(
+			controllerId,
+			commandId,
+		),
+		{
+			...options,
+			method: "PATCH",
+			headers: { "Content-Type": "application/json", ...options?.headers },
+			body: JSON.stringify(patchIotDevicesControllerIdCommandsCommandIdAckBody),
+		},
+	);
 
-  return `/iot/devices/${controllerId}/commands/${commandId}/ack`
-}
+	const body = [204, 205, 304].includes(res.status) ? null : await res.text();
 
-export const patchIotDevicesControllerIdCommandsCommandIdAck = async (controllerId: string,
-    commandId: string,
-    patchIotDevicesControllerIdCommandsCommandIdAckBody: PatchIotDevicesControllerIdCommandsCommandIdAckBody, options?: RequestInit): Promise<patchIotDevicesControllerIdCommandsCommandIdAckResponse> => {
-  
-  const res = await fetch(getPatchIotDevicesControllerIdCommandsCommandIdAckUrl(controllerId,commandId),
-  {      
-    ...options,
-    method: 'PATCH',
-    headers: { 'Content-Type': 'application/json', ...options?.headers },
-    body: JSON.stringify(
-      patchIotDevicesControllerIdCommandsCommandIdAckBody,)
-  }
-)
-
-  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-  
-  const data: patchIotDevicesControllerIdCommandsCommandIdAckResponse['data'] = body ? JSON.parse(body) : {}
-  return { data, status: res.status, headers: res.headers } as patchIotDevicesControllerIdCommandsCommandIdAckResponse
-}
+	const data: patchIotDevicesControllerIdCommandsCommandIdAckResponse["data"] =
+		body ? JSON.parse(body) : {};
+	return {
+		data,
+		status: res.status,
+		headers: res.headers,
+	} as patchIotDevicesControllerIdCommandsCommandIdAckResponse;
+};

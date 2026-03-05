@@ -24,9 +24,9 @@ import {
 	TableHeader,
 	TableRow,
 } from "@/components/ui/table";
-import type { ProfileSummary } from "@/services/profiles/types";
+import type { RoomType } from "@/services/rooms/types";
 
-const columnHelper = createColumnHelper<ProfileSummary>();
+const columnHelper = createColumnHelper<RoomType>();
 
 const columns = [
 	columnHelper.accessor("name", {
@@ -37,34 +37,34 @@ const columns = [
 				className="-ml-3"
 				onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
 			>
-				Perfil
+				Tipo
 				<ArrowUpDown className="ml-1 size-3" />
 			</Button>
 		),
 		cell: () => null,
 	}),
-	columnHelper.display({
-		id: "actions",
-		header: "",
+	columnHelper.accessor("abbreviation", {
+		header: "Sigla",
 		cell: () => null,
 	}),
+	columnHelper.display({ id: "actions", header: "", cell: () => null }),
 ];
 
-interface ProfilesTableProps {
-	profiles: ProfileSummary[];
-	onEdit: (profile: ProfileSummary) => void;
-	onDelete: (profile: ProfileSummary) => void;
+interface RoomTypesTableProps {
+	roomTypes: RoomType[];
+	onEdit: (roomType: RoomType) => void;
+	onDelete: (roomType: RoomType) => void;
 }
 
-export function ProfilesTable({
-	profiles,
+export function RoomTypesTable({
+	roomTypes,
 	onEdit,
 	onDelete,
-}: ProfilesTableProps) {
+}: RoomTypesTableProps) {
 	const [sorting, setSorting] = useState<SortingState>([]);
 
 	const table = useReactTable({
-		data: profiles,
+		data: roomTypes,
 		columns,
 		state: { sorting },
 		onSortingChange: setSorting,
@@ -93,20 +93,18 @@ export function ProfilesTable({
 				</TableHeader>
 				<TableBody>
 					{table.getRowModel().rows.map((row) => {
-						const profile = row.original;
+						const roomType = row.original;
 						return (
 							<TableRow key={row.id}>
-								<TableCell className="w-full py-3">
-									<div className="flex flex-col gap-0.5">
-										<span className="font-medium text-zinc-900 dark:text-zinc-100 leading-tight">
-											{profile.name}
-										</span>
-										{profile.description && (
-											<span className="text-xs text-zinc-400 dark:text-zinc-500 leading-tight">
-												{profile.description}
-											</span>
-										)}
-									</div>
+								<TableCell className="py-3 w-full">
+									<span className="font-medium text-zinc-900 dark:text-zinc-100 leading-tight">
+										{roomType.name}
+									</span>
+								</TableCell>
+								<TableCell className="py-3">
+									<span className="inline-flex items-center rounded-md bg-zinc-100 dark:bg-zinc-800 px-2 py-0.5 text-xs font-semibold text-zinc-700 dark:text-zinc-300 font-mono">
+										{roomType.abbreviation}
+									</span>
 								</TableCell>
 								<TableCell className="py-3 pr-4 pl-2">
 									<div className="flex items-center justify-end">
@@ -118,14 +116,14 @@ export function ProfilesTable({
 												</Button>
 											</DropdownMenuTrigger>
 											<DropdownMenuContent align="end">
-												<DropdownMenuItem onClick={() => onEdit(profile)}>
+												<DropdownMenuItem onClick={() => onEdit(roomType)}>
 													<Pencil className="size-4" />
 													Editar
 												</DropdownMenuItem>
 												<DropdownMenuSeparator />
 												<DropdownMenuItem
 													variant="destructive"
-													onClick={() => onDelete(profile)}
+													onClick={() => onDelete(roomType)}
 												>
 													<Trash2 className="size-4" />
 													Excluir
