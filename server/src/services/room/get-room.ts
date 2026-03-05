@@ -26,17 +26,16 @@ export async function getRooms(filters?: GetRoomsFilters) {
 		conditions.push(inArray(room.blockId, blockIds));
 	}
 
-	const query = db
+	const baseQuery = db
 		.select()
 		.from(room)
-		.innerJoin(block, eq(block.id, room.blockId))
-		.orderBy(block.name, room.name);
+		.innerJoin(block, eq(block.id, room.blockId));
 
-	if (conditions.length > 0) {
-		// biome-ignore lint/suspicious/noExplicitAny: drizzle typings
-		query.where(and(...(conditions as [any, ...any[]])));
-	}
-
-	const result = await query;
+	const result = await (
+		conditions.length > 0
+			? // biome-ignore lint/suspicious/noExplicitAny: drizzle typings
+				baseQuery.where(and(...(conditions as [any, ...any[]]))).orderBy(block.name, room.name)
+			: baseQuery.orderBy(block.name, room.name)
+	);
 	return { result };
 }
