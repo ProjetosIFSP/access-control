@@ -1,3 +1,4 @@
+import { useState } from "react";
 import {
   Combobox,
   ComboboxContent,
@@ -29,30 +30,60 @@ export function SelectFilter({
   defaultValue = "all",
   className,
 }: SelectFilterProps) {
+  const [query, setQuery] = useState("");
+
   const currentValue =
     value === defaultValue
       ? null
       : (options.find((o) => o.value === value) ?? null);
 
+  const filtered =
+    query.trim() === ""
+      ? options
+      : options.filter((o) =>
+          o.label
+            .toLowerCase()
+            .normalize("NFD")
+            .replace(/[\u0300-\u036f]/g, "")
+            .includes(
+              query
+                .toLowerCase()
+                .normalize("NFD")
+                .replace(/[\u0300-\u036f]/g, ""),
+            ),
+        );
+
   return (
     <Combobox<SelectFilterOption>
       items={options}
       value={currentValue}
-      onValueChange={(opt) => onValueChange(opt?.value ?? defaultValue)}
-      className={className}
+      onValueChange={(opt) => {
+        onValueChange(opt?.value ?? defaultValue);
+        setQuery("");
+      }}
+      onInputValueChange={(inputValue) => {
+        // Only update query when the user is actively typing (not when the
+        // combobox writes the selected label back into the input on selection).
+        setQuery(inputValue);
+      }}
     >
-      <ComboboxInput placeholder={placeholder} showClear />
+      <ComboboxInput
+        placeholder={placeholder}
+        showClear
+        className={className}
+      />
       <ComboboxContent>
-        {options.length === 0 && (
+        {filtered.length === 0 ? (
           <ComboboxEmpty>Nenhum resultado encontrado.</ComboboxEmpty>
+        ) : (
+          <ComboboxList>
+            {filtered.map((opt) => (
+              <ComboboxItem key={opt.value} value={opt}>
+                {opt.label}
+              </ComboboxItem>
+            ))}
+          </ComboboxList>
         )}
-        <ComboboxList>
-          {options.map((opt) => (
-            <ComboboxItem key={opt.value} value={opt}>
-              {opt.label}
-            </ComboboxItem>
-          ))}
-        </ComboboxList>
       </ComboboxContent>
     </Combobox>
   );

@@ -31,11 +31,11 @@ export async function getRooms(filters?: GetRoomsFilters) {
 		.from(room)
 		.innerJoin(block, eq(block.id, room.blockId));
 
-	const result = await (
-		conditions.length > 0
-			? // biome-ignore lint/suspicious/noExplicitAny: drizzle typings
-				baseQuery.where(and(...(conditions as [any, ...any[]]))).orderBy(block.name, room.name)
-			: baseQuery.orderBy(block.name, room.name)
-	);
+	const result = await (conditions.length > 0
+		? baseQuery
+				// biome-ignore lint/suspicious/noExplicitAny: drizzle typings
+				.where(and(...(conditions as [any, ...any[]])))
+				.orderBy(block.name, room.name)
+		: baseQuery.orderBy(block.name, room.name));
 	return { result };
 }

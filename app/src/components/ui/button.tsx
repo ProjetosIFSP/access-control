@@ -78,7 +78,9 @@ function useHoverFlair(variant: string | null | undefined) {
     }
 
     function onMouseEnter(e: MouseEvent) {
-      const { x, y } = getXY(e);
+      const pos = getXY(e);
+      if (!pos) return;
+      const { x, y } = pos;
       xSet(x);
       ySet(y);
 
@@ -90,7 +92,9 @@ function useHoverFlair(variant: string | null | undefined) {
     }
 
     function onMouseLeave(e: MouseEvent) {
-      const { x, y } = getXY(e);
+      const pos = getXY(e);
+      if (!pos) return;
+      const { x, y } = pos;
 
       gsap.killTweensOf(flair);
 
@@ -104,7 +108,9 @@ function useHoverFlair(variant: string | null | undefined) {
     }
 
     function onMouseMove(e: MouseEvent) {
-      const { x, y } = getXY(e);
+      const pos = getXY(e);
+      if (!pos) return;
+      const { x, y } = pos;
 
       gsap.to(flair, {
         xPercent: x,

@@ -5,7 +5,7 @@ export const Route = createFileRoute("/profiles")({
 		// Profiles were merged into the users page under a tab
 		throw redirect({
 			to: "/users",
-			search: { q: undefined, tab: "profiles" as const },
+			search: { q: undefined, tab: "profiles" as const, profileIds: undefined },
 		});
 	},
 	component: () => null,

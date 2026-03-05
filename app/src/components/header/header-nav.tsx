@@ -49,7 +49,14 @@ export function HeaderNav() {
 						<NavigationMenuContent>
 							<ul className="w-96">
 								<Item asChild className="hover:bg-muted">
-									<Link search={{ q: undefined, tab: undefined }} to="/users">
+									<Link
+										search={{
+											q: undefined,
+											profileIds: undefined,
+											tab: undefined,
+										}}
+										to="/users"
+									>
 										<ItemContent>
 											<ItemTitle>Usuários e Perfis</ItemTitle>
 											<ItemDescription>
@@ -59,7 +66,15 @@ export function HeaderNav() {
 									</Link>
 								</Item>
 								<Item asChild className="hover:bg-muted">
-									<Link search={{ block: undefined }} to="/rooms">
+									<Link
+										search={{
+											tab: undefined,
+											q: undefined,
+											typeIds: undefined,
+											blockIds: undefined,
+										}}
+										to="/rooms"
+									>
 										<ItemContent>
 											<ItemTitle>Salas e Blocos</ItemTitle>
 											<ItemDescription>

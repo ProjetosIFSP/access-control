@@ -9,15 +9,10 @@ import {
 import { Footer } from "@/components/footer";
 import { PageTitle } from "@/components/page/title";
 import { BlockSection } from "@/components/rooms/block-section";
+import { FilterBar } from "@/components/ui/filter-bar";
 import { Input } from "@/components/ui/input";
 import { Kbd } from "@/components/ui/kbd";
-import {
-	Select,
-	SelectContent,
-	SelectItem,
-	SelectTrigger,
-	SelectValue,
-} from "@/components/ui/select";
+import { SelectFilter } from "@/components/ui/select-filter";
 import { useDebounce } from "@/hooks/use-debounce";
 import { useIsMac, useIsMobile as useIsMobileOS } from "@/hooks/use-os";
 import {
@@ -107,6 +102,8 @@ function RoomsPage() {
 
 	const hasFilters = !!q?.trim() || !!type || !!state;
 
+	const activeFiltersCount = (type ? 1 : 0) + (state ? 1 : 0);
+
 	function setType(value: string) {
 		navigate({
 			search: (prev) => ({
@@ -126,6 +123,12 @@ function RoomsPage() {
 			replace: true,
 		});
 	}
+
+	const roomTypeOptions =
+		roomTypesData?.result.map((rt) => ({
+			value: rt.abbreviation,
+			label: rt.name,
+		})) ?? [];
 
 	return (
 		<>
@@ -155,34 +158,31 @@ function RoomsPage() {
 						)}
 					</div>
 
-					{/* Room type select */}
-					<Select value={type ?? "all"} onValueChange={setType}>
-						<SelectTrigger size="default" className="w-auto min-w-36 bg-white">
-							<SelectValue placeholder="Tipo de sala" />
-						</SelectTrigger>
-						<SelectContent>
-							<SelectItem value="all">Todos os tipos</SelectItem>
-							{roomTypesData?.result.map((rt) => (
-								<SelectItem key={rt.id} value={rt.abbreviation}>
-									{rt.name}
-								</SelectItem>
-							))}
-						</SelectContent>
-					</Select>
+					{/* Type + state filters — inline on md+, icon button popover on mobile */}
+					<FilterBar activeCount={activeFiltersCount} panelOpen={false}>
+						{/* Room type combobox */}
+						<SelectFilter
+							value={type ?? "all"}
+							onValueChange={setType}
+							placeholder="Tipo de sala"
+							options={roomTypeOptions}
+							className="max-w-40"
+						/>
 
-					{/* Door state toggle */}
-					<ToggleGroup
-						type="single"
-						value={state ?? "all"}
-						onValueChange={(v) => setState(v || "all")}
-						variant="outline"
-						className="bg-white dark:bg-zinc-950"
-					>
-						<ToggleGroupItem value="all">Todas</ToggleGroupItem>
-						<ToggleGroupItem value="aberta">Livres</ToggleGroupItem>
-						<ToggleGroupItem value="fechada">Em uso</ToggleGroupItem>
-						<ToggleGroupItem value="alerta">Alerta</ToggleGroupItem>
-					</ToggleGroup>
+						{/* Door state toggle */}
+						<ToggleGroup
+							type="single"
+							value={state ?? "all"}
+							onValueChange={(v) => setState(v || "all")}
+							variant="outline"
+							className="bg-white dark:bg-zinc-950 flex-wrap"
+						>
+							<ToggleGroupItem value="all">Todas</ToggleGroupItem>
+							<ToggleGroupItem value="aberta">Livres</ToggleGroupItem>
+							<ToggleGroupItem value="fechada">Em uso</ToggleGroupItem>
+							<ToggleGroupItem value="alerta">Alerta</ToggleGroupItem>
+						</ToggleGroup>
+					</FilterBar>
 				</div>
 
 				{/* Content */}

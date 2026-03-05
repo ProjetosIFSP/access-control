@@ -1,0 +1,16 @@
+{
+  "short_name": "Controle de Acesso",
+  "name": "Controle de Acesso — IFSP Presidente Epitácio",
+  "description": "Sistema IoT de controle de acesso e gerenciamento de ambientes com biometria e RFID.",
+  "icons": [
+    {
+      "src": "favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml"
+    }
+  ],
+  "start_url": ".",
+  "display": "standalone",
+  "theme_color": "#379936",
+  "background_color": "#e4e4e7"
+}
