@@ -1,9 +1,9 @@
-import { db } from "@/db";
-import { room } from "@/db/schema/room";
-import { profileRoomPermission } from "@/db/schema/profile";
-import { userRoomPermission } from "@/db/schema/access";
-import { v7 as uuidv7 } from "uuid";
 import { eq } from "drizzle-orm";
+import { v7 as uuidv7 } from "uuid";
+import { db } from "@/db";
+import { userRoomPermission } from "@/db/schema/access";
+import { profileRoomPermission } from "@/db/schema/profile";
+import { room } from "@/db/schema/room";
 
 interface CreateRoomInput {
 	name: string;
@@ -40,7 +40,11 @@ export async function createRoom({
 		await db
 			.insert(profileRoomPermission)
 			.values(
-				profileIds.map((profileId) => ({ id: uuidv7(), profileId, roomId: id })),
+				profileIds.map((profileId) => ({
+					id: uuidv7(),
+					profileId,
+					roomId: id,
+				})),
 			)
 			.onConflictDoNothing();
 	}
@@ -49,9 +53,7 @@ export async function createRoom({
 	if (userIds.length > 0) {
 		await db
 			.insert(userRoomPermission)
-			.values(
-				userIds.map((userId) => ({ id: uuidv7(), userId, roomId: id })),
-			)
+			.values(userIds.map((userId) => ({ id: uuidv7(), userId, roomId: id })))
 			.onConflictDoNothing();
 	}
 

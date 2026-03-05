@@ -1,39 +1,39 @@
+import type { FastifyPluginAsyncZod } from "fastify-type-provider-zod";
+import type { SchemaWithExamples } from "@/api/openapi";
 import {
 	accessStatusEnum,
 	doorCommandStatusEnum,
 	doorCommandTypeEnum,
 	doorStateEnum,
 } from "@/db/schema/enums";
+import { z } from "@/lib/zod";
 import { createDoorCommand } from "@/services/iot/commands";
+import { getDoorControllerById } from "@/services/iot/door-controller";
 import { getControllerAccessLogs } from "@/services/iot/get-controller-access-logs";
 import { getControllerCommands } from "@/services/iot/get-controller-commands";
 import { getDoorControllers } from "@/services/iot/get-door-controllers";
-import { getDoorControllerById } from "@/services/iot/door-controller";
-import type { FastifyPluginAsyncZod } from "fastify-type-provider-zod";
-import { z } from "@/lib/zod";
-import type { SchemaWithExamples } from "@/api/openapi";
 
 const commandTypeValues = doorCommandTypeEnum.enumValues as [
-	typeof doorCommandTypeEnum.enumValues[number],
-	...typeof doorCommandTypeEnum.enumValues[number][],
+	(typeof doorCommandTypeEnum.enumValues)[number],
+	...(typeof doorCommandTypeEnum.enumValues)[number][],
 ];
 const commandTypeSchema = z.enum(commandTypeValues);
 
 const commandStatusValues = doorCommandStatusEnum.enumValues as [
-	typeof doorCommandStatusEnum.enumValues[number],
-	...typeof doorCommandStatusEnum.enumValues[number][],
+	(typeof doorCommandStatusEnum.enumValues)[number],
+	...(typeof doorCommandStatusEnum.enumValues)[number][],
 ];
 const commandStatusSchema = z.enum(commandStatusValues);
 
 const doorStateValues = doorStateEnum.enumValues as [
-	typeof doorStateEnum.enumValues[number],
-	...typeof doorStateEnum.enumValues[number][],
+	(typeof doorStateEnum.enumValues)[number],
+	...(typeof doorStateEnum.enumValues)[number][],
 ];
 const doorStateSchema = z.enum(doorStateValues);
 
 const accessStatusValues = accessStatusEnum.enumValues as [
-	typeof accessStatusEnum.enumValues[number],
-	...typeof accessStatusEnum.enumValues[number][],
+	(typeof accessStatusEnum.enumValues)[number],
+	...(typeof accessStatusEnum.enumValues)[number][],
 ];
 const accessStatusSchema = z.enum(accessStatusValues);
 
@@ -246,14 +246,14 @@ export const doorRoute: FastifyPluginAsyncZod = async (app) => {
 					},
 					lastCommand: controller.lastCommand
 						? {
-							id: controller.lastCommand.id,
-							type: controller.lastCommand.type,
-							status: controller.lastCommand.status,
-							createdAt: controller.lastCommand.createdAt.toISOString(),
-							sentAt: controller.lastCommand.sentAt?.toISOString() ?? null,
-							processedAt:
-								controller.lastCommand.processedAt?.toISOString() ?? null,
-						}
+								id: controller.lastCommand.id,
+								type: controller.lastCommand.type,
+								status: controller.lastCommand.status,
+								createdAt: controller.lastCommand.createdAt.toISOString(),
+								sentAt: controller.lastCommand.sentAt?.toISOString() ?? null,
+								processedAt:
+									controller.lastCommand.processedAt?.toISOString() ?? null,
+							}
 						: null,
 				})),
 			};
@@ -273,7 +273,8 @@ export const doorRoute: FastifyPluginAsyncZod = async (app) => {
 				}),
 				tags: ["doors"],
 				summary: "Histórico de comandos",
-				description: "Consulta os comandos emitidos para um controlador específico.",
+				description:
+					"Consulta os comandos emitidos para um controlador específico.",
 				security: [{ sessionCookie: [] }],
 				response: {
 					200: controllerCommandsResponseSchema,

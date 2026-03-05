@@ -1,8 +1,8 @@
+import { eq } from "drizzle-orm";
 import { db } from "@/db";
 import { doorController } from "@/db/schema/door";
-import { room } from "@/db/schema/room";
 import { doorStateEnum } from "@/db/schema/enums";
-import { eq } from "drizzle-orm";
+import { room } from "@/db/schema/room";
 
 const DOOR_STATES = doorStateEnum.enumValues;
 
@@ -57,9 +57,7 @@ interface RecordDoorHeartbeatInput {
 	firmwareVersion?: string;
 }
 
-export async function recordDoorHeartbeat(
-	input: RecordDoorHeartbeatInput,
-) {
+export async function recordDoorHeartbeat(input: RecordDoorHeartbeatInput) {
 	const { controllerId, firmwareVersion } = input;
 	const now = new Date();
 

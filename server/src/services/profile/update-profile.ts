@@ -1,12 +1,12 @@
+import { and, eq, inArray } from "drizzle-orm";
+import { v7 as uuidv7 } from "uuid";
 import { db } from "@/db";
 import {
 	profile,
-	userProfile,
 	profileRoomPermission,
 	profileRoomTypePermission,
+	userProfile,
 } from "@/db/schema/profile";
-import { eq, and, inArray } from "drizzle-orm";
-import { v7 as uuidv7 } from "uuid";
 
 interface UpdateProfileInput {
 	id: string;
@@ -102,9 +102,7 @@ async function syncProfileRooms(profileId: string, nextIds: string[]) {
 	if (toAdd.length > 0) {
 		await db
 			.insert(profileRoomPermission)
-			.values(
-				toAdd.map((roomId) => ({ id: uuidv7(), profileId, roomId })),
-			)
+			.values(toAdd.map((roomId) => ({ id: uuidv7(), profileId, roomId })))
 			.onConflictDoNothing();
 	}
 

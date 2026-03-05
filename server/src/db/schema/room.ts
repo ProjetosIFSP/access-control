@@ -1,7 +1,11 @@
-import { boolean, pgTable, text, timestamp, jsonb } from "drizzle-orm/pg-core";
-import { v7 as uuidv7 } from "uuid";
 import { sql } from "drizzle-orm";
-import { doorCommandStatusEnum, doorCommandTypeEnum, doorStateEnum } from "./enums";
+import { boolean, jsonb, pgTable, text, timestamp } from "drizzle-orm/pg-core";
+import { v7 as uuidv7 } from "uuid";
+import {
+	doorCommandStatusEnum,
+	doorCommandTypeEnum,
+	doorStateEnum,
+} from "./enums";
 
 // Tabela para agrupar salas, ex: "Prédio A", "Andar 3"
 export const block = pgTable("block", {
@@ -15,7 +19,7 @@ export const roomType = pgTable("room_type", {
 	id: text("id")
 		.primaryKey()
 		.$defaultFn(() => uuidv7()),
-  name: text("name").notNull().unique(),
+	name: text("name").notNull().unique(),
 	abbreviation: text("abbreviation").notNull(),
 	description: text("description").notNull().default(""),
 });

@@ -30,7 +30,7 @@ export const auth = betterAuth({
 		google: {
 			clientId: process.env.GOOGLE_CLIENT_ID as string,
 			clientSecret: process.env.GOOGLE_SECRET_KEY as string,
-			mapProfileToUser: (profile) => ({
+			mapProfileToUser: (_profile) => ({
 				emailVerified: true,
 				isAdmin: false,
 			}),

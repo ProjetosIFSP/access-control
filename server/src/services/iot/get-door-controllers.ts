@@ -1,19 +1,7 @@
+import { desc, eq, inArray } from "drizzle-orm";
 import { db } from "@/db";
 import { doorCommand, doorController } from "@/db/schema/door";
 import { block, room } from "@/db/schema/room";
-import { desc, eq, inArray } from "drizzle-orm";
-
-interface DoorControllerRow {
-	controllerId: string;
-	roomId: string;
-	roomName: string;
-	blockName: string;
-	firmwareVersion: string | null;
-	lastSeenAt: Date;
-	doorState: typeof room.$inferSelect.doorState;
-	isLocked: boolean | null;
-	lastStatusUpdateAt: Date | null;
-}
 
 interface LastCommandRow {
 	controllerId: string;
@@ -71,7 +59,9 @@ export async function getDoorControllers(): Promise<DoorControllerSummary[]> {
 		return [];
 	}
 
-	const controllerIds = controllers.map((controller) => controller.controllerId);
+	const controllerIds = controllers.map(
+		(controller) => controller.controllerId,
+	);
 
 	const commandRows: LastCommandRow[] = await db
 		.select({
@@ -113,13 +103,13 @@ export async function getDoorControllers(): Promise<DoorControllerSummary[]> {
 			},
 			lastCommand: lastCommand
 				? {
-					id: lastCommand.id,
-					type: lastCommand.type,
-					status: lastCommand.status,
-					createdAt: lastCommand.createdAt,
-					sentAt: lastCommand.sentAt,
-					processedAt: lastCommand.processedAt,
-				}
+						id: lastCommand.id,
+						type: lastCommand.type,
+						status: lastCommand.status,
+						createdAt: lastCommand.createdAt,
+						sentAt: lastCommand.sentAt,
+						processedAt: lastCommand.processedAt,
+					}
 				: null,
 		};
 	});

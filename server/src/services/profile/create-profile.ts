@@ -1,12 +1,12 @@
+import { eq } from "drizzle-orm";
+import { v7 as uuidv7 } from "uuid";
 import { db } from "@/db";
 import {
 	profile,
-	userProfile,
 	profileRoomPermission,
 	profileRoomTypePermission,
+	userProfile,
 } from "@/db/schema/profile";
-import { v7 as uuidv7 } from "uuid";
-import { eq } from "drizzle-orm";
 
 interface CreateProfileInput {
 	name: string;

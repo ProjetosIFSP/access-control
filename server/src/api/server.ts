@@ -7,13 +7,13 @@ import {
 } from "fastify-type-provider-zod";
 import { registerDocs } from "./docs";
 import { authRoute } from "./routes/auth";
+import { blockRoute } from "./routes/block";
 import { doorRoute } from "./routes/door";
 import { iotRoute } from "./routes/iot";
+import { profileRoute } from "./routes/profile";
 import { roomRoute } from "./routes/room";
 import { roomTypesRoute } from "./routes/room-types"; // GET / added
 import { userRoute } from "./routes/user";
-import { blockRoute } from "./routes/block";
-import { profileRoute } from "./routes/profile";
 
 const app = fastify({
 	routerOptions: {
@@ -23,7 +23,11 @@ const app = fastify({
 
 async function bootstrap() {
 	app.register(fastifyCors, {
-		origin: ["http://localhost:5173", "http://localhost:3000", "http://localhost:3333"],
+		origin: [
+			"http://localhost:5173",
+			"http://localhost:3000",
+			"http://localhost:3333",
+		],
 		credentials: true,
 		methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
 	});

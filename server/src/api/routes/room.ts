@@ -12,7 +12,6 @@ import { userRoomPermission } from "@/db/schema/access";
 import { user } from "@/db/schema/auth";
 import { doorStateEnum } from "@/db/schema/enums";
 import { profile, profileRoomPermission } from "@/db/schema/profile";
-import { room } from "@/db/schema/room";
 import { auth } from "@/lib/auth";
 import { z } from "@/lib/zod";
 import { addUserRoomPermission } from "@/services/permissions/add-user-room-permission";

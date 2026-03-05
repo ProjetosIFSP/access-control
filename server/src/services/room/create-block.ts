@@ -1,7 +1,7 @@
+import { eq } from "drizzle-orm";
+import { v7 as uuidv7 } from "uuid";
 import { db } from "@/db";
 import { block } from "@/db/schema/room";
-import { v7 as uuidv7 } from "uuid";
-import { eq } from "drizzle-orm";
 
 export async function createBlock(data: { name: string }) {
 	const id = uuidv7();

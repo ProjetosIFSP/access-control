@@ -1,1 +1,1 @@
-export { doorController, doorCommand } from "./room";
+export { doorCommand, doorController } from "./room";

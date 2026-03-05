@@ -43,6 +43,7 @@ export async function getUsers(qOrFilters?: string | GetUsersFilters) {
 
 	if (profileIds && profileIds.length > 0) {
 		// Join with userProfile to filter by profile membership
+		// biome-ignore lint/suspicious/noExplicitAny: drizzle typings restrictions
 		baseQuery = (baseQuery as any)
 			.innerJoin(userProfile, eq(userProfile.userId, user.id))
 			.$dynamic();
@@ -50,6 +51,7 @@ export async function getUsers(qOrFilters?: string | GetUsersFilters) {
 	}
 
 	if (conditions.length > 0) {
+		// biome-ignore lint/suspicious/noExplicitAny: drizzle typings
 		baseQuery = baseQuery.where(and(...(conditions as [any, ...any[]])));
 	}
 

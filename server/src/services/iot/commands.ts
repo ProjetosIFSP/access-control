@@ -1,10 +1,7 @@
-import { db } from "@/db";
-import {
-	doorCommandStatusEnum,
-	doorCommandTypeEnum,
-} from "@/db/schema/enums";
-import { doorCommand } from "@/db/schema/room"
 import { and, asc, eq, inArray } from "drizzle-orm";
+import { db } from "@/db";
+import { doorCommandStatusEnum, doorCommandTypeEnum } from "@/db/schema/enums";
+import { doorCommand } from "@/db/schema/room";
 
 const COMMAND_TYPES = doorCommandTypeEnum.enumValues;
 const COMMAND_STATUSES = doorCommandStatusEnum.enumValues;
@@ -19,9 +16,7 @@ interface CreateDoorCommandInput {
 	expiresInSeconds?: number;
 }
 
-export async function createDoorCommand(
-	input: CreateDoorCommandInput,
-) {
+export async function createDoorCommand(input: CreateDoorCommandInput) {
 	const { controllerId, type, payload, expiresInSeconds } = input;
 	const expiresAt =
 		type === "UNLOCK" && !expiresInSeconds
@@ -48,9 +43,7 @@ interface PullPendingCommandsInput {
 	limit?: number;
 }
 
-export async function pullPendingCommands(
-	input: PullPendingCommandsInput,
-) {
+export async function pullPendingCommands(input: PullPendingCommandsInput) {
 	const { controllerId, limit = 10 } = input;
 	const now = new Date();
 

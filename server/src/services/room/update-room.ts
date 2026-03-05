@@ -1,9 +1,9 @@
-import { db } from "@/db";
-import { room } from "@/db/schema/room";
-import { profileRoomPermission } from "@/db/schema/profile";
-import { userRoomPermission } from "@/db/schema/access";
-import { eq, and, inArray } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 import { v7 as uuidv7 } from "uuid";
+import { db } from "@/db";
+import { userRoomPermission } from "@/db/schema/access";
+import { profileRoomPermission } from "@/db/schema/profile";
+import { room } from "@/db/schema/room";
 
 interface UpdateRoomInput {
 	id: string;
@@ -33,9 +33,7 @@ async function syncRoomProfiles(roomId: string, nextIds: string[]) {
 	if (toAdd.length > 0) {
 		await db
 			.insert(profileRoomPermission)
-			.values(
-				toAdd.map((profileId) => ({ id: uuidv7(), profileId, roomId })),
-			)
+			.values(toAdd.map((profileId) => ({ id: uuidv7(), profileId, roomId })))
 			.onConflictDoNothing();
 	}
 
@@ -66,9 +64,7 @@ async function syncRoomUsers(roomId: string, nextIds: string[]) {
 	if (toAdd.length > 0) {
 		await db
 			.insert(userRoomPermission)
-			.values(
-				toAdd.map((userId) => ({ id: uuidv7(), userId, roomId })),
-			)
+			.values(toAdd.map((userId) => ({ id: uuidv7(), userId, roomId })))
 			.onConflictDoNothing();
 	}
 
@@ -107,7 +103,8 @@ export async function updateRoom({
 	if (name !== undefined) updates.name = name;
 	if (blockId !== undefined) updates.blockId = blockId;
 	if (typeId !== undefined) updates.typeId = typeId;
-	if (requiresBiometry !== undefined) updates.requiresBiometry = requiresBiometry;
+	if (requiresBiometry !== undefined)
+		updates.requiresBiometry = requiresBiometry;
 	if (requiresRFID !== undefined) updates.requiresRFID = requiresRFID;
 
 	if (Object.keys(updates).length > 0) {

@@ -1,10 +1,9 @@
-import { db } from "@/db";
-import { user } from "@/db/schema/auth";
-import { account } from "@/db/schema/auth";
-import { userProfile } from "@/db/schema/profile";
-import { userRoomPermission, userRoomTypePermission } from "@/db/schema/access";
+import { randomBytes, scrypt } from "node:crypto";
 import { v7 as uuidv7 } from "uuid";
-import { scrypt, randomBytes } from "node:crypto";
+import { db } from "@/db";
+import { userRoomPermission, userRoomTypePermission } from "@/db/schema/access";
+import { account, user } from "@/db/schema/auth";
+import { userProfile } from "@/db/schema/profile";
 
 interface CreateUserInput {
 	name: string;

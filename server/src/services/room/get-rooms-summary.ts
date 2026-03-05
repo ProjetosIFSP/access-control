@@ -1,5 +1,5 @@
 import { and, eq, ilike, or } from "drizzle-orm";
-import { db, client } from "@/db";
+import { client, db } from "@/db";
 import { block, room, roomType } from "@/db/schema/room";
 
 export type RoomState = "aberta" | "fechada" | "alerta";
@@ -25,10 +25,7 @@ export interface BlockWithRooms {
 	rooms: RoomSummaryItem[];
 }
 
-function mapDoorState(
-	doorState: string,
-	isLocked: boolean | null,
-): RoomState {
+function mapDoorState(doorState: string, isLocked: boolean | null): RoomState {
 	if (doorState === "OPEN") {
 		return isLocked ? "alerta" : "aberta";
 	}
@@ -88,7 +85,7 @@ export async function getRoomsSummary(
 		user_email: string | null;
 	};
 
-	let lastAccessMap = new Map<string, UserInfo>();
+	const lastAccessMap = new Map<string, UserInfo>();
 
 	if (authenticated) {
 		const lastAccess = await client<LastAccessRow[]>`
@@ -163,7 +160,7 @@ export async function getRoomsSummary(
 			...(authenticated ? { currentUser, lastUser } : {}),
 		};
 
-		blocksMap.get(row.blockId)!.rooms.push(roomItem);
+		blocksMap.get(row.blockId)?.rooms.push(roomItem);
 	}
 
 	return { result: Array.from(blocksMap.values()) };

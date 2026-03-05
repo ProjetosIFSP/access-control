@@ -20,22 +20,23 @@ const route: FastifyPluginAsync = async (fastify) => {
 	});
 
 	fastify.post("/", async (request, reply) => {
+		// biome-ignore lint/suspicious/noExplicitAny: fastify typing
 		const body = request.body as any;
 		const id = uuidv7();
-		await db
-			.insert(roomType)
-			.values({
-				id,
-				name: body.name,
-				abbreviation: body.abbreviation,
-				description: body.description ?? "",
-			});
+		await db.insert(roomType).values({
+			id,
+			name: body.name,
+			abbreviation: body.abbreviation,
+			description: body.description ?? "",
+		});
 		const rows = await db.select().from(roomType).where(eq(roomType.id, id));
 		reply.code(201).send(rows[0]);
 	});
 
 	fastify.put("/:roomTypeId", async (request, reply) => {
+		// biome-ignore lint/suspicious/noExplicitAny: fastify typing
 		const { roomTypeId } = request.params as any;
+		// biome-ignore lint/suspicious/noExplicitAny: fastify typing
 		const body = request.body as any;
 		const existing = await db
 			.select({ id: roomType.id })
@@ -59,6 +60,7 @@ const route: FastifyPluginAsync = async (fastify) => {
 	});
 
 	fastify.delete("/:roomTypeId", async (request, reply) => {
+		// biome-ignore lint/suspicious/noExplicitAny: fastify typing
 		const { roomTypeId } = request.params as any;
 		const existing = await db
 			.select({ id: roomType.id })
@@ -72,19 +74,19 @@ const route: FastifyPluginAsync = async (fastify) => {
 			.where(eq(room.typeId, roomTypeId))
 			.limit(1);
 		if (roomsUsing.length > 0) {
-			return reply
-				.code(409)
-				.send({
-					message:
-						"Existem salas associadas a este tipo. Remova as salas primeiro.",
-				});
+			return reply.code(409).send({
+				message:
+					"Existem salas associadas a este tipo. Remova as salas primeiro.",
+			});
 		}
 		await db.delete(roomType).where(eq(roomType.id, roomTypeId));
 		reply.code(204).send();
 	});
 
 	fastify.post("/:roomTypeId/users", async (request, reply) => {
+		// biome-ignore lint/suspicious/noExplicitAny: fastify typing
 		const { roomTypeId } = request.params as any;
+		// biome-ignore lint/suspicious/noExplicitAny: fastify typing
 		const body = request.body as any;
 		const id = uuidv7();
 		await db
@@ -94,6 +96,7 @@ const route: FastifyPluginAsync = async (fastify) => {
 	});
 
 	fastify.delete("/:roomTypeId/users/:userId", async (request, reply) => {
+		// biome-ignore lint/suspicious/noExplicitAny: fastify typing
 		const { roomTypeId, userId } = request.params as any;
 		await db
 			.delete(userRoomTypePermission)
@@ -107,7 +110,9 @@ const route: FastifyPluginAsync = async (fastify) => {
 	});
 
 	fastify.post("/:roomTypeId/profiles", async (request, reply) => {
+		// biome-ignore lint/suspicious/noExplicitAny: fastify typing
 		const { roomTypeId } = request.params as any;
+		// biome-ignore lint/suspicious/noExplicitAny: fastify typing
 		const body = request.body as any;
 		const id = uuidv7();
 		await db
@@ -117,6 +122,7 @@ const route: FastifyPluginAsync = async (fastify) => {
 	});
 
 	fastify.delete("/:roomTypeId/profiles/:profileId", async (request, reply) => {
+		// biome-ignore lint/suspicious/noExplicitAny: fastify typing
 		const { roomTypeId, profileId } = request.params as any;
 		await db
 			.delete(profileRoomTypePermission)

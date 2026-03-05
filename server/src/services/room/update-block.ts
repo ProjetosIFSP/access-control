@@ -1,6 +1,6 @@
+import { eq } from "drizzle-orm";
 import { db } from "@/db";
 import { block } from "@/db/schema/room";
-import { eq } from "drizzle-orm";
 
 export async function updateBlock(data: { id: string; name: string }) {
 	const { id, name } = data;

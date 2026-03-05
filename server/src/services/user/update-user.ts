@@ -1,9 +1,9 @@
-import { eq, and, inArray } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
+import { v7 as uuidv7 } from "uuid";
 import { db } from "@/db";
+import { userRoomPermission, userRoomTypePermission } from "@/db/schema/access";
 import { user } from "@/db/schema/auth";
 import { userProfile } from "@/db/schema/profile";
-import { userRoomPermission, userRoomTypePermission } from "@/db/schema/access";
-import { v7 as uuidv7 } from "uuid";
 
 interface UpdateUserInput {
 	id: string;

@@ -1,13 +1,17 @@
+import type { SwaggerTransform } from "@fastify/swagger";
 import fastifySwagger from "@fastify/swagger";
 import fastifySwaggerUi from "@fastify/swagger-ui";
 import type { FastifyInstance } from "fastify";
-import type { SwaggerTransform } from "@fastify/swagger";
 import { jsonSchemaTransform } from "fastify-type-provider-zod";
 import type { SchemaWithExamples } from "./openapi";
 
+// biome-ignore lint/suspicious/noExplicitAny: openapi record typing
 type JsonSchemaNode = Record<string, any>;
 
-const attachExample = (schemaNode: unknown, example: unknown): JsonSchemaNode => {
+const attachExample = (
+	schemaNode: unknown,
+	example: unknown,
+): JsonSchemaNode => {
 	if (!schemaNode || typeof schemaNode !== "object") {
 		return schemaNode as JsonSchemaNode;
 	}
@@ -30,6 +34,7 @@ const attachExample = (schemaNode: unknown, example: unknown): JsonSchemaNode =>
 const swaggerTransformWithExamples: SwaggerTransform<SchemaWithExamples> = (
 	input,
 ) => {
+	// biome-ignore lint/suspicious/noExplicitAny: fastify/openapi transform typing restrict
 	const base = jsonSchemaTransform(input as any);
 	const typedSchema = input.schema as SchemaWithExamples | undefined;
 

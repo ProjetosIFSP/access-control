@@ -8,10 +8,10 @@ import {
 } from "fastify-type-provider-zod";
 import { registerDocs } from "@/api/docs";
 import { authRoute } from "@/api/routes/auth";
-import { userRoute } from "@/api/routes/user";
-import { roomRoute } from "@/api/routes/room";
 import { doorRoute } from "@/api/routes/door";
 import { iotRoute } from "@/api/routes/iot";
+import { roomRoute } from "@/api/routes/room";
+import { userRoute } from "@/api/routes/user";
 
 async function generateOpenApiSpec() {
 	const app = fastify({ logger: false }).withTypeProvider<ZodTypeProvider>();
@@ -35,7 +35,10 @@ async function generateOpenApiSpec() {
 	const outputDir = resolve(__dirname, "../../docs");
 	await mkdir(outputDir, { recursive: true });
 
-	await writeFile(resolve(outputDir, "openapi.json"), JSON.stringify(document, null, 2));
+	await writeFile(
+		resolve(outputDir, "openapi.json"),
+		JSON.stringify(document, null, 2),
+	);
 	await writeFile(resolve(outputDir, "openapi.yaml"), yamlDocument);
 
 	await app.close();
