@@ -58,6 +58,12 @@ const userSummarySchema = z.object({
 	createdAt: z.string().datetime(),
 	updatedAt: z.string().datetime(),
 	hasCredentials: z.boolean(),
+	profiles: z.array(
+		z.object({
+			id: z.string(),
+			name: z.string(),
+		}),
+	),
 });
 
 const listUsersResponseSchema = z.object({
@@ -75,6 +81,7 @@ const listUsersResponseExample: z.infer<typeof listUsersResponseSchema> = {
 			createdAt: "2025-01-10T13:25:00.000Z",
 			updatedAt: "2025-02-11T09:42:00.000Z",
 			hasCredentials: true,
+			profiles: [{ id: "abc123", name: "Docentes" }],
 		},
 	],
 };
