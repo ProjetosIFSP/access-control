@@ -21,6 +21,7 @@ import { deleteRoom } from "@/services/room/delete-room";
 import { getRooms } from "@/services/room/get-room";
 import { getRoomsSummary } from "@/services/room/get-rooms-summary";
 import { updateRoom } from "@/services/room/update-room";
+import { getRoomAccessLogs } from "@/services/iot/get-room-access-logs";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -748,6 +749,61 @@ export const roomRoute: FastifyPluginAsyncZod = async (app) => {
 			}
 
 			return reply.status(204).send();
+		},
+	);
+
+	// ── GET /rooms/:id/access-logs ──────────────────────────────────────────────
+	app.get(
+		"/:id/access-logs",
+		{
+			schema: {
+				tags: ["rooms"],
+				summary: "Logs de acesso recentes de uma sala",
+				description:
+					"Retorna os últimos registros de acesso (GRANTED) de uma sala. Requer autenticação de admin.",
+				security: [{ sessionCookie: [] }],
+				params: z.object({
+					id: z.string().uuid(),
+				}),
+				querystring: z.object({
+					limit: z.coerce.number().int().min(1).max(50).optional(),
+				}),
+				response: {
+					200: z.object({
+						logs: z.array(
+							z.object({
+								id: z.string(),
+								status: z.string(),
+								reason: z.string().nullable(),
+								timestamp: z.string().datetime(),
+								userId: z.string().nullable(),
+								userName: z.string().nullable(),
+								userEmail: z.string().nullable(),
+							}),
+						),
+					}),
+				},
+			} satisfies SchemaWithExamples,
+		},
+		async (request, reply) => {
+			await requireAdmin(request, reply as AdminReply);
+
+			const { id: roomId } = request.params;
+			const limit = request.query.limit ?? 10;
+
+			const entries = await getRoomAccessLogs(roomId, { limit });
+
+			return reply.status(200).send({
+				logs: entries.map((e) => ({
+					id: e.id,
+					status: e.status,
+					reason: e.reason,
+					timestamp: e.timestamp.toISOString(),
+					userId: e.userId,
+					userName: e.userName,
+					userEmail: e.userEmail,
+				})),
+			});
 		},
 	);
 };

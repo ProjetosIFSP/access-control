@@ -27,6 +27,7 @@ export type RoomCardItem = {
 interface RoomCardProps {
   room: RoomCardItem;
   authenticated: boolean;
+  onClick?: () => void;
 }
 
 // ── State config ──────────────────────────────────────────────────────────────
@@ -51,7 +52,7 @@ const STATE_CONFIG: Record<
 
 // ── Component ─────────────────────────────────────────────────────────────────
 
-export function RoomCard({ room, authenticated }: RoomCardProps) {
+export function RoomCard({ room, authenticated, onClick }: RoomCardProps) {
   const { indicatorClass } = STATE_CONFIG[room.state];
 
   const displayUser =
@@ -69,13 +70,15 @@ export function RoomCard({ room, authenticated }: RoomCardProps) {
     };
   }, [room.lastStatusUpdateAt]);
 
-  return (
-    <div
-      className={cn(
-        "flex w-full items-stretch gap-2 rounded-lg bg-white dark:bg-zinc-800 py-3 px-2 shadow-none backdrop-blur-sm",
-        "transition-shadow hover:shadow-md",
-      )}
-    >
+  const cardClassName = cn(
+    "flex w-full items-stretch gap-2 rounded-lg bg-white dark:bg-zinc-800 py-3 px-2 shadow-none backdrop-blur-sm",
+    "transition-shadow hover:shadow-md",
+    onClick &&
+      "cursor-pointer select-none active:scale-[0.98] transition-transform",
+  );
+
+  const cardContent = (
+    <>
       {/* State indicator — vertical colored rectangle */}
       <div
         className={cn("w-1 shrink-0 self-stretch rounded-full", indicatorClass)}
@@ -124,6 +127,20 @@ export function RoomCard({ room, authenticated }: RoomCardProps) {
           </span>
         )}
       </div>
-    </div>
+    </>
   );
+
+  if (onClick) {
+    return (
+      <button
+        type="button"
+        className={cn(cardClassName, "text-left")}
+        onClick={onClick}
+      >
+        {cardContent}
+      </button>
+    );
+  }
+
+  return <div className={cardClassName}>{cardContent}</div>;
 }

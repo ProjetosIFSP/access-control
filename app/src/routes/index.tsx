@@ -215,6 +215,7 @@ function RoomsPage() {
                   blockName={block.name}
                   rooms={rooms}
                   authenticated={authenticated}
+                  isAdmin={isAdmin}
                 />
               ),
             )}
