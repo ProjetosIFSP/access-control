@@ -68,6 +68,10 @@ const userSummarySchema = z.object({
 
 const listUsersResponseSchema = z.object({
 	result: z.array(userSummarySchema),
+	total: z.number(),
+	page: z.number(),
+	pageSize: z.number(),
+	totalPages: z.number(),
 });
 
 const listUsersResponseExample: z.infer<typeof listUsersResponseSchema> = {
@@ -84,6 +88,10 @@ const listUsersResponseExample: z.infer<typeof listUsersResponseSchema> = {
 			profiles: [{ id: "abc123", name: "Docentes" }],
 		},
 	],
+	total: 1,
+	page: 1,
+	pageSize: 20,
+	totalPages: 1,
 };
 
 const userRelationsSchema = z.object({
@@ -168,6 +176,8 @@ export const userRoute: FastifyPluginAsyncZod = async (app) => {
 						.string()
 						.optional()
 						.describe("IDs de perfis separados por vírgula"),
+					page: z.coerce.number().int().min(1).optional().default(1),
+					pageSize: z.coerce.number().int().min(1).max(100).optional().default(20),
 				}),
 				response: {
 					200: listUsersResponseSchema,
@@ -180,9 +190,11 @@ export const userRoute: FastifyPluginAsyncZod = async (app) => {
 		async (request, reply) => {
 			if (!(await requireAdmin(request, reply as unknown as AdminReply)))
 				return;
-			const { q, profileIds } = request.query as {
+			const { q, profileIds, page, pageSize } = request.query as {
 				q?: string;
 				profileIds?: string;
+				page?: number;
+				pageSize?: number;
 			};
 			const profileIdsArray = profileIds?.trim()
 				? profileIds
@@ -190,13 +202,22 @@ export const userRoute: FastifyPluginAsyncZod = async (app) => {
 						.map((id) => id.trim())
 						.filter(Boolean)
 				: undefined;
-			const users = await getUsers({ q, profileIds: profileIdsArray });
+			const users = await getUsers({
+				q,
+				profileIds: profileIdsArray,
+				page: page ?? 1,
+				pageSize: pageSize ?? 20,
+			});
 			const payload: z.infer<typeof listUsersResponseSchema> = {
 				result: users.result.map((user) => ({
 					...user,
 					createdAt: user.createdAt.toISOString(),
 					updatedAt: user.updatedAt.toISOString(),
 				})),
+				total: users.total,
+				page: users.page,
+				pageSize: users.pageSize,
+				totalPages: users.totalPages,
 			};
 			return reply.status(200).send(payload);
 		},

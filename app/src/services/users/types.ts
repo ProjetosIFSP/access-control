@@ -12,6 +12,10 @@ export type UserSummary = {
 
 export type UsersResponse = {
   result: UserSummary[];
+  total: number;
+  page: number;
+  pageSize: number;
+  totalPages: number;
 };
 
 export type CreateUserPayload = {

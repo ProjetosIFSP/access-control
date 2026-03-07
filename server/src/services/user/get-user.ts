@@ -1,4 +1,4 @@
-import { and, eq, ilike, inArray, or, sql } from "drizzle-orm";
+import { and, count, eq, ilike, inArray, or, sql } from "drizzle-orm";
 import { db } from "@/db";
 import { accessCredential } from "@/db/schema/access";
 import { user } from "@/db/schema/auth";
@@ -8,6 +8,8 @@ export interface GetUsersFilters {
 	q?: string;
 	/** Filter by profile ID(s) — returns users that belong to ANY of the given profiles */
 	profileIds?: string[];
+	page?: number;
+	pageSize?: number;
 }
 
 export async function getUsers(qOrFilters?: string | GetUsersFilters) {
@@ -15,7 +17,9 @@ export async function getUsers(qOrFilters?: string | GetUsersFilters) {
 	const filters: GetUsersFilters =
 		typeof qOrFilters === "string" ? { q: qOrFilters } : (qOrFilters ?? {});
 
-	const { q, profileIds } = filters;
+	const { q, profileIds, page = 1, pageSize = 20 } = filters;
+
+	const offset = (page - 1) * pageSize;
 
 	let baseQuery = db
 		.selectDistinct({
@@ -55,7 +59,38 @@ export async function getUsers(qOrFilters?: string | GetUsersFilters) {
 		baseQuery = baseQuery.where(and(...(conditions as [any, ...any[]])));
 	}
 
-	const rows = await baseQuery.orderBy(user.name);
+	// ── Count total (before pagination) ───────────────────────────────────────
+
+	// Build a count query that mirrors the same joins/conditions
+	let countQuery = db
+		.selectDistinct({ id: user.id })
+		.from(user)
+		.$dynamic();
+
+	if (profileIds && profileIds.length > 0) {
+		// biome-ignore lint/suspicious/noExplicitAny: drizzle typings restrictions
+		countQuery = (countQuery as any)
+			.innerJoin(userProfile, eq(userProfile.userId, user.id))
+			.$dynamic();
+	}
+
+	if (conditions.length > 0) {
+		// biome-ignore lint/suspicious/noExplicitAny: drizzle typings
+		countQuery = countQuery.where(and(...(conditions as [any, ...any[]])));
+	}
+
+	const countResult = await db
+		.select({ total: count() })
+		.from(countQuery.as("subquery"));
+
+	const total = Number(countResult[0]?.total ?? 0);
+
+	// ── Paginated rows ────────────────────────────────────────────────────────
+
+	const rows = await baseQuery
+		.orderBy(user.name)
+		.limit(pageSize)
+		.offset(offset);
 
 	// Fetch profiles for all returned users in a single query
 	const userIds = rows.map((u) => u.id);
@@ -86,5 +121,11 @@ export async function getUsers(qOrFilters?: string | GetUsersFilters) {
 		profiles: profilesByUserId.get(u.id) ?? [],
 	}));
 
-	return { result };
+	return {
+		result,
+		total,
+		page,
+		pageSize,
+		totalPages: Math.ceil(total / pageSize),
+	};
 }

@@ -4,7 +4,7 @@ import { Icon } from "@iconify/react";
 export function Footer() {
   return (
     <footer className="overflow-hidden mt-auto flex flex-col-reverse md:flex-row gap-8 py-8 bg-white dark:bg-black px-4 sm:px-8 md:px-16 lg:px-32 transition-all">
-      <div className="flex-1 flex flex-col gap-2">
+      <section className="flex-1 flex flex-col gap-2">
         <HeaderLogo className="m-0! p-0! h-max! bg-transparent!" />
 
         <p className="text-xs  text-zinc-500 dark:text-zinc-400 leading-4 w-3/4">
@@ -17,60 +17,62 @@ export function Footer() {
           J. Silva
         </span>
 
+        {/* Social */}
         <div className="flex gap-2">
           {/* https://abnerjs.vercel.app/ */}
-          <Button
-            asChild
-            variant="hover"
-            className="rounded-xs! size-10 p-0"
-            size="icon"
+          <a
+            href="https://abnerjs.vercel.app/"
+            target="_blank"
+            rel="noopener noreferrer"
+            aria-label="Website pessoal"
           >
-            <a
-              href="https://abnerjs.vercel.app/"
-              target="_blank"
-              rel="noopener noreferrer"
+            <Button
+              variant="hover"
+              className="rounded-xs! size-10 p-0"
+              size="icon"
             >
               <Icon icon="streamline-plump:web" />
-            </a>
-          </Button>
+            </Button>
+          </a>
 
           {/* https://www.linkedin.com/in/abner-j-silva/ */}
-          <Button
-            asChild
-            variant="hover"
-            className="rounded-xs! size-10 p-0"
-            overlayClassname="before:bg-[#0072b1]"
-            size="icon"
+          <a
+            href="https://www.linkedin.com/in/abner-j-silva/"
+            target="_blank"
+            rel="noopener noreferrer"
+            aria-label="LinkedIn"
           >
-            <a
-              href="https://www.linkedin.com/in/abner-j-silva/"
-              target="_blank"
-              rel="noopener noreferrer"
+            <Button
+              variant="hover"
+              className="rounded-xs! size-10 p-0"
+              overlayClassname="before:bg-[#0072b1]"
+              size="icon"
             >
               <Icon icon="akar-icons:linkedin-fill" />
-            </a>
-          </Button>
+            </Button>
+          </a>
 
           {/* https://github.com/abnerjs/ */}
-          <Button
-            asChild
-            variant="hover"
-            className="rounded-xs! size-10 p-0"
-            size="icon"
-            overlayClassname="before:bg-[#2b3137]"
+          <a
+            href="https://github.com/abnerjs/"
+            target="_blank"
+            rel="noopener noreferrer"
+            aria-label="GitHub"
           >
-            <a
-              href="https://github.com/abnerjs/"
-              target="_blank"
-              rel="noopener noreferrer"
+            <Button
+              variant="hover"
+              className="rounded-xs! size-10 p-0"
+              size="icon"
+              overlayClassname="before:bg-[#2b3137]"
             >
               <Icon icon="uim:github-alt" />
-            </a>
-          </Button>
+            </Button>
+          </a>
         </div>
-      </div>
+      </section>
 
-      <div className="flex-1 flex flex-col">
+      {/* Right Section */}
+      <section className="flex-1 flex flex-col">
         {/* repo */}
         <span className="text-sm text-zinc-500 dark:text-zinc-400">
           Código fonte:{" "}
@@ -103,7 +105,7 @@ export function Footer() {
             </a>
           </Button>
         </span>
-      </div>
+      </section>
     </footer>
   );
 }

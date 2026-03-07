@@ -1,15 +1,20 @@
-import { and, eq, ilike, inArray } from "drizzle-orm";
+import { and, count, ilike, inArray } from "drizzle-orm";
 import { db } from "@/db";
 import { block, room } from "@/db/schema/room";
+import { eq } from "drizzle-orm";
 
 export interface GetRoomsFilters {
 	q?: string;
 	typeIds?: string[];
 	blockIds?: string[];
+	page?: number;
+	pageSize?: number;
 }
 
 export async function getRooms(filters?: GetRoomsFilters) {
-	const { q, typeIds, blockIds } = filters ?? {};
+	const { q, typeIds, blockIds, page = 1, pageSize = 20 } = filters ?? {};
+
+	const offset = (page - 1) * pageSize;
 
 	const conditions = [];
 
@@ -26,16 +31,42 @@ export async function getRooms(filters?: GetRoomsFilters) {
 		conditions.push(inArray(room.blockId, blockIds));
 	}
 
+	const whereClause =
+		conditions.length > 0
+			? // biome-ignore lint/suspicious/noExplicitAny: drizzle typings
+				and(...(conditions as [any, ...any[]]))
+			: undefined;
+
+	// ── Count total (before pagination) ───────────────────────────────────────
+
+	const countResult = await db
+		.select({ total: count() })
+		.from(room)
+		.innerJoin(block, eq(block.id, room.blockId))
+		.where(whereClause);
+
+	const total = Number(countResult[0]?.total ?? 0);
+
+	// ── Paginated rows ────────────────────────────────────────────────────────
+
 	const baseQuery = db
 		.select()
 		.from(room)
 		.innerJoin(block, eq(block.id, room.blockId));
 
-	const result = await (conditions.length > 0
+	const result = await (whereClause
 		? baseQuery
-				// biome-ignore lint/suspicious/noExplicitAny: drizzle typings
-				.where(and(...(conditions as [any, ...any[]])))
+				.where(whereClause)
 				.orderBy(block.name, room.name)
-		: baseQuery.orderBy(block.name, room.name));
-	return { result };
+				.limit(pageSize)
+				.offset(offset)
+		: baseQuery.orderBy(block.name, room.name).limit(pageSize).offset(offset));
+
+	return {
+		result,
+		total,
+		page,
+		pageSize,
+		totalPages: Math.ceil(total / pageSize),
+	};
 }

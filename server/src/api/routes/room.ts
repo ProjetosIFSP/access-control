@@ -83,9 +83,17 @@ const listRoomsResponseSchema = z.object({
 			block: blockSummarySchema,
 		}),
 	),
+	total: z.number(),
+	page: z.number(),
+	pageSize: z.number(),
+	totalPages: z.number(),
 });
 
 const listRoomsResponseExample: z.infer<typeof listRoomsResponseSchema> = {
+	total: 1,
+	page: 1,
+	pageSize: 20,
+	totalPages: 1,
 	result: [
 		{
 			room: {
@@ -286,6 +294,8 @@ export const roomRoute: FastifyPluginAsyncZod = async (app) => {
 						.string()
 						.optional()
 						.describe("IDs de blocos separados por vírgula"),
+					page: z.coerce.number().int().min(1).optional().default(1),
+					pageSize: z.coerce.number().int().min(1).max(100).optional().default(20),
 				}),
 				response: {
 					200: listRoomsResponseSchema,
@@ -299,10 +309,12 @@ export const roomRoute: FastifyPluginAsyncZod = async (app) => {
 			if (!(await requireAdmin(request, reply as unknown as AdminReply)))
 				return;
 
-			const { q, typeIds, blockIds } = request.query as {
+			const { q, typeIds, blockIds, page, pageSize } = request.query as {
 				q?: string;
 				typeIds?: string;
 				blockIds?: string;
+				page?: number;
+				pageSize?: number;
 			};
 			const typeIdsArray = typeIds?.trim()
 				? typeIds
@@ -321,6 +333,8 @@ export const roomRoute: FastifyPluginAsyncZod = async (app) => {
 				q,
 				typeIds: typeIdsArray,
 				blockIds: blockIdsArray,
+				page: page ?? 1,
+				pageSize: pageSize ?? 20,
 			});
 			const payload: z.infer<typeof listRoomsResponseSchema> = {
 				result: rooms.result.map(({ room, block }) => ({
@@ -333,6 +347,10 @@ export const roomRoute: FastifyPluginAsyncZod = async (app) => {
 					},
 					block,
 				})),
+				total: rooms.total,
+				page: rooms.page,
+				pageSize: rooms.pageSize,
+				totalPages: rooms.totalPages,
 			};
 			return reply.status(200).send(payload);
 		},

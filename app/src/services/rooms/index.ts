@@ -48,6 +48,8 @@ export interface RoomsAdminFilters {
   q?: string;
   typeIds?: string[];
   blockIds?: string[];
+  page?: number;
+  pageSize?: number;
 }
 
 // ── Room Summary (public) ─────────────────────────────────────────────────────
@@ -139,6 +141,9 @@ export async function fetchRoomsAdmin(
   if (filters?.blockIds && filters.blockIds.length > 0) {
     url.searchParams.set("blockIds", filters.blockIds.join(","));
   }
+  if (filters?.page) url.searchParams.set("page", String(filters.page));
+  if (filters?.pageSize)
+    url.searchParams.set("pageSize", String(filters.pageSize));
 
   const res = await fetch(url.toString(), {
     credentials: "include",
@@ -161,6 +166,10 @@ export async function fetchRoomsAdmin(
       };
       block: { id: string; name: string };
     }>;
+    total: number;
+    page: number;
+    pageSize: number;
+    totalPages: number;
   } = await res.json();
 
   return {
@@ -179,6 +188,10 @@ export async function fetchRoomsAdmin(
       lastStatusUpdateAt: room.lastStatusUpdateAt,
       createdAt: room.createdAt,
     })),
+    total: data.total,
+    page: data.page,
+    pageSize: data.pageSize,
+    totalPages: data.totalPages,
   };
 }
 
@@ -331,6 +344,7 @@ export const roomsAdminQueryOptions = (filters?: RoomsAdminFilters) =>
     queryKey: roomsQueryKeys.adminList(filters),
     queryFn: () => fetchRoomsAdmin(filters),
     staleTime: 1000 * 60 * 2,
+    placeholderData: (prev) => prev,
   });
 
 export const blocksQueryOptions = queryOptions({

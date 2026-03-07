@@ -114,6 +114,10 @@ export type RoomSummaryAdmin = {
 
 export type RoomsAdminResponse = {
   result: RoomSummaryAdmin[];
+  total: number;
+  page: number;
+  pageSize: number;
+  totalPages: number;
 };
 
 export type CreateRoomPayload = {
