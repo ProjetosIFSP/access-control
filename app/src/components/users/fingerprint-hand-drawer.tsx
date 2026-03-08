@@ -1,12 +1,12 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { AnimatePresence, motion } from "motion/react";
-import { Loader2, PlugZap, Unplug, Wifi, WifiOff, X } from "lucide-react";
+import { Loader2, X } from "lucide-react";
 import { useCallback, useEffect, useLayoutEffect, useState } from "react";
 import { toast } from "sonner";
 
 import { Hand } from "@/assets/vectors/hand";
 import { Button } from "@/components/ui/button";
-import { FingerprintCaptureFeedback } from "@/components/users/fingerprint-capture-feedback";
+
 import { useFingerprintReader } from "@/hooks/use-fingerprint-reader";
 import {
   FINGER_LABELS,
@@ -37,97 +37,6 @@ type ActiveHandTab = "left" | "right";
 
 const EASE: [number, number, number, number] = [0.65, 0.01, 0.05, 0.99];
 const EASE_CLOSE: [number, number, number, number] = [0.65, 0.05, 0, 1];
-
-// ── ReaderStatusIndicator ─────────────────────────────────────────────────────
-
-interface ReaderStatusIndicatorProps {
-  isConnected: boolean;
-  isSupported: boolean;
-  onConnect: () => void;
-  onDisconnect: () => void;
-  isConnecting: boolean;
-  mode: "hid" | "keyboard";
-}
-
-function ReaderStatusIndicator({
-  isConnected,
-  isSupported,
-  onConnect,
-  onDisconnect,
-  isConnecting,
-  mode,
-}: ReaderStatusIndicatorProps) {
-  if (!isSupported) {
-    return (
-      <div className="flex items-center gap-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2 dark:border-red-800/50 dark:bg-red-900/10">
-        <WifiOff className="size-3.5 shrink-0 text-red-500" />
-        <p className="text-xs text-red-600 dark:text-red-400">
-          Navegador não suporta leitores USB. Use Chrome ou Edge.
-        </p>
-      </div>
-    );
-  }
-
-  if (mode === "keyboard") {
-    return (
-      <div className="flex items-center gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 dark:border-emerald-800/50 dark:bg-emerald-900/10">
-        <Wifi className="size-3.5 shrink-0 text-emerald-500" />
-        <p className="text-xs text-emerald-600 dark:text-emerald-400">
-          Leitor em modo teclado — pronto para captura
-        </p>
-      </div>
-    );
-  }
-
-  if (isConnected) {
-    return (
-      <div className="flex items-center justify-between gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 dark:border-emerald-800/50 dark:bg-emerald-900/10">
-        <div className="flex items-center gap-2">
-          <span className="relative flex size-2">
-            <span className="absolute inline-flex size-full animate-ping rounded-full bg-emerald-400 opacity-75" />
-            <span className="relative inline-flex size-2 rounded-full bg-emerald-500" />
-          </span>
-          <p className="text-xs font-medium text-emerald-600 dark:text-emerald-400">
-            Leitor conectado
-          </p>
-        </div>
-        <button
-          type="button"
-          onClick={onDisconnect}
-          className="flex items-center gap-1 text-xs text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 transition-colors"
-        >
-          <Unplug className="size-3" />
-          Desconectar
-        </button>
-      </div>
-    );
-  }
-
-  return (
-    <div className="flex items-center justify-between gap-2 rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-2 dark:border-zinc-700 dark:bg-zinc-800/50">
-      <div className="flex items-center gap-2">
-        <span className="size-2 rounded-full bg-zinc-300 dark:bg-zinc-600" />
-        <p className="text-xs text-zinc-500 dark:text-zinc-400">
-          Leitor desconectado
-        </p>
-      </div>
-      <button
-        type="button"
-        onClick={onConnect}
-        disabled={isConnecting}
-        className="flex items-center gap-1 text-xs text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-100 transition-colors disabled:opacity-50"
-      >
-        {isConnecting ? (
-          <Loader2 className="size-3 animate-spin" />
-        ) : (
-          <PlugZap className="size-3" />
-        )}
-        Conectar
-      </button>
-    </div>
-  );
-}
-
 // ── Main Drawer ───────────────────────────────────────────────────────────────
 
 export function FingerprintHandDrawer({
@@ -142,7 +51,6 @@ export function FingerprintHandDrawer({
   // Tabs: left first, right second (per spec)
   const [activeTab, setActiveTab] = useState<ActiveHandTab>("left");
   const [selectedFinger, setSelectedFinger] = useState<FingerKey | null>(null);
-  const [isConnecting, setIsConnecting] = useState(false);
 
   // ── Reader hook ─────────────────────────────────────────────────────────────
   const reader = useFingerprintReader({ mode: "keyboard" });
@@ -173,6 +81,14 @@ export function FingerprintHandDrawer({
       );
     },
   });
+
+  // ── Reset selectedFinger on error — ícone volta ao estado inicial ────────────
+  useEffect(() => {
+    if (reader.status === "error") {
+      setSelectedFinger(null);
+      reader.reset();
+    }
+  }, [reader.status, reader.reset]);
 
   // ── Auto-register when template is captured ──────────────────────────────────
   const registerMutate = registerMutation.mutate;
@@ -264,26 +180,6 @@ export function FingerprintHandDrawer({
     [fingerprints, reader, selectedFinger],
   );
 
-  const handleConnect = useCallback(async () => {
-    setIsConnecting(true);
-    try {
-      await reader.connect();
-    } finally {
-      setIsConnecting(false);
-    }
-  }, [reader]);
-
-  const handleCancelCapture = useCallback(() => {
-    reader.cancelCapture();
-    setSelectedFinger(null);
-  }, [reader]);
-
-  const handleRetryCapture = useCallback(() => {
-    if (!selectedFinger) return;
-    reader.reset();
-    setTimeout(() => reader.startCapture(), 50);
-  }, [reader, selectedFinger]);
-
   const handleTabChange = useCallback(
     (tab: ActiveHandTab) => {
       if (tab === activeTab) return;
@@ -370,7 +266,7 @@ export function FingerprintHandDrawer({
               />
 
               {/* ── Content ── */}
-              <div className="absolute inset-0 z-10 flex flex-col overflow-y-auto overflow-x-hidden">
+              <div className="absolute inset-0 z-10 flex flex-col overflow-hidden">
                 {/* Header */}
                 <motion.div
                   className="flex items-start justify-between gap-4 px-6 pt-8 pb-4"
@@ -381,10 +277,10 @@ export function FingerprintHandDrawer({
                 >
                   <div className="flex flex-col gap-0.5">
                     <h2 className="text-lg font-bold leading-tight text-zinc-900 dark:text-zinc-50">
-                      Cadastro de Digitais
+                      Credenciais
                     </h2>
                     <p className="text-sm text-zinc-400 dark:text-zinc-500">
-                      Selecione um dedo para iniciar a leitura
+                      Gerencie suas credenciais de acesso
                     </p>
                   </div>
 
@@ -467,44 +363,37 @@ export function FingerprintHandDrawer({
                         <Loader2 className="size-6 animate-spin text-zinc-300 dark:text-zinc-600" />
                       </div>
                     ) : (
-                      <div className="relative size-56 text-zinc-700 dark:text-zinc-300">
+                      <div className="relative size-56 text-zinc-300 dark:text-zinc-700">
                         <Hand
                           side={activeTab}
                           registeredFingers={fingerprints}
                           selectedFinger={selectedFinger}
                           onFingerClick={handleFingerClick}
                           readerStatus={reader.status}
+                          captureActive={
+                            reader.status === "waiting" ||
+                            reader.status === "reading"
+                          }
+                          countdown={reader.countdown}
                           interactive
                         />
                       </div>
                     )}
                   </div>
 
-                  {/* Reader status */}
-                  <ReaderStatusIndicator
-                    isConnected={reader.isConnected}
-                    isSupported={reader.isSupported}
-                    onConnect={handleConnect}
-                    onDisconnect={reader.disconnect}
-                    isConnecting={isConnecting}
-                    mode="keyboard"
-                  />
-
-                  {/* Capture feedback */}
-                  {selectedFinger && (
-                    <FingerprintCaptureFeedback
-                      status={
-                        registerMutation.isPending ? "reading" : reader.status
-                      }
-                      fingerLabel={FINGER_LABELS[selectedFinger]}
-                      errorMessage={reader.errorMessage}
-                      countdown={reader.countdown}
-                      onRetry={handleRetryCapture}
-                      onCancel={handleCancelCapture}
-                    />
-                  )}
-
-                  {!selectedFinger && (
+                  {selectedFinger ? (
+                    <Button
+                      variant="hoverOutline"
+                      className="w-full text-black! dark:text-white! after:border-zinc-200! dark:after:border-zinc-800!"
+                      overlayClassname="before:bg-zinc-200 dark:before:bg-zinc-800"
+                      onClick={() => {
+                        reader.cancelCapture();
+                        setSelectedFinger(null);
+                      }}
+                    >
+                      Cancelar leitura
+                    </Button>
+                  ) : (
                     <p className="text-center text-xs text-zinc-400 dark:text-zinc-500 pb-2">
                       Toque em um dedo para iniciar o cadastro
                     </p>

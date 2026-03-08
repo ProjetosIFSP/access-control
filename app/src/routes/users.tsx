@@ -9,7 +9,14 @@ import { ProfileFormPanel } from "@/components/profiles/profile-form-panel";
 import { ProfilesTable } from "@/components/profiles/profiles-table";
 import { Button } from "@/components/ui/button";
 import { CrudPageHeader } from "@/components/ui/crud-page-header";
-import { EmptyState } from "@/components/ui/empty-state";
+import {
+  Empty,
+  EmptyContent,
+  EmptyDescription,
+  EmptyHeader,
+  EmptyMedia,
+  EmptyTitle,
+} from "@/components/ui/empty";
 import { FilterBar } from "@/components/ui/filter-bar";
 import { SearchToolbar } from "@/components/ui/search-toolbar";
 import { SelectFilter } from "@/components/ui/select-filter";
@@ -554,14 +561,24 @@ function UsersProfilesPage() {
                       : "Erro ao carregar os usuarios. Tente novamente."}
                   </div>
                 ) : allUsers.length === 0 ? (
-                  <EmptyState
-                    icon={Users}
-                    message={
-                      hasFilters
-                        ? "Nenhum usuario encontrado com os filtros aplicados."
-                        : "Nenhum usuario cadastrado ate o momento."
-                    }
-                  />
+                  <Empty>
+                    <EmptyHeader>
+                      <EmptyMedia variant="icon">
+                        <Users />
+                      </EmptyMedia>
+                      <EmptyTitle>Nenhum usuário encontrado</EmptyTitle>
+                      <EmptyDescription>
+                        {hasFilters
+                          ? "Nenhum usuario encontrado com os filtros aplicados."
+                          : "Nenhum usuario cadastrado ate o momento."}
+                      </EmptyDescription>
+                    </EmptyHeader>
+                    <EmptyContent className="flex-row justify-center gap-2">
+                      <Button variant="hover" onClick={openCreateUser}>
+                        Cadastrar usuário
+                      </Button>
+                    </EmptyContent>
+                  </Empty>
                 ) : (
                   <>
                     <UsersTable
@@ -645,14 +662,24 @@ function UsersProfilesPage() {
                       : "Erro ao carregar os perfis. Tente novamente."}
                   </div>
                 ) : filteredProfiles.length === 0 ? (
-                  <EmptyState
-                    icon={ShieldCheck}
-                    message={
-                      hasFilters
-                        ? "Nenhum perfil encontrado com os filtros aplicados."
-                        : "Nenhum perfil cadastrado ate o momento."
-                    }
-                  />
+                  <Empty>
+                    <EmptyHeader>
+                      <EmptyMedia variant="icon">
+                        <ShieldCheck />
+                      </EmptyMedia>
+                      <EmptyTitle>Nenhum perfil encontrado</EmptyTitle>
+                      <EmptyDescription>
+                        {hasFilters
+                          ? "Nenhum perfil encontrado com os filtros aplicados."
+                          : "Nenhum perfil cadastrado ate o momento."}
+                      </EmptyDescription>
+                    </EmptyHeader>
+                    <EmptyContent className="flex-row justify-center gap-2">
+                      <Button variant="hover" onClick={openCreateProfile}>
+                        Cadastrar perfil
+                      </Button>
+                    </EmptyContent>
+                  </Empty>
                 ) : (
                   <ProfilesTable
                     profiles={filteredProfiles}

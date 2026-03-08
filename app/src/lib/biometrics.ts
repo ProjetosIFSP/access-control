@@ -97,15 +97,15 @@ export const RIGHT_HAND_ZONES: Record<
   FingerHotZone
 > = {
   // Polegar aponta para baixo/lateral — rotação forte anti-horária
-  right_thumb: { cx: 45, cy: 415, r: 34, rotation: -50 },
+  right_thumb: { cx: 50, cy: 415, r: 34, rotation: -90 },
   // Indicador inclinado levemente para a esquerda
-  right_index: { cx: 110, cy: 120, r: 32, rotation: -18 },
+  right_index: { cx: 110, cy: 120, r: 32, rotation: -25 },
   // Médio praticamente vertical
-  right_middle: { cx: 225, cy: 45, r: 32, rotation: -4 },
+  right_middle: { cx: 227, cy: 45, r: 32, rotation: -15 },
   // Anelar inclinado levemente para a direita
   right_ring: { cx: 342, cy: 55, r: 30, rotation: 10 },
   // Mínimo mais inclinado para a direita
-  right_pinky: { cx: 455, cy: 135, r: 26, rotation: 35 },
+  right_pinky: { cx: 456, cy: 135, r: 26, rotation: 30 },
 };
 
 /**
@@ -121,13 +121,13 @@ export const LEFT_HAND_ZONES: Record<
   // Polegar da mão esquerda espelha o direito — rotação forte horária
   left_thumb: { cx: 450, cy: 415, r: 34, rotation: 90 },
   // Indicador inclinado levemente para a direita (espelho)
-  left_index: { cx: 390, cy: 120, r: 32, rotation: 18 },
+  left_index: { cx: 390, cy: 120, r: 32, rotation: 25 },
   // Médio praticamente vertical
-  left_middle: { cx: 268, cy: 45, r: 32, rotation: 4 },
+  left_middle: { cx: 270, cy: 45, r: 32, rotation: 15 },
   // Anelar inclinado levemente para a esquerda (espelho)
-  left_ring: { cx: 154, cy: 55, r: 30, rotation: -10 },
+  left_ring: { cx: 154, cy: 55, r: 30, rotation: -5 },
   // Mínimo mais inclinado para a esquerda (espelho)
-  left_pinky: { cx: 40, cy: 135, r: 26, rotation: -22 },
+  left_pinky: { cx: 40, cy: 135, r: 26, rotation: -25 },
 };
 
 /**

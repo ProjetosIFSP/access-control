@@ -15,7 +15,14 @@ import { RoomFormPanel } from "@/components/rooms-admin/room-form-panel";
 import { RoomsTable } from "@/components/rooms-admin/rooms-table";
 import { Button } from "@/components/ui/button";
 import { CrudPageHeader } from "@/components/ui/crud-page-header";
-import { EmptyState } from "@/components/ui/empty-state";
+import {
+  Empty,
+  EmptyContent,
+  EmptyDescription,
+  EmptyHeader,
+  EmptyMedia,
+  EmptyTitle,
+} from "@/components/ui/empty";
 import { FilterBar } from "@/components/ui/filter-bar";
 import { SearchToolbar } from "@/components/ui/search-toolbar";
 import { SelectFilter } from "@/components/ui/select-filter";
@@ -664,14 +671,24 @@ function RoomsManagePage() {
                       : "Erro ao carregar as salas."}
                   </div>
                 ) : allRooms.length === 0 ? (
-                  <EmptyState
-                    icon={DoorOpen}
-                    message={
-                      hasRoomsFilters
-                        ? "Nenhuma sala encontrada com os filtros aplicados."
-                        : "Nenhuma sala cadastrada ate o momento."
-                    }
-                  />
+                  <Empty>
+                    <EmptyHeader>
+                      <EmptyMedia variant="icon">
+                        <DoorOpen />
+                      </EmptyMedia>
+                      <EmptyTitle>Nenhuma sala encontrada</EmptyTitle>
+                      <EmptyDescription>
+                        {hasRoomsFilters
+                          ? "Nenhuma sala encontrada com os filtros aplicados."
+                          : "Nenhuma sala cadastrada ate o momento."}
+                      </EmptyDescription>
+                    </EmptyHeader>
+                    <EmptyContent className="flex-row justify-center gap-2">
+                      <Button variant="hover" onClick={openCreateRoom}>
+                        Cadastrar sala
+                      </Button>
+                    </EmptyContent>
+                  </Empty>
                 ) : (
                   <>
                     <RoomsTable
@@ -753,14 +770,24 @@ function RoomsManagePage() {
                       : "Erro ao carregar os blocos."}
                   </div>
                 ) : filteredBlocks.length === 0 ? (
-                  <EmptyState
-                    icon={Building2}
-                    message={
-                      debouncedQ.trim()
-                        ? "Nenhum bloco encontrado com os filtros aplicados."
-                        : "Nenhum bloco cadastrado ate o momento."
-                    }
-                  />
+                  <Empty>
+                    <EmptyHeader>
+                      <EmptyMedia variant="icon">
+                        <Building2 />
+                      </EmptyMedia>
+                      <EmptyTitle>Nenhum bloco encontrado</EmptyTitle>
+                      <EmptyDescription>
+                        {debouncedQ.trim()
+                          ? "Nenhum bloco encontrado com os filtros aplicados."
+                          : "Nenhum bloco cadastrado ate o momento."}
+                      </EmptyDescription>
+                    </EmptyHeader>
+                    <EmptyContent className="flex-row justify-center gap-2">
+                      <Button variant="hover" onClick={openCreateBlock}>
+                        Cadastrar bloco
+                      </Button>
+                    </EmptyContent>
+                  </Empty>
                 ) : (
                   <BlocksTable
                     blocks={filteredBlocks}
@@ -779,14 +806,24 @@ function RoomsManagePage() {
                       : "Erro ao carregar os tipos de sala."}
                   </div>
                 ) : filteredRoomTypes.length === 0 ? (
-                  <EmptyState
-                    icon={Tag}
-                    message={
-                      debouncedQ.trim()
-                        ? "Nenhum tipo encontrado com os filtros aplicados."
-                        : "Nenhum tipo de sala cadastrado ate o momento."
-                    }
-                  />
+                  <Empty>
+                    <EmptyHeader>
+                      <EmptyMedia variant="icon">
+                        <Tag />
+                      </EmptyMedia>
+                      <EmptyTitle>Nenhum tipo encontrado</EmptyTitle>
+                      <EmptyDescription>
+                        {debouncedQ.trim()
+                          ? "Nenhum tipo encontrado com os filtros aplicados."
+                          : "Nenhum tipo de sala cadastrado ate o momento."}
+                      </EmptyDescription>
+                    </EmptyHeader>
+                    <EmptyContent className="flex-row justify-center gap-2">
+                      <Button variant="hover" onClick={openCreateRoomType}>
+                        Cadastrar tipo
+                      </Button>
+                    </EmptyContent>
+                  </Empty>
                 ) : (
                   <RoomTypesTable
                     roomTypes={filteredRoomTypes}

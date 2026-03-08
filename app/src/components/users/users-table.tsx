@@ -10,7 +10,6 @@ import {
   ArrowUpDown,
   Fingerprint,
   KeyRound,
-  MoreHorizontal,
   Pencil,
   Trash2,
 } from "lucide-react";
@@ -22,13 +21,6 @@ import {
 import { useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
 import {
   Table,
   TableBody,
@@ -149,14 +141,14 @@ export function UsersTable({
 
                 {/* ── Actions cell ───────────────────────────────── */}
                 <TableCell className="py-3 pr-4 pl-2">
-                  <div className="flex flex-col items-end justify-between gap-3 h-full min-h-[2.75rem]">
-                    {/* Top-right: credential indicators */}
-                    <div className="h-4 flex items-center">
-                      <div className="flex items-center gap-1.5">
+                  <div className="flex items-center justify-end gap-1">
+                    {/* Credential indicators */}
+                    {(user.hasCredentials || user.fingerprintCount > 0) && (
+                      <div className="flex items-center gap-1 mr-1">
                         {user.hasCredentials && (
                           <Tooltip>
                             <TooltipTrigger asChild>
-                              <KeyRound className="size-3 text-emerald-500 dark:text-emerald-400 cursor-default" />
+                              <KeyRound className="size-3.5 text-emerald-500 dark:text-emerald-400 cursor-default" />
                             </TooltipTrigger>
                             <TooltipContent side="left">
                               Possui credencial física
@@ -167,7 +159,7 @@ export function UsersTable({
                           <Tooltip>
                             <TooltipTrigger asChild>
                               <span className="inline-flex items-center gap-0.5 text-[10px] font-medium text-violet-600 dark:text-violet-400 cursor-default">
-                                <Fingerprint className="size-3" />
+                                <Fingerprint className="size-3.5" />
                                 {user.fingerprintCount}
                               </span>
                             </TooltipTrigger>
@@ -180,15 +172,51 @@ export function UsersTable({
                           </Tooltip>
                         )}
                       </div>
-                    </div>
+                    )}
 
-                    {/* Bottom-right: actions menu */}
-                    <RowActions
-                      user={user}
-                      onEdit={onEdit}
-                      onDelete={onDelete}
-                      onManageFingerprints={onManageFingerprints}
-                    />
+                    {/* Action buttons */}
+                    {onManageFingerprints && (
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <Button
+                            variant="ghost"
+                            size="icon-xs"
+                            onClick={() => onManageFingerprints(user)}
+                          >
+                            <KeyRound className="size-4" />
+                            <span className="sr-only">Gerenciar Digitais</span>
+                          </Button>
+                        </TooltipTrigger>
+                        <TooltipContent>Gerenciar Digitais</TooltipContent>
+                      </Tooltip>
+                    )}
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button
+                          variant="ghost"
+                          size="icon-xs"
+                          onClick={() => onEdit(user)}
+                        >
+                          <Pencil className="size-4" />
+                          <span className="sr-only">Editar</span>
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent>Editar</TooltipContent>
+                    </Tooltip>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button
+                          variant="ghost"
+                          size="icon-xs"
+                          className="text-destructive hover:text-destructive hover:bg-destructive/10"
+                          onClick={() => onDelete(user)}
+                        >
+                          <Trash2 className="size-4" />
+                          <span className="sr-only">Excluir</span>
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent>Excluir</TooltipContent>
+                    </Tooltip>
                   </div>
                 </TableCell>
               </TableRow>
@@ -197,47 +225,5 @@ export function UsersTable({
         </TableBody>
       </Table>
     </div>
-  );
-}
-
-// ── Row Actions ───────────────────────────────────────────────────────────────
-
-function RowActions({
-  user,
-  onEdit,
-  onDelete,
-  onManageFingerprints,
-}: {
-  user: UserSummary;
-  onEdit: (u: UserSummary) => void;
-  onDelete: (u: UserSummary) => void;
-  onManageFingerprints?: (u: UserSummary) => void;
-}) {
-  return (
-    <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        <Button variant="ghost" size="icon-xs">
-          <MoreHorizontal className="size-4" />
-          <span className="sr-only">Ações</span>
-        </Button>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent align="end">
-        <DropdownMenuItem onClick={() => onEdit(user)}>
-          <Pencil className="size-4" />
-          Editar
-        </DropdownMenuItem>
-        {onManageFingerprints && (
-          <DropdownMenuItem onClick={() => onManageFingerprints(user)}>
-            <Fingerprint className="size-4" />
-            Gerenciar Digitais
-          </DropdownMenuItem>
-        )}
-        <DropdownMenuSeparator />
-        <DropdownMenuItem variant="destructive" onClick={() => onDelete(user)}>
-          <Trash2 className="size-4" />
-          Excluir
-        </DropdownMenuItem>
-      </DropdownMenuContent>
-    </DropdownMenu>
   );
 }
