@@ -5,6 +5,19 @@ export const credentialTypeEnum = pgEnum("credential_type", [
 	"NFC_TAG",
 ]);
 
+export const fingerKeyEnum = pgEnum("finger_key", [
+	"right_thumb",
+	"right_index",
+	"right_middle",
+	"right_ring",
+	"right_pinky",
+	"left_thumb",
+	"left_index",
+	"left_middle",
+	"left_ring",
+	"left_pinky",
+]);
+
 // Enum para o status de uma tentativa de acesso no log
 export const accessStatusEnum = pgEnum("access_status", ["GRANTED", "DENIED"]);
 

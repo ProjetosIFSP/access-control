@@ -7,6 +7,7 @@ export type UserSummary = {
   createdAt: string;
   updatedAt: string;
   hasCredentials: boolean;
+  fingerprintCount: number;
   profiles: { id: string; name: string }[];
 };
 

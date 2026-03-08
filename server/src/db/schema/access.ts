@@ -1,4 +1,5 @@
 import { boolean, pgTable, text, timestamp } from "drizzle-orm/pg-core";
+import { fingerKeyEnum } from "./enums";
 import { v7 as uuidv7 } from "uuid";
 import { user } from "./auth";
 import { accessStatusEnum, credentialTypeEnum } from "./enums";
@@ -14,6 +15,7 @@ export const accessCredential = pgTable("access_credential", {
 		.references(() => user.id, { onDelete: "cascade" }),
 	type: credentialTypeEnum("type").notNull(),
 	value: text("value").notNull().unique(), // Identificador da digital/tag
+	finger: fingerKeyEnum("finger"), // nullable — NFC credentials don't have a finger
 	isActive: boolean("is_active").notNull().default(true),
 	createdAt: timestamp("created_at", { withTimezone: true })
 		.notNull()

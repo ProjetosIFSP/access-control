@@ -8,11 +8,17 @@ import {
 } from "@tanstack/react-table";
 import {
   ArrowUpDown,
+  Fingerprint,
   KeyRound,
   MoreHorizontal,
   Pencil,
   Trash2,
 } from "lucide-react";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -65,11 +71,17 @@ interface UsersTableProps {
   users: UserSummary[];
   onEdit: (user: UserSummary) => void;
   onDelete: (user: UserSummary) => void;
+  onManageFingerprints?: (user: UserSummary) => void;
 }
 
 // ── Component ─────────────────────────────────────────────────────────────────
 
-export function UsersTable({ users, onEdit, onDelete }: UsersTableProps) {
+export function UsersTable({
+  users,
+  onEdit,
+  onDelete,
+  onManageFingerprints,
+}: UsersTableProps) {
   const [sorting, setSorting] = useState<SortingState>([]);
 
   const table = useReactTable({
@@ -138,11 +150,36 @@ export function UsersTable({ users, onEdit, onDelete }: UsersTableProps) {
                 {/* ── Actions cell ───────────────────────────────── */}
                 <TableCell className="py-3 pr-4 pl-2">
                   <div className="flex flex-col items-end justify-between gap-3 h-full min-h-[2.75rem]">
-                    {/* Top-right: lock icon if has credentials */}
+                    {/* Top-right: credential indicators */}
                     <div className="h-4 flex items-center">
-                      {user.hasCredentials && (
-                        <KeyRound className="size-3 text-emerald-500 dark:text-emerald-400" />
-                      )}
+                      <div className="flex items-center gap-1.5">
+                        {user.hasCredentials && (
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <KeyRound className="size-3 text-emerald-500 dark:text-emerald-400 cursor-default" />
+                            </TooltipTrigger>
+                            <TooltipContent side="left">
+                              Possui credencial física
+                            </TooltipContent>
+                          </Tooltip>
+                        )}
+                        {user.fingerprintCount > 0 && (
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <span className="inline-flex items-center gap-0.5 text-[10px] font-medium text-violet-600 dark:text-violet-400 cursor-default">
+                                <Fingerprint className="size-3" />
+                                {user.fingerprintCount}
+                              </span>
+                            </TooltipTrigger>
+                            <TooltipContent side="left">
+                              {user.fingerprintCount}{" "}
+                              {user.fingerprintCount === 1
+                                ? "digital cadastrada"
+                                : "digitais cadastradas"}
+                            </TooltipContent>
+                          </Tooltip>
+                        )}
+                      </div>
                     </div>
 
                     {/* Bottom-right: actions menu */}
@@ -150,6 +187,7 @@ export function UsersTable({ users, onEdit, onDelete }: UsersTableProps) {
                       user={user}
                       onEdit={onEdit}
                       onDelete={onDelete}
+                      onManageFingerprints={onManageFingerprints}
                     />
                   </div>
                 </TableCell>
@@ -168,10 +206,12 @@ function RowActions({
   user,
   onEdit,
   onDelete,
+  onManageFingerprints,
 }: {
   user: UserSummary;
   onEdit: (u: UserSummary) => void;
   onDelete: (u: UserSummary) => void;
+  onManageFingerprints?: (u: UserSummary) => void;
 }) {
   return (
     <DropdownMenu>
@@ -186,6 +226,12 @@ function RowActions({
           <Pencil className="size-4" />
           Editar
         </DropdownMenuItem>
+        {onManageFingerprints && (
+          <DropdownMenuItem onClick={() => onManageFingerprints(user)}>
+            <Fingerprint className="size-4" />
+            Gerenciar Digitais
+          </DropdownMenuItem>
+        )}
         <DropdownMenuSeparator />
         <DropdownMenuItem variant="destructive" onClick={() => onDelete(user)}>
           <Trash2 className="size-4" />

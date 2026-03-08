@@ -1,4 +1,14 @@
 import type { FastifyPluginAsyncZod } from "fastify-type-provider-zod";
+import {
+	FingerprintConflictError,
+	registerFingerprint,
+} from "@/services/user/fingerprint/register-fingerprint";
+import {
+	FingerprintNotFoundError,
+	deleteFingerprint,
+	toggleFingerprint,
+} from "@/services/user/fingerprint/delete-fingerprint";
+import { listFingerprints } from "@/services/user/fingerprint/list-fingerprints";
 
 type AdminReply = {
 	status: (code: number) => { send: (body: unknown) => void };
@@ -49,6 +59,28 @@ async function requireAdmin(
 
 // ── Schemas ───────────────────────────────────────────────────────────────────
 
+const FINGER_KEYS = [
+	"right_thumb",
+	"right_index",
+	"right_middle",
+	"right_ring",
+	"right_pinky",
+	"left_thumb",
+	"left_index",
+	"left_middle",
+	"left_ring",
+	"left_pinky",
+] as const;
+
+const fingerKeySchema = z.enum(FINGER_KEYS);
+
+const fingerprintSummarySchema = z.object({
+	id: z.string().uuid(),
+	finger: fingerKeySchema,
+	isActive: z.boolean(),
+	createdAt: z.string().datetime(),
+});
+
 const userSummarySchema = z.object({
 	id: z.string().uuid(),
 	name: z.string(),
@@ -58,6 +90,7 @@ const userSummarySchema = z.object({
 	createdAt: z.string().datetime(),
 	updatedAt: z.string().datetime(),
 	hasCredentials: z.boolean(),
+	fingerprintCount: z.number(),
 	profiles: z.array(
 		z.object({
 			id: z.string(),
@@ -85,6 +118,7 @@ const listUsersResponseExample: z.infer<typeof listUsersResponseSchema> = {
 			createdAt: "2025-01-10T13:25:00.000Z",
 			updatedAt: "2025-02-11T09:42:00.000Z",
 			hasCredentials: true,
+			fingerprintCount: 2,
 			profiles: [{ id: "abc123", name: "Docentes" }],
 		},
 	],
@@ -213,6 +247,7 @@ export const userRoute: FastifyPluginAsyncZod = async (app) => {
 					...user,
 					createdAt: user.createdAt.toISOString(),
 					updatedAt: user.updatedAt.toISOString(),
+					fingerprintCount: user.fingerprintCount,
 				})),
 				total: users.total,
 				page: users.page,
@@ -222,6 +257,183 @@ export const userRoute: FastifyPluginAsyncZod = async (app) => {
 			return reply.status(200).send(payload);
 		},
 	);
+
+	// ── Fingerprint endpoints ─────────────────────────────────────────────────
+
+	// GET /users/:id/fingerprints — lista digitais do usuário
+	app.get(
+		"/:id/fingerprints",
+		{
+			schema: {
+				tags: ["users"],
+				summary: "Listar digitais do usuário",
+				description:
+					"Retorna as impressões digitais cadastradas para um usuário.",
+				security: [{ sessionCookie: [] }],
+				params: z.object({ id: z.string().uuid() }),
+				response: {
+					200: z.array(fingerprintSummarySchema),
+				},
+			},
+		},
+		async (request, reply) => {
+			if (!(await requireAdmin(request, reply as unknown as AdminReply)))
+				return;
+
+			const { id: userId } = request.params as { id: string };
+			const records = await listFingerprints(userId);
+
+			return reply.status(200).send(
+				records.map((r) => ({
+					...r,
+					finger: r.finger as (typeof FINGER_KEYS)[number],
+					createdAt: r.createdAt.toISOString(),
+				})),
+			);
+		},
+	);
+
+	// POST /users/:id/fingerprints — registra nova digital
+	app.post(
+		"/:id/fingerprints",
+		{
+			schema: {
+				tags: ["users"],
+				summary: "Cadastrar digital",
+				description:
+					"Registra uma nova impressão digital para o usuário. Máximo de 1 por dedo.",
+				security: [{ sessionCookie: [] }],
+				params: z.object({ id: z.string().uuid() }),
+				body: z.object({
+					finger: fingerKeySchema,
+					template: z.string().min(1),
+				}),
+				response: {
+					201: fingerprintSummarySchema,
+					409: z.object({ message: z.string() }),
+				},
+			},
+		},
+		async (request, reply) => {
+			if (!(await requireAdmin(request, reply as unknown as AdminReply)))
+				return;
+
+			const { id: userId } = request.params as { id: string };
+			const { finger, template } = request.body as {
+				finger: (typeof FINGER_KEYS)[number];
+				template: string;
+			};
+
+			try {
+				const record = await registerFingerprint({ userId, finger, template });
+				return reply.status(201).send({
+					...record,
+					createdAt: record.createdAt.toISOString(),
+				});
+			} catch (err) {
+				if (err instanceof FingerprintConflictError) {
+					return (reply as unknown as AdminReply)
+						.status(409)
+						.send({ message: err.message });
+				}
+				throw err;
+			}
+		},
+	);
+
+	// DELETE /users/:id/fingerprints/:credentialId — remove digital
+	app.delete(
+		"/:id/fingerprints/:credentialId",
+		{
+			schema: {
+				tags: ["users"],
+				summary: "Remover digital",
+				description: "Remove uma impressão digital cadastrada do usuário.",
+				security: [{ sessionCookie: [] }],
+				params: z.object({
+					id: z.string().uuid(),
+					credentialId: z.string().uuid(),
+				}),
+				response: {
+					204: z.void(),
+					404: z.object({ message: z.string() }),
+				},
+			},
+		},
+		async (request, reply) => {
+			if (!(await requireAdmin(request, reply as unknown as AdminReply)))
+				return;
+
+			const { id: userId, credentialId } = request.params as {
+				id: string;
+				credentialId: string;
+			};
+
+			try {
+				await deleteFingerprint(userId, credentialId);
+				return reply.status(204).send();
+			} catch (err) {
+				if (err instanceof FingerprintNotFoundError) {
+					return (reply as unknown as AdminReply)
+						.status(404)
+						.send({ message: err.message });
+				}
+				throw err;
+			}
+		},
+	);
+
+	// PATCH /users/:id/fingerprints/:credentialId — ativa/desativa digital
+	app.patch(
+		"/:id/fingerprints/:credentialId",
+		{
+			schema: {
+				tags: ["users"],
+				summary: "Ativar/desativar digital",
+				description: "Alterna o status ativo/inativo de uma impressão digital.",
+				security: [{ sessionCookie: [] }],
+				params: z.object({
+					id: z.string().uuid(),
+					credentialId: z.string().uuid(),
+				}),
+				body: z.object({
+					isActive: z.boolean(),
+				}),
+				response: {
+					200: fingerprintSummarySchema,
+					404: z.object({ message: z.string() }),
+				},
+			},
+		},
+		async (request, reply) => {
+			if (!(await requireAdmin(request, reply as unknown as AdminReply)))
+				return;
+
+			const { id: userId, credentialId } = request.params as {
+				id: string;
+				credentialId: string;
+			};
+			const { isActive } = request.body as { isActive: boolean };
+
+			try {
+				const record = await toggleFingerprint(userId, credentialId, isActive);
+				return reply.status(200).send({
+					...record,
+					finger: record.finger as (typeof FINGER_KEYS)[number],
+					createdAt: record.createdAt.toISOString(),
+				});
+			} catch (err) {
+				if (err instanceof FingerprintNotFoundError) {
+					return (reply as unknown as AdminReply)
+						.status(404)
+						.send({ message: err.message });
+				}
+				throw err;
+			}
+		},
+	);
+
+	// ── Relations / CRUD endpoints ────────────────────────────────────────────
 
 	// GET /users/:id/relations — perfis, salas e tipos de sala do usuário
 	app.get(

@@ -34,6 +34,11 @@ export async function getUsers(qOrFilters?: string | GetUsersFilters) {
         SELECT 1 FROM ${accessCredential}
         WHERE ${accessCredential.userId} = ${user.id}
       )`.as("hasCredentials"),
+			fingerprintCount: sql<string> /* sql */`(
+	        SELECT COUNT(*) FROM ${accessCredential}
+	        WHERE ${accessCredential.userId} = ${user.id}
+	          AND ${accessCredential.type} = 'FINGERPRINT'
+	      )`.as("fingerprintCount"),
 		})
 		.from(user)
 		.$dynamic();
@@ -118,6 +123,7 @@ export async function getUsers(qOrFilters?: string | GetUsersFilters) {
 
 	const result = rows.map((u) => ({
 		...u,
+		fingerprintCount: Number.parseInt(u.fingerprintCount as string, 10),
 		profiles: profilesByUserId.get(u.id) ?? [],
 	}));
 

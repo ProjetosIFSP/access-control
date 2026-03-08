@@ -30,6 +30,7 @@ import {
   PaginationNext,
   PaginationPrevious,
 } from "@/components/ui/pagination";
+import { FingerprintHandDrawer } from "@/components/users/fingerprint-hand-drawer";
 import { UserDeleteDialog } from "@/components/users/user-delete-dialog";
 import { UserFormPanel } from "@/components/users/user-form-panel";
 import { UsersTable } from "@/components/users/users-table";
@@ -172,6 +173,10 @@ function UsersProfilesPage() {
   );
   const [deleteProfileTarget, setDeleteProfileTarget] =
     useState<ProfileSummary | null>(null);
+
+  // ── Fingerprint drawer state ──────────────────────────────────────────────
+  const [fingerprintTarget, setFingerprintTarget] =
+    useState<UserSummary | null>(null);
 
   const openCreateUser = useCallback(
     () => setPanelMode({ kind: "createUser" }),
@@ -563,6 +568,7 @@ function UsersProfilesPage() {
                       users={allUsers}
                       onEdit={openEditUser}
                       onDelete={setDeleteUserTarget}
+                      onManageFingerprints={setFingerprintTarget}
                     />
                     {totalPages > 1 && (
                       <div className="flex items-center justify-between gap-4 pt-2">
@@ -705,6 +711,18 @@ function UsersProfilesPage() {
           </SplitViewPanel>
         </SplitView>
       </main>
+
+      <FingerprintHandDrawer
+        open={fingerprintTarget !== null}
+        onOpenChange={(open) => {
+          if (!open) {
+            setFingerprintTarget(null);
+            invalidateUsers();
+          }
+        }}
+        userId={fingerprintTarget?.id ?? ""}
+        userName={fingerprintTarget?.name ?? ""}
+      />
 
       <UserDeleteDialog
         open={deleteUserTarget !== null}
