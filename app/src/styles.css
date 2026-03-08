@@ -15,12 +15,15 @@
     scrollbar-width: none; /* Firefox */
   }
 
-  /* Applied to <html> when a drawer/modal is open.
-	   overflow:hidden stops scrolling; scrollbar-gutter:stable keeps the
-	   layout width stable so the page doesn't jump when the scrollbar disappears. */
+  /* Always reserve scrollbar gutter so the layout width never shifts
+     when a scrollbar appears or disappears (e.g. when a drawer opens). */
+  html {
+    scrollbar-gutter: stable;
+  }
+
+  /* Applied to <html> when a drawer/modal is open — only hides scrolling. */
   html.drawer-open {
     overflow: hidden;
-    scrollbar-gutter: stable;
   }
 }
 
