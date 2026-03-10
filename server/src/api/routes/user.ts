@@ -1,6 +1,7 @@
 import type { FastifyPluginAsyncZod } from "fastify-type-provider-zod";
 import {
 	FingerprintConflictError,
+	FingerprintDuplicateTemplateError,
 	registerFingerprint,
 } from "@/services/user/fingerprint/register-fingerprint";
 import {
@@ -10,52 +11,18 @@ import {
 } from "@/services/user/fingerprint/delete-fingerprint";
 import { listFingerprints } from "@/services/user/fingerprint/list-fingerprints";
 
-type AdminReply = {
-	status: (code: number) => { send: (body: unknown) => void };
-};
-
 import { eq } from "drizzle-orm";
 import type { SchemaWithExamples } from "@/api/openapi";
 import { db } from "@/db";
 import { userRoomPermission, userRoomTypePermission } from "@/db/schema/access";
 import { profile, userProfile } from "@/db/schema/profile";
 import { room, roomType } from "@/db/schema/room";
-import { auth } from "@/lib/auth";
+import { requireAdmin, resolveSession, type GuardReply } from "@/lib/require-admin";
 import { z } from "@/lib/zod";
 import { createUser } from "@/services/user/create-user";
 import { deleteUser } from "@/services/user/delete-user";
 import { getUsers } from "@/services/user/get-user";
 import { updateUser } from "@/services/user/update-user";
-
-// ── Helpers ───────────────────────────────────────────────────────────────────
-
-async function resolveSession(request: { headers: Record<string, unknown> }) {
-	return auth.api
-		.getSession({
-			headers: new Headers(request.headers as Record<string, string>),
-		})
-		.catch(() => null);
-}
-
-async function requireAdmin(
-	request: { headers: Record<string, unknown> },
-	reply: AdminReply,
-) {
-	const session = await resolveSession(request);
-
-	if (!session?.user) {
-		reply.status(401).send({ message: "Autenticação necessária." });
-		return null;
-	}
-
-	const isAdmin = !!(session.user as Record<string, unknown>).isAdmin;
-	if (!isAdmin) {
-		reply.status(403).send({ message: "Acesso restrito a administradores." });
-		return null;
-	}
-
-	return session;
-}
 
 // ── Schemas ───────────────────────────────────────────────────────────────────
 
@@ -179,7 +146,7 @@ export const userRoute: FastifyPluginAsyncZod = async (app) => {
 		async (request, reply) => {
 			const session = await resolveSession(request);
 			if (!session?.user) {
-				return (reply as unknown as AdminReply)
+				return (reply as unknown as GuardReply)
 					.status(401)
 					.send({ message: "Autenticação necessária." });
 			}
@@ -222,7 +189,7 @@ export const userRoute: FastifyPluginAsyncZod = async (app) => {
 			} satisfies SchemaWithExamples,
 		},
 		async (request, reply) => {
-			if (!(await requireAdmin(request, reply as unknown as AdminReply)))
+			if (!(await requireAdmin(request, reply as unknown as GuardReply)))
 				return;
 			const { q, profileIds, page, pageSize } = request.query as {
 				q?: string;
@@ -277,7 +244,7 @@ export const userRoute: FastifyPluginAsyncZod = async (app) => {
 			},
 		},
 		async (request, reply) => {
-			if (!(await requireAdmin(request, reply as unknown as AdminReply)))
+			if (!(await requireAdmin(request, reply as unknown as GuardReply)))
 				return;
 
 			const { id: userId } = request.params as { id: string };
@@ -315,7 +282,7 @@ export const userRoute: FastifyPluginAsyncZod = async (app) => {
 			},
 		},
 		async (request, reply) => {
-			if (!(await requireAdmin(request, reply as unknown as AdminReply)))
+			if (!(await requireAdmin(request, reply as unknown as GuardReply)))
 				return;
 
 			const { id: userId } = request.params as { id: string };
@@ -331,8 +298,11 @@ export const userRoute: FastifyPluginAsyncZod = async (app) => {
 					createdAt: record.createdAt.toISOString(),
 				});
 			} catch (err) {
-				if (err instanceof FingerprintConflictError) {
-					return (reply as unknown as AdminReply)
+				if (
+					err instanceof FingerprintConflictError ||
+					err instanceof FingerprintDuplicateTemplateError
+				) {
+					return (reply as unknown as GuardReply)
 						.status(409)
 						.send({ message: err.message });
 				}
@@ -361,7 +331,7 @@ export const userRoute: FastifyPluginAsyncZod = async (app) => {
 			},
 		},
 		async (request, reply) => {
-			if (!(await requireAdmin(request, reply as unknown as AdminReply)))
+			if (!(await requireAdmin(request, reply as unknown as GuardReply)))
 				return;
 
 			const { id: userId, credentialId } = request.params as {
@@ -374,7 +344,7 @@ export const userRoute: FastifyPluginAsyncZod = async (app) => {
 				return reply.status(204).send();
 			} catch (err) {
 				if (err instanceof FingerprintNotFoundError) {
-					return (reply as unknown as AdminReply)
+					return (reply as unknown as GuardReply)
 						.status(404)
 						.send({ message: err.message });
 				}
@@ -406,7 +376,7 @@ export const userRoute: FastifyPluginAsyncZod = async (app) => {
 			},
 		},
 		async (request, reply) => {
-			if (!(await requireAdmin(request, reply as unknown as AdminReply)))
+			if (!(await requireAdmin(request, reply as unknown as GuardReply)))
 				return;
 
 			const { id: userId, credentialId } = request.params as {
@@ -424,7 +394,7 @@ export const userRoute: FastifyPluginAsyncZod = async (app) => {
 				});
 			} catch (err) {
 				if (err instanceof FingerprintNotFoundError) {
-					return (reply as unknown as AdminReply)
+					return (reply as unknown as GuardReply)
 						.status(404)
 						.send({ message: err.message });
 				}
@@ -450,7 +420,7 @@ export const userRoute: FastifyPluginAsyncZod = async (app) => {
 			},
 		},
 		async (request, reply) => {
-			if (!(await requireAdmin(request, reply as unknown as AdminReply)))
+			if (!(await requireAdmin(request, reply as unknown as GuardReply)))
 				return;
 
 			const { id: userId } = request.params as { id: string };
@@ -530,7 +500,7 @@ export const userRoute: FastifyPluginAsyncZod = async (app) => {
 			},
 		},
 		async (request, reply) => {
-			if (!(await requireAdmin(request, reply as unknown as AdminReply)))
+			if (!(await requireAdmin(request, reply as unknown as GuardReply)))
 				return;
 			const {
 				name,
@@ -599,7 +569,7 @@ export const userRoute: FastifyPluginAsyncZod = async (app) => {
 			},
 		},
 		async (request, reply) => {
-			if (!(await requireAdmin(request, reply as unknown as AdminReply)))
+			if (!(await requireAdmin(request, reply as unknown as GuardReply)))
 				return;
 			const { id } = request.params as { id: string };
 			const { name, email, isAdmin, profileIds, roomIds, roomTypeIds } =
@@ -644,7 +614,7 @@ export const userRoute: FastifyPluginAsyncZod = async (app) => {
 			},
 		},
 		async (request, reply) => {
-			if (!(await requireAdmin(request, reply as unknown as AdminReply)))
+			if (!(await requireAdmin(request, reply as unknown as GuardReply)))
 				return;
 			const { id } = request.params as { id: string };
 			await deleteUser(id);

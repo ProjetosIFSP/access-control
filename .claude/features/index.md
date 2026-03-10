@@ -34,7 +34,7 @@
 | PERM-003  | Permissão perfil → sala                               | ✅     | `profile_room_permission`                                                   |
 | PERM-004  | Permissão perfil → tipo de sala                       | ✅     | `profile_room_type_permission`                                              |
 | PERM-005  | Verificação de acesso unificada no fluxo IoT          | 🔧     | `processAccessAttempt` só verifica PERM-001; PERM-002/003/004 ignorados     |
-| CRED-001  | Gestão de credenciais físicas — digitais (FINGERPRINT)| 🔧     | Endpoints REST prontos, migração executada; falta NFC e integração hardware |
+| CRED-001  | Gestão de credenciais físicas — digitais (FINGERPRINT)| 🔧     | Endpoints REST prontos; fluxo real via terminal ZN-53X (HW-007); WA26 descartado do fluxo de produção |
 | CRED-002  | Gestão de credenciais físicas — RFID (NFC_TAG)        | ⬜     | Tabela existe, sem endpoints de cadastro NFC                                |
 | LOG-001   | Registro de log de acessos (GRANTED / DENIED)         | ✅     | Tabela `access_log` populada pelo fluxo IoT                                 |
 | LOG-002   | Endpoint de consulta de histórico de acessos          | ⬜     | Sem rota `GET /access-logs`; bloqueia UI-010                                |
@@ -92,11 +92,12 @@
 | ID     | Feature                                             | Status | Observações                                                                  |
 |--------|-----------------------------------------------------|--------|------------------------------------------------------------------------------|
 | HW-001 | Firmware base ESP32S (Wi-Fi + MQTT + heartbeat)     | 🔧     | Código de teste funcional em `.claude/test/hardware-porta/`; não modularizado |
-| HW-002 | Integração com sensor biométrico (DY50 / ZN-53X)   | ⬜     | Biblioteca e pinout mapeados; sem implementação no firmware base             |
+| HW-002 | Integração com sensor biométrico (DY50 / ZN-53X)   | ⬜     | Depende de HW-007 para definição do formato de template; matching on-device  |
 | HW-003 | Integração com leitor RFID RC522                    | ⬜     | Hardware possuído; sem implementação                                         |
 | HW-004 | Controle do relé da fechadura solenoide             | ⬜     | Hardware ainda não adquirido                                                 |
 | HW-005 | Detecção de estado da porta (reed switch / SCT-013) | 🔧     | SCT-013 testado no firmware de teste; reed switch como botão simulado        |
 | HW-006 | Protocolo de reconexão e fallback offline           | ⬜     | Não implementado                                                             |
+| HW-007 | Terminal de enrollment biométrico (ZN-53X + ESP32)  | ⬜     | Arquitetura definida; guia de testes em `.claude/test/enrollment-terminal/`  |
 
 ---
 
@@ -114,8 +115,9 @@
 ## Próximas prioridades
 
 1. **PERM-005 / MQTT-006** — Unificar verificação de acesso no `processAccessAttempt` com `verifyAccess`
-2. **LOG-002** — Endpoint `GET /access-logs` com filtros (sala, usuário, período, status)
-3. **UI-010** — Página de histórico de acessos (depende de LOG-002)
-4. **HW-001** — Modularizar firmware base ESP32S em `core/` (PlatformIO)
-5. **CRED-002** — Endpoints de cadastro de NFC_TAG por usuário
-6. **UI-016** — Monitoramento em tempo real (WebSocket ou polling curto no frontend)
+2. **HW-007** — Validar compatibilidade ZN-53X + fluxo de enrollment (guia em `.claude/test/enrollment-terminal/`)
+3. **LOG-002** — Endpoint `GET /access-logs` com filtros (sala, usuário, período, status)
+4. **UI-010** — Página de histórico de acessos (depende de LOG-002)
+5. **HW-001** — Modularizar firmware base ESP32S em `core/` (PlatformIO)
+6. **CRED-002** — Endpoints de cadastro de NFC_TAG por usuário
+7. **UI-016** — Monitoramento em tempo real (WebSocket ou polling curto no frontend)

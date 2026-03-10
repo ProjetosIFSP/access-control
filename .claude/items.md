@@ -76,6 +76,7 @@
 
 ## 📝 Notas
 
-- O **leitor WA26** opera em modo de emulação de teclado — compatível com o hook `useFingerprintReader` no modo `"keyboard"` (padrão). O `vendorId` e `productId` reais precisam ser identificados fisicamente (ver guia em `.claude/guides/wa26-hid-guide.md`).
+- O **leitor WA26** opera em modo de emulação de teclado — compatível com o hook `useFingerprintReader` no modo `"keyboard"` (padrão). **Não participa do fluxo de produção de biometria** — os templates Boland são incompatíveis com o ZN-53X. Mantido apenas para demonstração do hook na UI. Ver aviso em `.claude/guides/wa26-hid-guide.md`.
 - O **ESP-32S** está sendo usado nos testes por ter mais memória e velocidade que o ESP8266. O firmware final pode ser portado para ESP8266 (NodeMCU) se necessário para redução de custo.
-- O **sensor ZN-53X / A21 UART** usa protocolo serial (UART) — requer biblioteca customizada ou protocolo documentado pelo fabricante. Verificar compatibilidade com a biblioteca `Adafruit Fingerprint Sensor Library` ou implementar protocolo proprietário.
+- O **sensor ZN-53X / A21 UART** usa protocolo R30x (GROW) via UART — **compatibilidade a confirmar fisicamente** com a biblioteca `Adafruit Fingerprint Sensor Library` (start code `0xEF01`, pacotes estruturados com checksum). É o sensor central da arquitetura biométrica: usado tanto no terminal de enrollment quanto nos controladores de acesso. Ver `.claude/features/HARDWARE/hw-007-enrollment-terminal.md` e `.claude/test/enrollment-terminal/README.md`.
+- O **CS9711 embutido no notebook** (ID USB `2541:0236`) usa classe Vendor Specific (0xFF) com transferência Bulk — **não é HID**, não aparece na Web HID API, não é compatível com o sistema. Ignorar.

@@ -1,4 +1,4 @@
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { db } from "@/db";
 import { accessCredential } from "@/db/schema/access";
 import { room } from "@/db/schema/room";
@@ -9,33 +9,42 @@ export const verifyAccess = async (payload: {
 	credentialValue: string;
 	type: "BIOMETRY" | "RFID";
 }) => {
-	// buscar sala
-	const roomRows = await db
-		.select()
+	const [r] = await db
+		.select({
+			id: room.id,
+			typeId: room.typeId,
+			requiresBiometry: room.requiresBiometry,
+			requiresRFID: room.requiresRFID,
+		})
 		.from(room)
-		.where(eq(room.id, payload.roomId));
-	const r = roomRows[0];
+		.where(eq(room.id, payload.roomId))
+		.limit(1);
+
 	if (!r) return { granted: false, reason: "ROOM_NOT_FOUND" } as const;
 
-	// verificar requisitos multimodais
 	if (r.requiresBiometry && payload.type !== "BIOMETRY")
 		return { granted: false, reason: "BIOMETRY_REQUIRED" } as const;
 	if (r.requiresRFID && payload.type !== "RFID")
 		return { granted: false, reason: "RFID_REQUIRED" } as const;
 
-	// identificar usuário pela credencial
-	const credRows = await db
-		.select()
+	const [cred] = await db
+		.select({
+			userId: accessCredential.userId,
+			isActive: accessCredential.isActive,
+		})
 		.from(accessCredential)
-		.where(eq(accessCredential.value, payload.credentialValue));
-	const cred = credRows[0];
-	const userId = cred?.userId;
+		.where(
+			and(
+				eq(accessCredential.value, payload.credentialValue),
+				eq(accessCredential.isActive, true),
+			),
+		)
+		.limit(1);
 
-	if (!userId) {
+	if (!cred?.userId) {
 		return { granted: false, reason: "UNKNOWN_CREDENTIAL" } as const;
 	}
 
-	// usar a lógica unificada de verificação de permissões
-	const result = await checkUserRoomAccess(userId, payload.roomId, r.typeId);
+	const result = await checkUserRoomAccess(cred.userId, payload.roomId, r.typeId);
 	return { granted: result.granted, reason: result.reason } as const;
 };

@@ -27,6 +27,16 @@ export default defineConfig({
   resolve: {
     alias: {
       "@": resolve(__dirname, "./src"),
+      // nuqs is hoisted to the workspace root (tcc/node_modules) but
+      // @tanstack/react-router lives in app/node_modules. When esbuild
+      // pre-bundles nuqs/adapters/tanstack-router it resolves imports
+      // relative to the hoisted package location and cannot find the router.
+      // This alias pins the resolution to the app-local copy for every
+      // consumer, including esbuild during pre-bundling.
+      "@tanstack/react-router": resolve(
+        __dirname,
+        "node_modules/@tanstack/react-router",
+      ),
     },
     preserveSymlinks: true,
   },
@@ -52,6 +62,13 @@ export default defineConfig({
       "sonner",
       "input-otp",
       "nanostores",
+      // Both nuqs and its TanStack Router adapter must be pre-bundled together
+      // so they share a single module instance of the internal React context.
+      // The alias above ensures @tanstack/react-router resolves correctly from
+      // app/node_modules during esbuild pre-bundling (nuqs is hoisted to the
+      // workspace root where the router package does not exist).
+      "nuqs",
+      "nuqs/adapters/tanstack-router",
     ],
   },
 });

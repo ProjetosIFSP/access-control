@@ -1,9 +1,4 @@
 import type { FastifyPluginAsyncZod } from "fastify-type-provider-zod";
-
-type AdminReply = {
-	status: (code: number) => { send: (body: unknown) => void };
-};
-
 import { and, eq } from "drizzle-orm";
 import { v7 as uuidv7 } from "uuid";
 import { db } from "@/db";
@@ -14,38 +9,12 @@ import {
 	userProfile,
 } from "@/db/schema/profile";
 import { room, roomType } from "@/db/schema/room";
-import { auth } from "@/lib/auth";
+import { requireAdmin, type GuardReply } from "@/lib/require-admin";
 import { createProfile } from "@/services/profile/create-profile";
 import { deleteProfile } from "@/services/profile/delete-profile";
 import { getProfiles } from "@/services/profile/get-profiles";
 import { updateProfile } from "@/services/profile/update-profile";
 import { z } from "../../lib/zod";
-
-// ── Helpers ───────────────────────────────────────────────────────────────────
-
-async function requireAdmin(
-	request: { headers: Record<string, unknown> },
-	reply: { status: (code: number) => { send: (body: unknown) => void } },
-) {
-	const session = await auth.api
-		.getSession({
-			headers: new Headers(request.headers as Record<string, string>),
-		})
-		.catch(() => null);
-
-	if (!session?.user) {
-		reply.status(401).send({ message: "Autenticação necessária." });
-		return null;
-	}
-
-	const isAdmin = !!(session.user as Record<string, unknown>).isAdmin;
-	if (!isAdmin) {
-		reply.status(403).send({ message: "Acesso restrito a administradores." });
-		return null;
-	}
-
-	return session;
-}
 
 // ── Schemas ───────────────────────────────────────────────────────────────────
 
@@ -105,7 +74,7 @@ export const profileRoute: FastifyPluginAsyncZod = async (app) => {
 			},
 		},
 		async (request, reply) => {
-			if (!(await requireAdmin(request, reply as unknown as AdminReply)))
+			if (!(await requireAdmin(request, reply as unknown as GuardReply)))
 				return;
 
 			const profiles = await getProfiles();
@@ -133,7 +102,7 @@ export const profileRoute: FastifyPluginAsyncZod = async (app) => {
 			},
 		},
 		async (request, reply) => {
-			if (!(await requireAdmin(request, reply as unknown as AdminReply)))
+			if (!(await requireAdmin(request, reply as unknown as GuardReply)))
 				return;
 
 			const { id: profileId } = request.params as { id: string };
@@ -192,7 +161,7 @@ export const profileRoute: FastifyPluginAsyncZod = async (app) => {
 			},
 		},
 		async (request, reply) => {
-			if (!(await requireAdmin(request, reply as unknown as AdminReply)))
+			if (!(await requireAdmin(request, reply as unknown as GuardReply)))
 				return;
 
 			const { name, description, userIds, roomIds, roomTypeIds } =
@@ -233,7 +202,7 @@ export const profileRoute: FastifyPluginAsyncZod = async (app) => {
 			},
 		},
 		async (request, reply) => {
-			if (!(await requireAdmin(request, reply as unknown as AdminReply)))
+			if (!(await requireAdmin(request, reply as unknown as GuardReply)))
 				return;
 
 			const { id } = request.params as { id: string };
@@ -274,7 +243,7 @@ export const profileRoute: FastifyPluginAsyncZod = async (app) => {
 			},
 		},
 		async (request, reply) => {
-			if (!(await requireAdmin(request, reply as unknown as AdminReply)))
+			if (!(await requireAdmin(request, reply as unknown as GuardReply)))
 				return;
 
 			const { id } = request.params as { id: string };
@@ -297,7 +266,7 @@ export const profileRoute: FastifyPluginAsyncZod = async (app) => {
 			},
 		},
 		async (request, reply) => {
-			if (!(await requireAdmin(request, reply as unknown as AdminReply)))
+			if (!(await requireAdmin(request, reply as unknown as GuardReply)))
 				return;
 
 			const { id: profileId } = request.params as { id: string };
@@ -328,7 +297,7 @@ export const profileRoute: FastifyPluginAsyncZod = async (app) => {
 			},
 		},
 		async (request, reply) => {
-			if (!(await requireAdmin(request, reply as unknown as AdminReply)))
+			if (!(await requireAdmin(request, reply as unknown as GuardReply)))
 				return;
 
 			const { id: profileId, userId } = request.params as {
@@ -363,7 +332,7 @@ export const profileRoute: FastifyPluginAsyncZod = async (app) => {
 			},
 		},
 		async (request, reply) => {
-			if (!(await requireAdmin(request, reply as unknown as AdminReply)))
+			if (!(await requireAdmin(request, reply as unknown as GuardReply)))
 				return;
 
 			const { id: profileId } = request.params as { id: string };
@@ -394,7 +363,7 @@ export const profileRoute: FastifyPluginAsyncZod = async (app) => {
 			},
 		},
 		async (request, reply) => {
-			if (!(await requireAdmin(request, reply as unknown as AdminReply)))
+			if (!(await requireAdmin(request, reply as unknown as GuardReply)))
 				return;
 
 			const { id: profileId, roomId } = request.params as {

@@ -1,5 +1,114 @@
 # Histórico de Implementações
 
+---
+
+## REFACTOR-001 — Refatoração de Performance e Conformidade com Diretrizes
+
+**Data:** Sessão de análise e refatoração geral
+**Escopo:** `server/`, `app/` — módulo de biometria e infraestrutura de rotas
+
+**Problemas identificados e resolvidos:**
+
+### 1. Helper `requireAdmin` compartilhado (DRY — backend)
+
+**Problema:** `requireAdmin` e `resolveSession` eram definidos localmente em cada arquivo de rota (`user.ts`, `profile.ts`, `room.ts`, `block.ts`) — 4 cópias idênticas (ou quase) duplicando ~30 linhas cada.
+
+**Ação:**
+- Criado `server/src/lib/require-admin.ts` com `resolveSession`, `requireAdmin` e `GuardReply` exportados
+- Removidas as funções locais de todos os 4 arquivos de rota
+- Substituídos todos os `type AdminReply` locais pelo `GuardReply` importado do helper
+- `block.ts`: 4 blocos `auth.api.getSession()` manuais substituídos por `requireAdmin(request, reply as never)`
+
+**Impacto:** ~120 linhas removidas; comportamento idêntico; point único de mudança se a lógica de autenticação mudar.
+
+---
+
+### 2. `registerFingerprint` — remoção do SELECT redundante (N+1 → 1 query)
+
+**Problema:** `register-fingerprint.ts` executava um `SELECT` para verificar se o dedo já estava cadastrado **antes** do `INSERT`. O banco já tem constraint `UNIQUE` composta em `(userId, finger)` e constraint `UNIQUE` no campo `value` — o SELECT era desnecessário e criava N+1 queries.
+
+**Ação:**
+- Removido o `SELECT` de verificação prévia
+- `INSERT` direto capturando o erro Postgres `23505` (unique violation)
+- Adicionada `FingerprintDuplicateTemplateError` para distinguir conflito de template global vs. conflito de dedo por usuário
+- Rota `POST /users/:id/fingerprints` atualizada para capturar ambos os erros e retornar 409
+
+**Impacto:** Redução de 1 round-trip ao banco por cadastro; semântica de erro mais precisa.
+
+---
+
+### 3. `listFingerprints` — ordenação com `asc()` explícito
+
+**Problema:** `.orderBy(accessCredential.createdAt)` sem `asc()` explícito — comportamento dependente da implementação do Drizzle (implicitamente ascendente, mas não documentado).
+
+**Ação:** Substituído por `.orderBy(asc(accessCredential.createdAt))`.
+
+---
+
+### 4. `FingerprintHandDrawer` — `useQuery` usando `queryOptions` centralizado
+
+**Problema:** O drawer definia `queryKey` e `queryFn` inline, duplicando a lógica que já existe em `services/users/fingerprints.ts` via `userFingerprintsQueryOptions`.
+
+**Ação:** Substituído `useQuery({ queryKey: ..., queryFn: ..., staleTime: ... })` por `useQuery({ ...userFingerprintsQueryOptions(open ? userId : null) })`.
+
+---
+
+### 5. `FingerprintHandDrawer` — consolidação de `useEffect` do status do reader
+
+**Problema:** Dois `useEffect` separados observavam `reader.status` — um para `"error"` (reset + limpa dedo) e outro para `"success"` (auto-registro). Causava duplicação de dependências e potencial de race condition sutil.
+
+**Ação:** Consolidados em um único `useEffect` com early-return para o caso de erro.
+
+---
+
+### 6. `FingerprintHandDrawer` — remoção do toast de sucesso (violação de guideline UX)
+
+**Problema:** `toast.success("Digital cadastrada com sucesso!")` era disparado no `onSuccess` da mutation. Segundo o guideline UX: *"se o usuário consegue ver o resultado diretamente na interface, não use toast"*. O SVG da mão já exibe o dedo selecionado em verde imediatamente após o registro.
+
+**Ação:** Removido o toast de sucesso. Toast de erro no `onError` mantido (válido — falha em background sem feedback visual alternativo).
+
+---
+
+### 7. `verify-access.ts` — correção de gap de segurança (credencial inativa)
+
+**Problema:** `verifyAccess` buscava a credencial sem filtrar por `isActive`, permitindo que uma credencial desativada fosse aceita no endpoint `/verify`. Além disso, usava `select()` sem projeção (select *).
+
+**Ação:**
+- Adicionado filtro `eq(accessCredential.isActive, true)` na busca da credencial
+- Substituído `select()` por `select({ userId, isActive })` com projeção explícita
+- Adicionado `.limit(1)` nas queries de sala e credencial
+- Sala também com projeção explícita: `{ id, typeId, requiresBiometry, requiresRFID }`
+
+---
+
+### 8. `useIsMobile.hook.ts` → `use-is-mobile.ts` (kebab-case + named export)
+
+**Problema:** Nome de arquivo com sufixo `.hook.ts` viola a convenção `kebab-case` puro do guideline. Export era `default export` (guideline prefere named exports para componentes e hooks).
+
+**Ação:**
+- Arquivo renomeado: `useIsMobile.hook.ts` → `use-is-mobile.ts`
+- Convertido de `export default` para `export function useIsMobile()`
+- Tipo `NodeJS.Timeout` substituído por `ReturnType<typeof setTimeout>` (independente de runtime)
+- Import em `user-menu.tsx` atualizado para named import
+
+---
+
+**Arquivos modificados:**
+- `server/src/lib/require-admin.ts` *(novo)*
+- `server/src/services/user/fingerprint/register-fingerprint.ts`
+- `server/src/services/user/fingerprint/list-fingerprints.ts`
+- `server/src/services/permissions/verify-access.ts`
+- `server/src/api/routes/user.ts`
+- `server/src/api/routes/profile.ts`
+- `server/src/api/routes/room.ts`
+- `server/src/api/routes/block.ts`
+- `app/src/components/users/fingerprint-hand-drawer.tsx`
+- `app/src/hooks/use-is-mobile.ts` *(renomeado de useIsMobile.hook.ts)*
+- `app/src/components/header/user-menu.tsx`
+
+**Testes:** 110/110 passing (Vitest — `app/src/services/users/fingerprints.test.ts` e suite completa)
+
+
 Registro consolidado de todas as tasks implementadas, com ID, descrição e ações tomadas.
 
 ---
@@ -315,7 +424,87 @@ Registro consolidado de todas as tasks implementadas, com ID, descrição e aç�
 
 ---
 
-## HW-001 (teste) — Firmware de teste ESP32S
+## HW-007 — Terminal de Enrollment Biométrico (ZN-53X + ESP32) — Arquitetura definida
+
+**Status:** ⬜ Não iniciado no firmware — arquitetura documentada
+
+**Ações tomadas:**
+
+### Decisão arquitetural
+- Identificado que o `Chipsailing CS9711` embutido no notebook usa classe USB Vendor Specific (0xFF) com transferência Bulk — incompatível com Web HID API
+- Identificado que o WA26 (Boland) e o ZN-53X usam algoritmos biométricos de fabricantes diferentes — templates são incompatíveis entre si
+- Comparação exata de template (`WHERE value = ?`) nunca funcionaria entre sensores heterogêneos
+- **Decisão:** terminal físico dedicado ESP32 + ZN-53X para enrollment, substituindo o WA26 no fluxo de produção
+- Templates extraídos via protocolo R30x (UploadTemplate 0x08) e distribuídos via MQTT para todos os controladores
+- Matching on-device em cada ZN-53X via `fingerFastSearch()` — sem matching centralizado no backend
+
+### Documentação criada
+- `.claude/features/HARDWARE/hw-007-enrollment-terminal.md` — feature completa com fluxo, novos tópicos MQTT, novos endpoints REST, schema das tabelas `enrollment_request` e `controller_credential_slot`, critérios de aceite e notas de implementação
+- `.claude/test/enrollment-terminal/README.md` — guia de testes incremental com 6 passos validáveis (compatibilidade R30x → captura → extração → MQTT → download → matching)
+- `.claude/test/enrollment-terminal/firmware-enrollment-test.ino` — firmware Arduino para ESP32S com todos os 6 passos implementados via Serial Monitor e fluxo MQTT automático
+
+### Impacto em features existentes
+- `CRED-001` — fluxo real de cadastro de digitais passa pelo terminal ZN-53X; WA26 e `useFingerprintReader` permanecem apenas para demonstração do hook
+- `HW-002` — agora depende de HW-007 para definição do formato de template e protocolo de sync MQTT
+- `index.md` e `todo.md` atualizados com HW-007 e novos itens de backend/MQTT desbloqueados
+
+---
+
+## REFACTOR-002 — Migração de Query Params para nuqs
+
+**Data:** sessão atual
+**Arquivos modificados:**
+- `app/src/routes/index.tsx`
+- `app/src/routes/users.tsx`
+- `app/src/routes/rooms.tsx`
+
+### Motivação
+
+As três rotas de página gerenciavam query params via `validateSearch` + `Route.useSearch()` + `Route.useNavigate()` manualmente, com padrões repetitivos e frágeis:
+- `validateSearch` com parsing manual de tipos (`typeof search.q === "string"`, etc.)
+- `useDebounce` + `useRef(false)` + `useEffect` para evitar o flush no mount e sincronizar inputValue → URL
+- `useEffect` separado para reset de filtros ao trocar de aba
+- `navigate({ search: prev => ({ ...prev, ... }) })` espalhado por toda a função de componente
+
+### O que foi feito
+
+1. **`index.tsx`** — Substituído `validateSearch` + `loaderDeps` + `navigate` + `useDebounce` + `isMounted` ref por:
+   - Parser declarativo `indexSearchParams` com `parseAsString.withDefault("")`
+   - `useQueryStates(indexSearchParams, { history: "replace", shallow: false, limitUrlUpdates: debounce(400), clearOnDefault: true })`
+   - `setParams({ q: value || null })` substitui toda a lógica de sync com URL
+   - `setType` e `setState` viram `useCallback` simples de uma linha
+
+2. **`users.tsx`** — Substituído parser manual + 2 `useEffect` de sync + `useRef` de guard por:
+   - Parser declarativo `usersSearchParams` com `parseAsString`, `parseAsStringLiteral(TABS)`, `parseAsArrayOf(parseAsString)`, `parseAsInteger`
+   - `useQueryStates` com `limitUrlUpdates: debounce(400)` — o debounce acontece nativamente na camada nuqs, sem estado intermediário
+   - `setActiveTab` virou `useCallback` que chama `setParams({ tab: null, q: null, profileIds: null, page: null })` — reset atômico e sem guards
+   - `selectedProfileId` derivado de `paramProfileIds[0] ?? "all"` (sem `useState` separado)
+   - `goToPage` virou `setParams({ page: p === 1 ? null : p })`
+   - Removidos: `useRef(false)` (syncMounted, tabMounted), `useDebounce`, import `useDebounce`
+
+3. **`rooms.tsx`** — Mesma abordagem que `users.tsx`:
+   - Parser `roomsSearchParams` com 5 campos tipados
+   - `selectedTypeId` e `selectedBlockId` derivados dos arrays de params (sem `useState` separado)
+   - `setSelectedTypeId` / `setSelectedBlockId` como `useCallback` com `setParams`
+   - `setActiveTab` com reset atômico de todos os filtros
+   - Removidos: `validateSearch`, `loaderDeps`, `useDebounce`, 2 `useRef`, 2 `useEffect` de sync, `navigate`
+   - Removido import desnecessário de `usersQueryOptions` (não era usado no loader de rooms)
+
+### Ganhos de performance
+
+- **Sem duplo render no mount:** o padrão `isMounted.current = true; return` no `useEffect` existia para evitar um flush inicial desnecessário. Com nuqs, o estado já nasce correto da URL — sem necessidade de guard.
+- **Debounce nativo sem estado extra:** `limitUrlUpdates: debounce(400)` aplica o debounce apenas às escritas na URL, mantendo o `inputValue` local respondendo imediatamente — sem o par `(inputValue, debouncedValue)` que causava re-renders duplos.
+- **Batching atômico:** `setParams({ a, b, c })` envia todas as mudanças em um único push de history, sem múltiplos `navigate()` encadeados.
+- **`clearOnDefault: true`:** remove automaticamente params com valor default da URL (ex: `page=1` nunca aparece na barra de endereço), mantendo URLs limpas.
+- **Suporte a browser back/forward:** `useEffect(() => setInputValue(q), [q])` garante que o input local reflita a URL quando o usuário usa o botão Voltar — sem lógica manual.
+
+### O que NÃO foi alterado
+
+- `use-debounce.ts` — mantido, pois ainda é usado em `use-crud-page.ts` para estado local (sem URL)
+- `use-crud-page.ts` — mantido sem alterações; o hook é para estado puramente local de UI, não gerencia URL
+- Lógica de queries TanStack Query, mutations, panel state (`PanelMode`) — sem alterações
+
+## HW-001 (teste) — Firmware de Teste ESP32S [L453-460]
 
 **Ações tomadas:**
 - Firmware completo documentado em `.claude/test/hardware-porta/`

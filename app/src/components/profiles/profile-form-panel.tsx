@@ -112,7 +112,6 @@ function RoomSelectors({
           onChange={onChangeRoomTypeIds}
           placeholder="Selecionar tipos de sala..."
           searchPlaceholder="Buscar tipo..."
-          className="rounded-3xl"
           emptyMessage="Nenhum tipo de sala encontrado."
         />
       </FormField>

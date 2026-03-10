@@ -264,7 +264,6 @@ function PermissionSelectors({
               ? "Todos os tipos já estão cobertos pelos perfis selecionados."
               : "Nenhum tipo de sala encontrado."
           }
-          className="rounded-3xl"
           readonlyBadges={roomTypeReadonlyBadges}
           disabled={
             roomTypeReadonlyBadges.length > 0 &&

@@ -1,4 +1,3 @@
-import { and, eq } from "drizzle-orm";
 import { v7 as uuidv7 } from "uuid";
 import { db } from "@/db";
 import { accessCredential } from "@/db/schema/access";
@@ -27,53 +26,76 @@ export class FingerprintConflictError extends Error {
 	}
 }
 
+export class FingerprintDuplicateTemplateError extends Error {
+	constructor() {
+		super("Este template biométrico já está cadastrado no sistema.");
+		this.name = "FingerprintDuplicateTemplateError";
+	}
+}
+
 export async function registerFingerprint(
 	input: RegisterFingerprintInput,
 ): Promise<RegisteredFingerprintRecord> {
 	const { userId, finger, template } = input;
 
-	// Check if this finger already has a registered credential for this user
-	const existing = await db
-		.select({ id: accessCredential.id })
-		.from(accessCredential)
-		.where(
-			and(
-				eq(accessCredential.userId, userId),
-				eq(accessCredential.type, "FINGERPRINT"),
-				eq(accessCredential.finger, finger),
-			),
-		)
-		.limit(1);
+	try {
+		const [inserted] = await db
+			.insert(accessCredential)
+			.values({
+				id: uuidv7(),
+				userId,
+				type: "FINGERPRINT",
+				finger,
+				value: template,
+				isActive: true,
+			})
+			.returning({
+				id: accessCredential.id,
+				finger: accessCredential.finger,
+				isActive: accessCredential.isActive,
+				createdAt: accessCredential.createdAt,
+			});
 
-	if (existing.length > 0) {
-		throw new FingerprintConflictError(
-			`Já existe uma digital cadastrada para o dedo "${finger}" deste usuário.`,
-		);
+		return {
+			id: inserted.id,
+			finger: inserted.finger as FingerKey,
+			isActive: inserted.isActive,
+			createdAt: inserted.createdAt,
+		};
+	} catch (err) {
+		if (isUniqueViolation(err)) {
+			const conflictColumn = getConflictColumn(err);
+
+			if (conflictColumn === "value") {
+				throw new FingerprintDuplicateTemplateError();
+			}
+
+			// Unique violation on (userId, finger) composite — finger already registered
+			throw new FingerprintConflictError(
+				`Já existe uma digital cadastrada para o dedo "${finger}" deste usuário.`,
+			);
+		}
+		throw err;
 	}
+}
 
-	// The `value` field stores the raw template. It has a UNIQUE constraint,
-	// so duplicate templates across all users will be rejected by the DB.
-	const [inserted] = await db
-		.insert(accessCredential)
-		.values({
-			id: uuidv7(),
-			userId,
-			type: "FINGERPRINT",
-			finger,
-			value: template,
-			isActive: true,
-		})
-		.returning({
-			id: accessCredential.id,
-			finger: accessCredential.finger,
-			isActive: accessCredential.isActive,
-			createdAt: accessCredential.createdAt,
-		});
+function isUniqueViolation(err: unknown): boolean {
+	return (
+		typeof err === "object" &&
+		err !== null &&
+		"code" in err &&
+		(err as { code: string }).code === "23505"
+	);
+}
 
-	return {
-		id: inserted.id,
-		finger: inserted.finger as FingerKey,
-		isActive: inserted.isActive,
-		createdAt: inserted.createdAt,
-	};
+function getConflictColumn(err: unknown): string | null {
+	if (
+		typeof err === "object" &&
+		err !== null &&
+		"constraint" in err
+	) {
+		const constraint = (err as { constraint: string }).constraint ?? "";
+		if (constraint.includes("value")) return "value";
+	}
+	return null;
 }

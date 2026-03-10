@@ -3,6 +3,7 @@ import { AnimatePresence, motion } from "motion/react";
 import { Loader2, X } from "lucide-react";
 import { useCallback, useEffect, useLayoutEffect, useState } from "react";
 import { toast } from "sonner";
+import { userFingerprintsQueryOptions } from "@/services/users/fingerprints";
 
 import { Hand } from "@/assets/vectors/hand";
 import { Button } from "@/components/ui/button";
@@ -17,7 +18,6 @@ import {
 } from "@/lib/biometrics";
 import { cn } from "@/lib/utils";
 import {
-  fetchUserFingerprints,
   fingerprintQueryKeys,
   registerFingerprint,
 } from "@/services/users/fingerprints";
@@ -58,10 +58,7 @@ export function FingerprintHandDrawer({
   // ── Fetch fingerprints ──────────────────────────────────────────────────────
   const { data: fingerprints = [], isLoading: isLoadingFingerprints } =
     useQuery({
-      queryKey: fingerprintQueryKeys.list(userId),
-      queryFn: () => fetchUserFingerprints(userId),
-      enabled: open && !!userId,
-      staleTime: 1000 * 60 * 2,
+      ...userFingerprintsQueryOptions(open ? userId : null),
     });
 
   // ── Register mutation ───────────────────────────────────────────────────────
@@ -71,7 +68,6 @@ export function FingerprintHandDrawer({
       queryClient.invalidateQueries({
         queryKey: fingerprintQueryKeys.list(userId),
       });
-      toast.success("Digital cadastrada com sucesso!");
       setSelectedFinger(null);
       reader.reset();
     },
@@ -81,20 +77,17 @@ export function FingerprintHandDrawer({
       );
     },
   });
+  const registerMutate = registerMutation.mutate;
+  const registerIsPending = registerMutation.isPending;
 
-  // ── Reset selectedFinger on error — ícone volta ao estado inicial ────────────
+  // ── React to reader status changes ───────────────────────────────────────────
   useEffect(() => {
     if (reader.status === "error") {
       setSelectedFinger(null);
       reader.reset();
+      return;
     }
-  }, [reader.status, reader.reset]);
 
-  // ── Auto-register when template is captured ──────────────────────────────────
-  const registerMutate = registerMutation.mutate;
-  const registerIsPending = registerMutation.isPending;
-
-  useEffect(() => {
     if (
       reader.status === "success" &&
       reader.lastTemplate &&
@@ -110,6 +103,7 @@ export function FingerprintHandDrawer({
   }, [
     reader.status,
     reader.lastTemplate,
+    reader.reset,
     selectedFinger,
     userId,
     registerMutate,

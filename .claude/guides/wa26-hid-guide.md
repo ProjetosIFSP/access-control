@@ -1,5 +1,17 @@
 # Guia de Integração com o Leitor Biométrico WA26
 
+> ⚠️ **Status: demonstração apenas — fora do fluxo de produção**
+>
+> Este guia foi escrito originalmente para utilizar o WA26 como leitor de cadastro de digitais via portal web. Após análise arquitetural, identificou-se que os templates gerados pelo WA26 (protocolo Boland proprietário) são **incompatíveis** com os templates gerados pelo ZN-53X (protocolo R30x / GROW), impossibilitando o matching cruzado entre os dois sensores.
+>
+> **O fluxo real de produção passou a ser:**
+> Terminal físico dedicado ESP32 + ZN-53X → extração do template via UploadTemplate (0x08) → transmissão via MQTT → sincronização para todos os controladores.
+> Ver `.claude/features/HARDWARE/hw-007-enrollment-terminal.md` e `.claude/test/enrollment-terminal/README.md`.
+>
+> O WA26 e o hook `useFingerprintReader` permanecem no codebase para **demonstração do modo `keyboard` e do modo `hid`** na interface web, mas não participam do fluxo de cadastro real de digitais.
+
+---
+
 > **Para quem é este guia?**
 > Este guia foi escrito para alguém que nunca mexeu com hardware USB ou leitores biométricos antes. Cada passo é explicado do zero, sem assumir conhecimento prévio. Siga na ordem — cada etapa depende da anterior.
 
@@ -364,6 +376,8 @@ Após completar todos os testes, preencha a tabela abaixo e salve junto com este
 
 | Arquivo | O que alterar |
 |---------|--------------|
-| `app/src/hooks/use-fingerprint-reader.ts` | Linha ~62: preencher `vendorId` e `productId` em `KNOWN_FINGERPRINT_FILTERS` |
+| `app/src/hooks/use-fingerprint-reader.ts` | Linha ~62: preencher `vendorId` e `productId` em `KNOWN_FINGERPRINT_FILTERS` (somente para demonstração do hook) |
 | `tcc/.claude/features/todo.md` | Marcar as tasks de hardware como concluídas após os testes |
 | `tcc/.claude/guides/wa26-hid-guide.md` | (este arquivo) Preencher a tabela de resultados do Passo 7 |
+
+> **Nota:** As alterações em `use-fingerprint-reader.ts` têm efeito apenas na demonstração da UI. O fluxo real de cadastro de digitais em produção usa o terminal ZN-53X — ver `.claude/test/enrollment-terminal/README.md`.

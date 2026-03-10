@@ -1,4 +1,4 @@
-import { and, eq } from "drizzle-orm";
+import { and, asc, eq } from "drizzle-orm";
 import { db } from "@/db";
 import { accessCredential } from "@/db/schema/access";
 
@@ -26,7 +26,7 @@ export async function listFingerprints(
 				eq(accessCredential.type, "FINGERPRINT"),
 			),
 		)
-		.orderBy(accessCredential.createdAt);
+		.orderBy(asc(accessCredential.createdAt));
 
 	return rows.map((row) => ({
 		id: row.id,

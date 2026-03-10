@@ -1,5 +1,5 @@
 import type { FastifyPluginAsyncZod } from "fastify-type-provider-zod";
-import { auth } from "@/lib/auth";
+import { requireAdmin } from "@/lib/require-admin";
 import { z } from "@/lib/zod";
 import { createBlock } from "@/services/room/create-block";
 import { deleteBlock } from "@/services/room/delete-block";
@@ -27,19 +27,7 @@ export const blockRoute: FastifyPluginAsyncZod = async (app) => {
 			},
 		},
 		async (request, reply) => {
-			const session = await auth.api
-				.getSession({
-					headers: new Headers(request.headers as Record<string, string>),
-				})
-				.catch(() => null);
-			if (!session?.user)
-				return reply
-					.status(401)
-					.send({ message: "Autenticacao necessaria." } as never);
-			if (!(session.user as Record<string, unknown>).isAdmin)
-				return reply
-					.status(403)
-					.send({ message: "Acesso restrito a administradores." } as never);
+			if (!(await requireAdmin(request, reply as never))) return;
 			const blocks = await getBlocks();
 			return reply.status(200).send(blocks);
 		},
@@ -57,19 +45,7 @@ export const blockRoute: FastifyPluginAsyncZod = async (app) => {
 			},
 		},
 		async (request, reply) => {
-			const session = await auth.api
-				.getSession({
-					headers: new Headers(request.headers as Record<string, string>),
-				})
-				.catch(() => null);
-			if (!session?.user)
-				return reply
-					.status(401)
-					.send({ message: "Autenticacao necessaria." } as never);
-			if (!(session.user as Record<string, unknown>).isAdmin)
-				return reply
-					.status(403)
-					.send({ message: "Acesso restrito a administradores." } as never);
+			if (!(await requireAdmin(request, reply as never))) return;
 			const { name } = request.body;
 			const created = await createBlock({ name });
 			return reply.status(201).send(created);
@@ -89,19 +65,7 @@ export const blockRoute: FastifyPluginAsyncZod = async (app) => {
 			},
 		},
 		async (request, reply) => {
-			const session = await auth.api
-				.getSession({
-					headers: new Headers(request.headers as Record<string, string>),
-				})
-				.catch(() => null);
-			if (!session?.user)
-				return reply
-					.status(401)
-					.send({ message: "Autenticacao necessaria." } as never);
-			if (!(session.user as Record<string, unknown>).isAdmin)
-				return reply
-					.status(403)
-					.send({ message: "Acesso restrito a administradores." } as never);
+			if (!(await requireAdmin(request, reply as never))) return;
 			const { id } = request.params;
 			const { name } = request.body;
 			const updated = await updateBlock({ id, name });
@@ -121,19 +85,7 @@ export const blockRoute: FastifyPluginAsyncZod = async (app) => {
 			},
 		},
 		async (request, reply) => {
-			const session = await auth.api
-				.getSession({
-					headers: new Headers(request.headers as Record<string, string>),
-				})
-				.catch(() => null);
-			if (!session?.user)
-				return reply
-					.status(401)
-					.send({ message: "Autenticacao necessaria." } as never);
-			if (!(session.user as Record<string, unknown>).isAdmin)
-				return reply
-					.status(403)
-					.send({ message: "Acesso restrito a administradores." } as never);
+			if (!(await requireAdmin(request, reply as never))) return;
 			const { id } = request.params;
 			await deleteBlock(id);
 			return reply.status(204).send();

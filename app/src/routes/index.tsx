@@ -1,7 +1,9 @@
 import { useQuery } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
 import { Search } from "lucide-react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { parseAsString, useQueryStates } from "nuqs";
+import { useDebounce } from "@/hooks/use-debounce";
 import {
   ToggleGroup,
   ToggleGroupItem,
@@ -12,7 +14,6 @@ import { FilterBar } from "@/components/ui/filter-bar";
 import { Input } from "@/components/ui/input";
 import { Kbd } from "@/components/ui/kbd";
 import { SelectFilter } from "@/components/ui/select-filter";
-import { useDebounce } from "@/hooks/use-debounce";
 import { useIsMac, useIsMobile as useIsMobileOS } from "@/hooks/use-os";
 import {
   roomsSummaryQueryOptions,
@@ -21,26 +22,24 @@ import {
 import type { RoomState } from "@/services/rooms/types";
 import { Footer } from "@/components/footer";
 
-// ── Query Params ──────────────────────────────────────────────────────────────
+// ── Constants ─────────────────────────────────────────────────────────────────
 
 const VALID_STATES = ["aberta", "fechada", "alerta"] as const;
+
+// ── Parsers ───────────────────────────────────────────────────────────────────
+
+const indexSearchParams = {
+  q: parseAsString.withDefault(""),
+  type: parseAsString.withDefault(""),
+  state: parseAsString.withDefault(""),
+};
 
 // ── Route ─────────────────────────────────────────────────────────────────────
 
 export const Route = createFileRoute("/")({
-  validateSearch: (search: Record<string, unknown>) => ({
-    q: typeof search.q === "string" ? search.q : undefined,
-    type: typeof search.type === "string" ? search.type : undefined,
-    state: VALID_STATES.includes(search.state as RoomState)
-      ? (search.state as RoomState)
-      : undefined,
-  }),
-  loaderDeps: ({ search: { q, type, state } }) => ({ q, type, state }),
-  loader: ({ context, deps: { q, type, state } }) =>
+  loader: ({ context }) =>
     Promise.all([
-      context.queryClient.ensureQueryData(
-        roomsSummaryQueryOptions({ q, type, state }),
-      ),
+      context.queryClient.ensureQueryData(roomsSummaryQueryOptions({})),
       context.queryClient.ensureQueryData(roomTypesQueryOptions),
     ]),
   component: RoomsPage,
@@ -49,29 +48,53 @@ export const Route = createFileRoute("/")({
 // ── Component ─────────────────────────────────────────────────────────────────
 
 function RoomsPage() {
-  const { q, type, state } = Route.useSearch();
-  const navigate = Route.useNavigate();
+  // URL state managed by nuqs — q reflects the committed (debounced) search.
+  const [params, setParams] = useQueryStates(indexSearchParams, {
+    history: "replace",
+    shallow: false,
+    clearOnDefault: true,
+  });
 
-  const [inputValue, setInputValue] = useState(q ?? "");
-  const debouncedQ = useDebounce(inputValue, 400);
-  const isMounted = useRef(false);
+  const { q, type, state } = params;
+
+  // inputValue drives the text field instantly; debouncedInput is used both
+  // to fire the query and to sync the URL — params.q is never read by the query.
+  const [inputValue, setInputValue] = useState(q);
+  const debouncedInput = useDebounce(inputValue, 500);
   const searchInputRef = useRef<HTMLInputElement>(null);
   const isMac = useIsMac();
   const isMobileOS = useIsMobileOS();
 
-  // Sync debounced search value → URL
+  // Commit debounced value to URL once typing stops.
   useEffect(() => {
-    if (!isMounted.current) {
-      isMounted.current = true;
-      return;
-    }
-    navigate({
-      search: (prev) => ({ ...prev, q: debouncedQ.trim() || undefined }),
-      replace: true,
-    });
-  }, [debouncedQ, navigate]);
+    setParams({ q: debouncedInput.trim() || "" });
+  }, [debouncedInput, setParams]);
 
-  // Shortcut Ctrl+K → focus search input
+  // Keep inputValue in sync when q changes externally (e.g. browser back/fwd)
+  useEffect(() => {
+    setInputValue(q);
+  }, [q]);
+
+  const setType = useCallback(
+    (value: string) => {
+      setParams({ type: value === "all" || !value ? null : value });
+    },
+    [setParams],
+  );
+
+  const setState = useCallback(
+    (value: string) => {
+      setParams({
+        state:
+          value === "all" || !value
+            ? null
+            : (value as (typeof VALID_STATES)[number]),
+      });
+    },
+    [setParams],
+  );
+
+  // Keyboard shortcut Ctrl/Cmd+K → focus search input
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if ((e.ctrlKey || e.metaKey) && e.key === "k") {
@@ -79,13 +102,16 @@ function RoomsPage() {
         searchInputRef.current?.focus();
       }
     };
-
     document.addEventListener("keydown", handleKeyDown);
     return () => document.removeEventListener("keydown", handleKeyDown);
   }, []);
 
   const { data, isLoading, isError, error } = useQuery(
-    roomsSummaryQueryOptions({ q, type, state }),
+    roomsSummaryQueryOptions({
+      q: debouncedInput.trim() || undefined,
+      type: type || undefined,
+      state: (state as RoomState) || undefined,
+    }),
   );
   const { data: roomTypesData } = useQuery(roomTypesQueryOptions);
 
@@ -100,29 +126,8 @@ function RoomsPage() {
   const totalRooms =
     data?.result.reduce((acc, b) => acc + b.rooms.length, 0) ?? 0;
 
-  const hasFilters = !!q?.trim() || !!type || !!state;
-
+  const hasFilters = !!debouncedInput.trim() || !!type || !!state;
   const activeFiltersCount = (type ? 1 : 0) + (state ? 1 : 0);
-
-  function setType(value: string) {
-    navigate({
-      search: (prev) => ({
-        ...prev,
-        type: value === "all" || !value ? undefined : value,
-      }),
-      replace: true,
-    });
-  }
-
-  function setState(value: string) {
-    navigate({
-      search: (prev) => ({
-        ...prev,
-        state: value === "all" || !value ? undefined : (value as RoomState),
-      }),
-      replace: true,
-    });
-  }
 
   const roomTypeOptions = useMemo(
     () =>
@@ -165,7 +170,7 @@ function RoomsPage() {
           <FilterBar activeCount={activeFiltersCount} panelOpen={false}>
             {/* Room type combobox */}
             <SelectFilter
-              value={type ?? "all"}
+              value={type || "all"}
               onValueChange={setType}
               placeholder="Tipo de sala"
               options={roomTypeOptions}
@@ -175,7 +180,7 @@ function RoomsPage() {
             {/* Door state toggle */}
             <ToggleGroup
               type="single"
-              value={state ?? "all"}
+              value={state || "all"}
               onValueChange={(v) => setState(v || "all")}
               variant="outline"
               className="bg-white dark:bg-zinc-950 flex-wrap"
