@@ -5,7 +5,11 @@ import {
   parseAsStringLiteral,
 } from "nuqs";
 
-import type { BlockSummary, RoomSummaryAdmin, RoomType } from "@/services/rooms/types";
+import type {
+  BlockSummary,
+  RoomSummaryAdmin,
+  RoomType,
+} from "@/services/rooms/types";
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 

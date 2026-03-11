@@ -1,17 +1,22 @@
 import { eq } from "drizzle-orm";
 import { db } from "@/db";
 import { doorController } from "@/db/schema/door";
-import { doorStateEnum } from "@/db/schema/enums";
+import { doorStateEnum, sensorProtocolEnum } from "@/db/schema/enums";
 import { room } from "@/db/schema/room";
 
 const DOOR_STATES = doorStateEnum.enumValues;
 
 type DoorState = (typeof DOOR_STATES)[number];
 
+const SENSOR_PROTOCOLS = sensorProtocolEnum.enumValues;
+type SensorProtocol = (typeof SENSOR_PROTOCOLS)[number];
+
 interface RegisterDoorControllerInput {
 	controllerId: string;
 	roomId: string;
 	firmwareVersion?: string;
+	sensorProtocol?: SensorProtocol;
+	sensorModel?: string;
 }
 
 interface RegisterDoorControllerResult {
@@ -19,6 +24,8 @@ interface RegisterDoorControllerResult {
 		id: string;
 		roomId: string;
 		firmwareVersion: string | null;
+		sensorProtocol: string | null;
+		sensorModel: string | null;
 		lastSeenAt: Date;
 	};
 }
@@ -26,7 +33,8 @@ interface RegisterDoorControllerResult {
 export async function registerDoorController(
 	input: RegisterDoorControllerInput,
 ): Promise<RegisterDoorControllerResult> {
-	const { controllerId, roomId, firmwareVersion } = input;
+	const { controllerId, roomId, firmwareVersion, sensorProtocol, sensorModel } =
+		input;
 	const now = new Date();
 
 	const [controller] = await db
@@ -35,6 +43,8 @@ export async function registerDoorController(
 			id: controllerId,
 			roomId,
 			firmwareVersion: firmwareVersion ?? null,
+			sensorProtocol: sensorProtocol ?? null,
+			sensorModel: sensorModel ?? null,
 			lastSeenAt: now,
 		})
 		.onConflictDoUpdate({
@@ -42,10 +52,19 @@ export async function registerDoorController(
 			set: {
 				roomId,
 				firmwareVersion: firmwareVersion ?? null,
+				...(sensorProtocol !== undefined ? { sensorProtocol } : {}),
+				...(sensorModel !== undefined ? { sensorModel } : {}),
 				lastSeenAt: now,
 			},
 		})
-		.returning();
+		.returning({
+			id: doorController.id,
+			roomId: doorController.roomId,
+			firmwareVersion: doorController.firmwareVersion,
+			sensorProtocol: doorController.sensorProtocol,
+			sensorModel: doorController.sensorModel,
+			lastSeenAt: doorController.lastSeenAt,
+		});
 
 	return {
 		controller,
@@ -68,7 +87,14 @@ export async function recordDoorHeartbeat(input: RecordDoorHeartbeatInput) {
 			...(firmwareVersion ? { firmwareVersion } : {}),
 		})
 		.where(eq(doorController.id, controllerId))
-		.returning();
+		.returning({
+			id: doorController.id,
+			roomId: doorController.roomId,
+			firmwareVersion: doorController.firmwareVersion,
+			sensorProtocol: doorController.sensorProtocol,
+			sensorModel: doorController.sensorModel,
+			lastSeenAt: doorController.lastSeenAt,
+		});
 
 	return controller ?? null;
 }

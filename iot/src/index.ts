@@ -14,6 +14,8 @@ import websocketStream from "websocket-stream";
 import WebSocket, { WebSocketServer } from "ws";
 import z from "zod";
 
+type HttpMethod = "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
+
 loadEnv();
 
 const logger = pino({
@@ -38,9 +40,13 @@ type CredentialType = (typeof credentialTypeValues)[number];
 type CommandType = (typeof commandTypeValues)[number];
 type CommandAckStatus = (typeof commandAckStatusValues)[number];
 
+const sensorProtocolValues = ["R30X", "BOLAND"] as const;
+
 const registerPayloadSchema = z.object({
 	roomId: z.string().min(1),
 	firmwareVersion: z.string().min(1).optional(),
+	sensorProtocol: z.enum(sensorProtocolValues).optional(),
+	sensorModel: z.string().min(1).optional(),
 });
 
 const heartbeatPayloadSchema = z
@@ -105,6 +111,8 @@ const apiRegisterResponseSchema = z.object({
 		id: z.string(),
 		roomId: z.string(),
 		firmwareVersion: z.string().nullable(),
+		sensorProtocol: z.string().nullable(),
+		sensorModel: z.string().nullable(),
 		lastSeenAt: z.string(),
 	}),
 });
@@ -199,11 +207,13 @@ async function handleRegister(controllerId: string, payload: string) {
 	const parsed = safeParseJson(payload);
 	const data = registerPayloadSchema.parse(parsed);
 	const response = await callApi(
-		`/iot/devices/register`,
+		"PUT",
+		`/iot/devices/${controllerId}`,
 		JSON.stringify({
-			controllerId,
 			roomId: data.roomId,
 			firmwareVersion: data.firmwareVersion,
+			sensorProtocol: data.sensorProtocol,
+			sensorModel: data.sensorModel,
 		}),
 	);
 
@@ -212,6 +222,8 @@ async function handleRegister(controllerId: string, payload: string) {
 		{
 			controllerId,
 			roomId: registerResponse.controller.roomId,
+			sensorProtocol: registerResponse.controller.sensorProtocol,
+			sensorModel: registerResponse.controller.sensorModel,
 		},
 		"Controller registered",
 	);
@@ -223,7 +235,7 @@ async function handleHeartbeat(controllerId: string, payload: string) {
 	const parsed = safeParseJson(payload);
 	const data = heartbeatPayloadSchema.parse(parsed);
 
-	await callApi(`/iot/devices/${controllerId}/heartbeat`, JSON.stringify(data));
+	await callApi("PATCH", `/iot/devices/${controllerId}/heartbeat`, JSON.stringify(data));
 	ensureCommandPolling(controllerId);
 }
 
@@ -232,6 +244,7 @@ async function handleStatus(controllerId: string, payload: string) {
 	const data = statusPayloadSchema.parse(parsed);
 
 	const response = await callApi(
+		"PUT",
 		`/iot/devices/${controllerId}/status`,
 		JSON.stringify({
 			doorState: data.doorState,
@@ -257,7 +270,8 @@ async function handleAccessAttempt(controllerId: string, payload: string) {
 	const data = accessAttemptPayloadSchema.parse(parsed);
 
 	const response = await callApi(
-		`/iot/devices/${controllerId}/access-attempt`,
+		"POST",
+		`/iot/devices/${controllerId}/access-attempts`,
 		JSON.stringify({
 			credentialType: data.credentialType,
 			credentialValue: data.credentialValue,
@@ -288,6 +302,7 @@ async function handleCommandResult(controllerId: string, payload: string) {
 	const data = commandAckPayloadSchema.parse(parsed);
 
 	await callApi(
+		"PATCH",
 		`/iot/devices/${controllerId}/commands/${data.commandId}/ack`,
 		JSON.stringify({
 			status: data.status,
@@ -310,22 +325,22 @@ function safeParseJson(payload: string) {
 	}
 }
 
-async function callApi(path: string, body?: string) {
+async function callApi(method: HttpMethod, path: string, body?: string) {
 	const headers = new Headers();
-	if (body) {
+	if (body && method !== "GET") {
 		headers.set("content-type", "application/json");
 	}
 
 	const response = await fetch(`${API_BASE_URL}${path}`, {
-		method: "POST",
+		method,
 		headers,
-		body,
+		body: method !== "GET" ? body : undefined,
 	});
 
 	if (!response.ok) {
 		const errorPayload = await response.text();
 		throw new Error(
-			`API request failed (${response.status}): ${errorPayload || response.statusText}`,
+			`API request failed (${method} ${path} → ${response.status}): ${errorPayload || response.statusText}`,
 		);
 	}
 
@@ -341,7 +356,7 @@ async function callApi(path: string, body?: string) {
 	try {
 		return JSON.parse(text);
 	} catch (error) {
-		logger.warn({ path, body, text }, "Received non-JSON response");
+		logger.warn({ method, path, body, text }, "Received non-JSON response");
 		return {};
 	}
 }
@@ -389,8 +404,8 @@ function ensureCommandPolling(controllerId: string) {
 
 async function pollCommands(controllerId: string) {
 	const response = await callApi(
-		`/iot/devices/${controllerId}/commands/pull`,
-		JSON.stringify({ limit: 5 }),
+		"GET",
+		`/iot/devices/${controllerId}/commands?limit=5`,
 	);
 
 	const parsed = commandResponseSchema.parse(response);
@@ -408,6 +423,7 @@ async function pollCommands(controllerId: string) {
 async function enqueueUnlockCommand(controllerId: string) {
 	try {
 		await callApi(
+			"POST",
 			`/iot/devices/${controllerId}/commands`,
 			JSON.stringify({
 				type: "UNLOCK",

@@ -5,6 +5,12 @@ export const credentialTypeEnum = pgEnum("credential_type", [
 	"NFC_TAG",
 ]);
 
+// Protocolo do sensor biométrico — determina compatibilidade de templates
+export const sensorProtocolEnum = pgEnum("sensor_protocol", [
+	"R30X",   // protocolo GROW/ZN-53X/A21 UART — padrão do projeto
+	"BOLAND", // protocolo proprietário Boland (WA26 USB) — apenas demonstração
+]);
+
 export const fingerKeyEnum = pgEnum("finger_key", [
 	"right_thumb",
 	"right_index",

@@ -13,6 +13,7 @@ import { getControllerAccessLogs } from "@/services/iot/get-controller-access-lo
 import { getControllerCommands } from "@/services/iot/get-controller-commands";
 import { getDoorControllers } from "@/services/iot/get-door-controllers";
 
+
 const commandTypeValues = doorCommandTypeEnum.enumValues as [
 	(typeof doorCommandTypeEnum.enumValues)[number],
 	...(typeof doorCommandTypeEnum.enumValues)[number][],
@@ -103,7 +104,7 @@ const accessLogEntrySchema = z.object({
 });
 
 const controllerAccessLogsResponseSchema = z.object({
-	roomId: z.string().uuid(),
+	roomId: z.string().uuid().nullable(),
 	logs: z.array(accessLogEntrySchema),
 });
 
@@ -211,6 +212,8 @@ const controllerNotFoundExample = {
 	error: "Controller not found" as const,
 	code: "CONTROLLER_NOT_FOUND" as const,
 };
+
+
 
 export const doorRoute: FastifyPluginAsyncZod = async (app) => {
 	app.get(

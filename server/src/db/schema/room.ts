@@ -5,6 +5,7 @@ import {
 	doorCommandStatusEnum,
 	doorCommandTypeEnum,
 	doorStateEnum,
+	sensorProtocolEnum,
 } from "./enums";
 
 // Tabela para agrupar salas, ex: "Prédio A", "Andar 3"
@@ -49,13 +50,25 @@ export const room = pgTable("room", {
 });
 
 // Tabela para gerenciar os dispositivos físicos (ESP32)
+// Cada controlador opera em modo fechadura (padrão) ou modo terminal (temporário, via MQTT).
+// O modo é um estado de runtime do firmware — não é propriedade do banco.
 export const doorController = pgTable("door_controller", {
 	// Pode ser o MAC Address ou outro identificador único do hardware
 	id: text("id").primaryKey(),
+
+	// Todo controlador está associado a uma sala.
+	// O modo terminal é ativado temporariamente via MQTT — a sala permanece associada.
 	roomId: text("room_id")
 		.notNull()
 		.unique()
 		.references(() => room.id, { onDelete: "cascade" }),
+
+	// Modelo e protocolo do sensor biométrico instalado neste dispositivo.
+	// Determina a compatibilidade de templates — só dispositivos com o mesmo
+	// sensorProtocol podem trocar templates entre si.
+	sensorProtocol: sensorProtocolEnum("sensor_protocol"),
+	sensorModel: text("sensor_model"), // ex: "ZN-53X", "A21", "WA26"
+
 	firmwareVersion: text("firmware_version"),
 	lastSeenAt: timestamp("last_seen_at").notNull().defaultNow(),
 });

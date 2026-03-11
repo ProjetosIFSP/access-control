@@ -31,14 +31,15 @@ import type {
 } from "@/services/rooms/types";
 import { currentUserQueryOptions } from "@/services/users";
 
-import { RoomsDialogs } from "./_dialogs";
-import { RoomsHeader } from "./_header";
-import { RoomsSidePanel } from "./_side-panel";
-import { TabBlocks } from "./_tab-blocks";
-import { TabRooms } from "./_tab-rooms";
-import { TabRoomTypes } from "./_tab-types";
-import { RoomsTabs } from "./_tabs";
-import { RoomsToolbar } from "./_toolbar";
+import { RoomsDialogs } from "./-dialogs";
+import { RoomsHeader } from "./-header";
+import { RoomsSidePanel } from "./-side-panel";
+import { TabBlocks } from "./-tab-blocks";
+import { TabRooms } from "./-tab-rooms";
+
+import { TabRoomTypes } from "./-tab-types";
+import { RoomsTabs } from "./-tabs";
+import { RoomsToolbar } from "./-toolbar";
 import { PAGE_SIZE, roomsSearchParams } from "./types";
 import type { ActiveTab, PanelMode } from "./types";
 

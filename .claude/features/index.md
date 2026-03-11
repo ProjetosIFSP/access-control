@@ -34,11 +34,11 @@
 | PERM-003  | Permissão perfil → sala                               | ✅     | `profile_room_permission`                                                   |
 | PERM-004  | Permissão perfil → tipo de sala                       | ✅     | `profile_room_type_permission`                                              |
 | PERM-005  | Verificação de acesso unificada no fluxo IoT          | 🔧     | `processAccessAttempt` só verifica PERM-001; PERM-002/003/004 ignorados     |
-| CRED-001  | Gestão de credenciais físicas — digitais (FINGERPRINT)| 🔧     | Endpoints REST prontos; fluxo real via terminal ZN-53X (HW-007); WA26 descartado do fluxo de produção |
+| CRED-001  | Gestão de credenciais físicas — digitais (FINGERPRINT)| 🔧     | Endpoints REST prontos; fluxo real via terminal ZN-53X (HW-007); WA26 descartado; `enrolledByControllerId` adicionado ao schema para rastreio de dispositivo de captura |
 | CRED-002  | Gestão de credenciais físicas — RFID (NFC_TAG)        | ⬜     | Tabela existe, sem endpoints de cadastro NFC                                |
 | LOG-001   | Registro de log de acessos (GRANTED / DENIED)         | ✅     | Tabela `access_log` populada pelo fluxo IoT                                 |
 | LOG-002   | Endpoint de consulta de histórico de acessos          | ⬜     | Sem rota `GET /access-logs`; bloqueia UI-010                                |
-| DOOR-001  | Registro e heartbeat de controladores                 | ✅     | `PUT /iot/devices/:id` e `PATCH .../heartbeat`                              |
+| DOOR-001  | Registro e heartbeat de controladores                 | ✅     | `PUT /iot/devices/:id` e `PATCH .../heartbeat`; payload aceita `sensorProtocol` e `sensorModel`; `roomId` NOT NULL (sem terminais dedicados) |
 | DOOR-002  | Atualização de status de porta                        | ✅     | `PUT /iot/devices/:id/status`                                               |
 | DOOR-003  | Fila de comandos (UNLOCK, LOCK, SYNC_STATE)           | ✅     | Criar, pull, ACK com expiração automática                                   |
 
@@ -50,7 +50,7 @@
 |----------|-------------------------------------------------------|--------|--------------------------------------------------------------------------|
 | MQTT-001 | Broker MQTT TCP (Aedes) — porta 1883                  | ✅     | Funcional                                                                |
 | MQTT-002 | Broker MQTT WebSocket — porta 9001                    | ✅     | Funcional                                                                |
-| MQTT-003 | Tópico `door/{id}/register`                           | ✅     | Registra controlador e inicia polling de comandos                        |
+| MQTT-003 | Tópico `door/{id}/register`                           | ✅     | Registra controlador (com `sensorProtocol`/`sensorModel`) e inicia polling de comandos |
 | MQTT-004 | Tópico `door/{id}/heartbeat`                          | ✅     | Atualiza `lastSeenAt`                                                    |
 | MQTT-005 | Tópico `door/{id}/status`                             | ✅     | Atualiza `doorState` e `isLocked`                                        |
 | MQTT-006 | Tópico `door/{id}/access-attempt`                     | 🔧     | Processa credencial mas ignora permissões por tipo/perfil (PERM-005)     |
@@ -70,7 +70,7 @@
 | UI-002 | Cards de sala com estado, usuário atual/último e timestamp      | ✅     | Visibilidade condicional por autenticação                                 |
 | UI-003 | Página `/users` — CRUD de usuários (admin)                      | ✅     | Split-view, busca, pré-carregamento                                       |
 | UI-004 | Página `/profiles` — CRUD de perfis (admin)                     | ✅     | Split-view, busca                                                         |
-| UI-005 | Página `/rooms` — CRUD de salas e blocos (admin)                | ✅     | Split-view com abas Salas/Blocos                                          |
+| UI-005 | Página `/rooms` — CRUD de salas e blocos (admin)                | ✅     | Split-view com abas Salas/Blocos/Tipos                                    |
 | UI-006 | Formulário de usuário com seleção de permissões                 | ✅     | Perfis, tipos de sala, salas diretas com deduplicação visual              |
 | UI-007 | Formulário de perfil com seleção de permissões                  | ✅     | Tipos de sala e salas diretas com badges readonly                         |
 | UI-008 | `MultiSelect` com `readonlyBadges` e tooltips (delay 300ms)     | ✅     | `ProfileTooltipContent`, `RoomTypeTooltipContent`                         |
@@ -84,6 +84,7 @@
 | UI-016 | Monitoramento em tempo real do estado das salas                 | ⬜     | Polling curto ou WebSocket                                                |
 | UI-017 | Paginação nas tabelas de admin                                  | ⬜     | Usuários, salas, logs                                                     |
 | UI-018 | Navbar sticky                                                   | ⬜     | Não implementado                                                          |
+| UI-019 | Seletor de fechadura no drawer de digitais (`FingerprintHandDrawer`) | ⬜ | Botão "Cadastrar via Fechadura" com dropdown de fechaduras online; spinner com countdown do TTL; polling de `GET /iot/enrollment/:id/status`; substitui aba "Terminais" removida |
 
 ---
 
@@ -97,7 +98,8 @@
 | HW-004 | Controle do relé da fechadura solenoide             | ⬜     | Hardware ainda não adquirido                                                 |
 | HW-005 | Detecção de estado da porta (reed switch / SCT-013) | 🔧     | SCT-013 testado no firmware de teste; reed switch como botão simulado        |
 | HW-006 | Protocolo de reconexão e fallback offline           | ⬜     | Não implementado                                                             |
-| HW-007 | Terminal de enrollment biométrico (ZN-53X + ESP32)  | ⬜     | Arquitetura definida; guia de testes em `.claude/test/enrollment-terminal/`  |
+| HW-007 | Modo terminal de enrollment nas próprias fechaduras (ZN-53X + ESP32) | ⬜ | Toda fechadura alterna entre modo fechadura (padrão) e modo terminal via MQTT; sem dispositivo dedicado; `sensorProtocol`, `sensorModel` e `enrolledByControllerId` no schema; `role` removido do `door_controller`; `roomId` NOT NULL |
+| HW-008 | Offline-first nas fechaduras (N últimas credenciais)| ⬜     | Política definida em `.claude/features/HARDWARE/hw-008-offline-first.md`; matching local sempre primeiro; eviction por `lastUsedAt`; log offline via LittleFS |
 
 ---
 
@@ -115,9 +117,12 @@
 ## Próximas prioridades
 
 1. **PERM-005 / MQTT-006** — Unificar verificação de acesso no `processAccessAttempt` com `verifyAccess`
-2. **HW-007** — Validar compatibilidade ZN-53X + fluxo de enrollment (guia em `.claude/test/enrollment-terminal/`)
-3. **LOG-002** — Endpoint `GET /access-logs` com filtros (sala, usuário, período, status)
-4. **UI-010** — Página de histórico de acessos (depende de LOG-002)
-5. **HW-001** — Modularizar firmware base ESP32S em `core/` (PlatformIO)
-6. **CRED-002** — Endpoints de cadastro de NFC_TAG por usuário
-7. **UI-016** — Monitoramento em tempo real (WebSocket ou polling curto no frontend)
+2. **Schema** — Reverter `role` e `roomId nullable` do `door_controller`; gerar migration com campos corretos (`sensorProtocol`, `sensorModel`, `enrolledByControllerId`); criar tabelas `enrollment_request` e `controller_credential_slot`
+3. **HW-007** — Validar compatibilidade ZN-53X + fluxo de enrollment em modo terminal (guia em `.claude/test/enrollment-terminal/`)
+4. **LOG-002** — Endpoint `GET /access-logs` com filtros (sala, usuário, período, status)
+5. **UI-010** — Página de histórico de acessos (depende de LOG-002)
+6. **HW-001** — Modularizar firmware base ESP32S em `core/` (PlatformIO)
+7. **CRED-002** — Endpoints de cadastro de NFC_TAG por usuário
+8. **UI-016** — Monitoramento em tempo real (WebSocket ou polling curto no frontend)
+9. **UI-019** — Seletor de fechadura no drawer de digitais (após endpoints de enrollment no backend)
+10. **HW-008** — Offline-first: timeout MQTT + concessão local + log offline (após HW-002 funcional)

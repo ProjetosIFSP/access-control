@@ -148,6 +148,12 @@ Broker MQTT baseado em Aedes (Node.js). Recebe mensagens dos controladores físi
 | `door/{id}/access-result` | Broker → Device | Decisão GRANTED/DENIED |
 | `door/{id}/command` | Broker → Device | Comando (UNLOCK/LOCK/SYNC_STATE) |
 | `door/{id}/command-result` | Device → Broker | ACK do comando executado |
+| `door/{id}/enter-enrollment-mode` | Broker → Device | Coloca a fechadura em modo terminal temporário para captura biométrica |
+| `door/{id}/cancel-enrollment` | Broker → Device | Cancela enrollment em andamento e retorna ao modo fechadura |
+| `door/{id}/enrollment-result` | Device → Broker | Template capturado (hex 512 chars) + status (`SUCCESS`/`FAILED`/`EXPIRED`) |
+| `door/{id}/sync-credentials` | Broker → Device | Envia lista de templates para carregar nos slots do ZN-53X |
+| `door/{id}/sync-result` | Device → Broker | Confirma slots carregados (e evictados) |
+| `door/{id}/delete-credential` | Broker → Device | Remove template de um slot específico do ZN-53X |
 
 **Tecnologias:**
 | Lib | Uso |
@@ -184,26 +190,54 @@ Firmware para microcontroladores ESP32S (e futuramente ESP8266) que atuam como c
 | Relé | 5V 1 canal | Acionamento da fechadura |
 | Fechadura | Solenoide 12V | Atuador eletromecânico |
 
+**Modos de operação do dispositivo:**
+
+Cada controlador opera em um de dois modos, alternável remotamente via MQTT:
+
+- **Modo Fechadura** (padrão): processa acessos normais, controla o relé
+- **Modo Terminal** (temporário, TTL ~2 min): captura template biométrico para enrollment; ignora tentativas de acesso; retorna ao modo fechadura automaticamente após concluir ou expirar
+
 **Fluxo de operação do dispositivo:**
 ```
 Inicialização
     │
     ├─► Conectar Wi-Fi
     ├─► Conectar MQTT broker
-    ├─► Publicar door/{id}/register
+    ├─► Publicar door/{id}/register  (com sensorProtocol e sensorModel)
     │
-    └─► Loop principal
+    └─► Loop principal — MODO FECHADURA
             │
             ├─► [30s] Publicar door/{id}/heartbeat
             ├─► [500ms] Ler estado da porta → door/{id}/status
             ├─► [evento] Leitura biométrica/RFID
             │       └─► Publicar door/{id}/access-attempt
-            │               └─► Aguardar door/{id}/access-result
+            │               └─► Aguardar door/{id}/access-result (timeout 3s)
             │                       ├─► GRANTED → acionar relé (UNLOCK)
-            │                       └─► DENIED → feedback negativo
-            └─► [evento] Receber door/{id}/command
-                    └─► Executar (UNLOCK/LOCK/SYNC_STATE)
-                            └─► Publicar door/{id}/command-result
+            │                       ├─► DENIED  → feedback negativo
+            │                       └─► TIMEOUT → concessão offline (HW-008)
+            ├─► [evento] Receber door/{id}/command
+            │       └─► Executar (UNLOCK/LOCK/SYNC_STATE)
+            │               └─► Publicar door/{id}/command-result
+            ├─► [evento] Receber door/{id}/enter-enrollment-mode
+            │       └─► Mudar para MODO TERMINAL (ver abaixo)
+            └─► [evento] Receber door/{id}/sync-credentials
+                    └─► Carregar templates nos slots do ZN-53X
+                            └─► Publicar door/{id}/sync-result
+
+    Loop principal — MODO TERMINAL (temporário)
+            │
+            ├─► LED azul pulsante (aguardando dedo)
+            ├─► Ignora tentativas de acesso normais (relé permanece inativo)
+            ├─► [evento] Captura 2 passagens do dedo
+            │       └─► createModel() → getModel() (UploadTemplate 0x08)
+            │               └─► Extrair 256 bytes → hex 512 chars
+            │                       └─► Publicar door/{id}/enrollment-result
+            │                               └─► Retornar ao MODO FECHADURA
+            ├─► [evento] Receber door/{id}/cancel-enrollment
+            │       └─► Retornar ao MODO FECHADURA imediatamente
+            └─► [timeout expiresAt atingido]
+                    └─► Publicar enrollment-result (status: EXPIRED)
+                            └─► Retornar ao MODO FECHADURA
 ```
 
 ---
@@ -224,10 +258,15 @@ user ──────────────────── account (bette
                                                           block (bloco)
 
 room ──── door_controller ──── door_command
+                    │               │
+                    │          controller_credential_slot ──── access_credential
                     │
                     └── access_log ──── access_credential (finger/NFC)
                                               │
                                           user
+
+enrollment_request ──── door_controller (controller_id)
+enrollment_request ──── user
 ```
 
 **Tabelas principais:**
@@ -244,14 +283,16 @@ room ──── door_controller ──── door_command
 | `profile_room_permission` | Permissão: perfil → sala |
 | `profile_room_type_permission` | Permissão: perfil → tipo de sala |
 | `user_profile` | Vínculo usuário ↔ perfil |
-| `door_controller` | Controlador físico vinculado a uma sala |
+| `door_controller` | Controlador físico vinculado a uma sala; campos `sensorProtocol` e `sensorModel` identificam o hardware biométrico |
 | `door_command` | Fila de comandos para controladores |
-| `access_credential` | Credenciais físicas (FINGERPRINT / NFC_TAG) |
+| `access_credential` | Credenciais físicas (FINGERPRINT / NFC_TAG); campo `enrolledByControllerId` rastreia qual fechadura capturou a digital |
 | `access_log` | Histórico de tentativas de acesso |
+| `controller_credential_slot` | Mapeia slotId do ZN-53X → credentialId por controlador; inclui `lastUsedAt` para política de eviction (HW-008) |
+| `enrollment_request` | Rastreia enrollments biométricos em andamento (TTL ~2 min); vinculado a um `door_controller` específico que opera em modo terminal |
 
 ---
 
-## Verificação de Acesso (fluxo IoT)
+## Verificação de Acesso (fluxo IoT — Modo Fechadura)
 
 Quando um dispositivo publica `door/{id}/access-attempt` com uma credencial:
 
@@ -276,6 +317,39 @@ Quando um dispositivo publica `door/{id}/access-attempt` com uma credencial:
 
 > ⚠️ **Gap atual (PERM-005):** `processAccessAttempt` verifica apenas PERM-001.
 > A integração com `verifyAccess` (que cobre os 4 níveis) ainda não foi feita.
+
+---
+
+## Enrollment Biométrico (fluxo IoT — Modo Terminal)
+
+Quando o admin inicia o cadastro de uma digital, a fechadura escolhida alterna para modo terminal temporariamente:
+
+```
+1. Admin clica em "Cadastrar via Fechadura" no portal → seleciona uma sala/fechadura online
+2. Portal chama POST /users/:id/fingerprints/enroll-request  { finger, controllerId }
+3. Backend cria enrollment_request (status: PENDING, TTL: 2 min)
+4. Backend publica door/{controllerId}/enter-enrollment-mode
+   payload: { enrollmentId, userId, finger, expiresAt }
+5. Fechadura entra em MODO TERMINAL:
+    ├── LED azul pulsante
+    ├── Ignora tentativas de acesso normais
+    └── Captura 2 passagens do dedo via ZN-53X
+            └── createModel() → getModel() (UploadTemplate 0x08)
+                    └── Extrai 256 bytes → hex 512 chars
+6. Fechadura publica door/{controllerId}/enrollment-result
+   payload: { enrollmentId, template: "hex...", quality: 85, status: "SUCCESS" }
+7. Fechadura retorna ao MODO FECHADURA imediatamente
+8. Broker chama POST /iot/enrollment/complete no backend
+9. Backend valida enrollmentId → insere access_credential
+   (enrolledByControllerId = controllerId da fechadura que capturou)
+10. Backend dispara sync para todos os controladores com mesmo sensorProtocol:
+    Publica door/{id}/sync-credentials para cada um
+    ├── Incluindo a própria fechadura que realizou o enrollment
+    └── Excluindo controladores com sensorProtocol diferente
+11. Cada controlador carrega o template via storeModel() e confirma com sync-result
+12. Backend atualiza controller_credential_slot com slotId e syncedAt
+13. Portal confirma o cadastro (polling GET /iot/enrollment/:id/status)
+```
 
 ---
 

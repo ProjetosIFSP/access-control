@@ -3,7 +3,7 @@ import { fingerKeyEnum } from "./enums";
 import { v7 as uuidv7 } from "uuid";
 import { user } from "./auth";
 import { accessStatusEnum, credentialTypeEnum } from "./enums";
-import { room, roomType } from "./room";
+import { doorController, room, roomType } from "./room";
 
 // Tabela de Credenciais de Acesso (Digitais, Tags NFC)
 export const accessCredential = pgTable("access_credential", {
@@ -16,6 +16,16 @@ export const accessCredential = pgTable("access_credential", {
 	type: credentialTypeEnum("type").notNull(),
 	value: text("value").notNull().unique(), // Identificador da digital/tag
 	finger: fingerKeyEnum("finger"), // nullable — NFC credentials don't have a finger
+
+	// Controlador físico (terminal de enrollment ou leitor USB) que capturou
+	// esta credencial. Nulo apenas para credenciais importadas manualmente.
+	// Determina indiretamente o sensorProtocol — só fechaduras com o mesmo
+	// protocolo receberão o sync desta credencial.
+	enrolledByControllerId: text("enrolled_by_controller_id").references(
+		() => doorController.id,
+		{ onDelete: "set null" },
+	),
+
 	isActive: boolean("is_active").notNull().default(true),
 	createdAt: timestamp("created_at", { withTimezone: true })
 		.notNull()

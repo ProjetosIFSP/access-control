@@ -52,10 +52,15 @@ const accessStatusSchema = z.enum(accessStatusValues);
 
 const jsonRecordSchema = z.record(z.string(), z.unknown());
 
+const sensorProtocolValues = ["R30X", "BOLAND"] as const;
+const sensorProtocolSchema = z.enum(sensorProtocolValues).nullable();
+
 const controllerSummarySchema = z.object({
 	id: z.string(),
 	roomId: z.string().uuid(),
 	firmwareVersion: z.string().nullable(),
+	sensorProtocol: sensorProtocolSchema,
+	sensorModel: z.string().nullable(),
 	lastSeenAt: z.string().datetime(),
 });
 
@@ -131,6 +136,8 @@ const registerControllerResponseExample: z.infer<
 		id: sampleControllerId,
 		roomId: sampleRoomId,
 		firmwareVersion: "1.2.3",
+		sensorProtocol: "R30X",
+		sensorModel: "ZN-53X",
 		lastSeenAt: "2025-02-20T14:31:12.000Z",
 	},
 };
@@ -209,6 +216,8 @@ export const iotRoute: FastifyPluginAsyncZod = async (app) => {
 				body: z.object({
 					roomId: z.string().min(1),
 					firmwareVersion: z.string().min(1).optional(),
+					sensorProtocol: z.enum(sensorProtocolValues).optional(),
+					sensorModel: z.string().min(1).optional(),
 				}),
 				tags: ["iot"],
 				summary: "Registrar ou atualizar controlador",
@@ -223,6 +232,8 @@ export const iotRoute: FastifyPluginAsyncZod = async (app) => {
 				bodyExample: {
 					roomId: sampleRoomId,
 					firmwareVersion: "1.2.3",
+					sensorProtocol: "R30X",
+					sensorModel: "ZN-53X",
 				},
 				responseExamples: {
 					200: registerControllerResponseExample,
@@ -231,17 +242,25 @@ export const iotRoute: FastifyPluginAsyncZod = async (app) => {
 		},
 		async (request, reply) => {
 			const { controllerId } = request.params;
-			const { roomId, firmwareVersion } = request.body;
+			const { roomId, firmwareVersion, sensorProtocol, sensorModel } =
+				request.body;
 			const result = await registerDoorController({
 				controllerId,
 				roomId,
 				firmwareVersion,
+				sensorProtocol,
+				sensorModel,
 			});
 			const payload: z.infer<typeof registerControllerResponseSchema> = {
 				controller: {
 					id: result.controller.id,
 					roomId: result.controller.roomId,
 					firmwareVersion: result.controller.firmwareVersion,
+					sensorProtocol:
+						(result.controller.sensorProtocol as
+							| (typeof sensorProtocolValues)[number]
+							| null) ?? null,
+					sensorModel: result.controller.sensorModel ?? null,
 					lastSeenAt: result.controller.lastSeenAt.toISOString(),
 				},
 			};
@@ -306,6 +325,11 @@ export const iotRoute: FastifyPluginAsyncZod = async (app) => {
 					id: controller.id,
 					roomId: controller.roomId,
 					firmwareVersion: controller.firmwareVersion,
+					sensorProtocol:
+						(controller.sensorProtocol as
+							| (typeof sensorProtocolValues)[number]
+							| null) ?? null,
+					sensorModel: controller.sensorModel ?? null,
 					lastSeenAt: controller.lastSeenAt.toISOString(),
 				},
 			};

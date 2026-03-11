@@ -29,13 +29,13 @@ import {
 } from "@/services/users";
 import type { UserSummary } from "@/services/users/types";
 
-import { UsersDialogs } from "./_dialogs";
-import { UsersPageHeader } from "./_header";
-import { UsersSidePanel } from "./_side-panel";
-import { UsersTabs } from "./_tabs";
-import { TabProfiles } from "./_tab-profiles";
-import { UsersTab } from "./_tab-users";
-import { UsersToolbar } from "./_toolbar";
+import { UsersDialogs } from "./-dialogs";
+import { UsersPageHeader } from "./-header";
+import { UsersSidePanel } from "./-side-panel";
+import { UsersTabs } from "./-tabs";
+import { TabProfiles } from "./-tab-profiles";
+import { UsersTab } from "./-tab-users";
+import { UsersToolbar } from "./-toolbar";
 import { PAGE_SIZE, usersSearchParams } from "./types";
 import type { ActiveTab, PanelMode } from "./types";
 

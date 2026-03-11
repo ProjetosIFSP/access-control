@@ -1,7 +1,7 @@
 import dayjs from "dayjs";
 import { client, db } from ".";
 import { user } from "./schema/auth";
-import { block, room, roomType } from "./schema/room";
+import { block, doorController, room, roomType } from "./schema/room";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -159,10 +159,47 @@ async function seed() {
 		}
 	}
 
-	await db.insert(room).values(rooms);
+	const roomReturning = await db.insert(room).values(rooms).returning();
+
+	// ── Door Controllers ──────────────────────────────────────────────────────
+	// Simula controladores físicos instalados nas primeiras salas de cada bloco.
+	// Em produção, os controladores se auto-registram via MQTT ao inicializar.
+
+	const controllerSeeds: {
+		id: string;
+		roomId: string;
+		sensorProtocol: "R30X" | "BOLAND";
+		sensorModel: string;
+		firmwareVersion: string;
+		lastSeenAt: Date;
+	}[] = [];
+
+	// Instala um controlador nas 3 primeiras salas de cada bloco (12 no total)
+	const roomsPerBlock = rooms.length / blockReturning.length; // 22 por bloco
+	for (let b = 0; b < blockReturning.length; b++) {
+		for (let r = 0; r < 3; r++) {
+			const roomIndex = b * roomsPerBlock + r;
+			const roomRecord = roomReturning[roomIndex];
+			if (!roomRecord) continue;
+
+			const minutesOffset = b * 3 + r;
+			controllerSeeds.push({
+				id: `esp32-${blockLetters[b].toLowerCase()}${String(r + 1).padStart(2, "0")}`,
+				roomId: roomRecord.id,
+				sensorProtocol: "R30X",
+				sensorModel: "ZN-53X",
+				firmwareVersion: "1.0.0",
+				lastSeenAt: minutesAgo(minutesOffset + 1),
+			});
+		}
+	}
+
+	if (controllerSeeds.length > 0) {
+		await db.insert(doorController).values(controllerSeeds);
+	}
 
 	console.log(
-		`✅ Seed concluído: ${rooms.length} salas criadas em ${blockReturning.length} blocos.`,
+		`✅ Seed concluído: ${rooms.length} salas em ${blockReturning.length} blocos, ${controllerSeeds.length} controladores instalados.`,
 	);
 }
 

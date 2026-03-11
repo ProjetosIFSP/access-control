@@ -2,6 +2,283 @@
 
 ---
 
+## PERM-005 + INFRA-IOT-001 — Verificação de Acesso Unificada + Broker IoT Corrigido
+
+**Data:** Sessão de correção de bugs e fluxo IoT com sensorProtocol/sensorModel
+**Escopo:** `server/src/services/iot/access.ts`, `server/src/services/permissions/`, `server/src/api/routes/iot.ts`, `server/src/services/iot/door-controller.ts`, `server/src/db/seed.ts`, `iot/src/index.ts`
+
+### PERM-005 — Verificação de Acesso Unificada (confirmado resolvido)
+
+**Status:** Confirmado por inspeção de código — `processAccessAttempt` já chamava `checkUserRoomAccess` com os 4 níveis de permissão. O bug estava anotado como pendente mas já havia sido corrigido em sessão anterior.
+
+**Ação adicional realizada:** `checkUserRoomAccess` foi extraído de `services/iot/access.ts` para um módulo próprio em `services/permissions/check-user-room-access.ts`. A função pertence conceitualmente ao domínio de permissões, não ao domínio IoT. A dependência arquiteturalmente invertida (`permissions/verify-access` importando de `iot/access`) foi eliminada.
+
+**Arquivos modificados:**
+| Arquivo | Mudança |
+|---|---|
+| `server/src/services/permissions/check-user-room-access.ts` | **Criado** — contém `checkUserRoomAccess` com os 4 níveis de permissão (PERM-001 a PERM-004) e expiração |
+| `server/src/services/iot/access.ts` | Removida a implementação duplicada de `checkUserRoomAccess`; passa a importar de `permissions/check-user-room-access` |
+| `server/src/services/permissions/verify-access.ts` | Atualizado para importar `checkUserRoomAccess` de `permissions/check-user-room-access` (em vez de `iot/access`) |
+
+---
+
+### INFRA-IOT-001 — Broker IoT: métodos HTTP, paths e sensorProtocol/sensorModel
+
+**Contexto:** O broker MQTT (`iot/src/index.ts`) usava `POST` fixo para todas as chamadas ao backend e paths incorretos. As rotas do backend usam métodos HTTP variados (`PUT`, `PATCH`, `GET`) e paths com convenções diferentes (plural em `access-attempts`, sem `/pull` nos comandos). Além disso, `sensorProtocol` e `sensorModel` não eram transmitidos no registro do controlador.
+
+**Correções aplicadas:**
+
+#### 1. `callApi` refatorado — suporte a múltiplos métodos HTTP
+
+```
+// Antes: POST fixo para todas as chamadas
+async function callApi(path: string, body?: string)
+
+// Depois: método como primeiro argumento
+type HttpMethod = "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
+async function callApi(method: HttpMethod, path: string, body?: string)
+```
+
+Body não é enviado em requisições `GET`. Mensagem de erro melhorada para incluir método e path.
+
+#### 2. Alinhamento de paths e métodos
+
+| Handler | Antes | Depois |
+|---|---|---|
+| `handleRegister` | `POST /iot/devices/register` | `PUT /iot/devices/:id` |
+| `handleHeartbeat` | `POST /iot/devices/:id/heartbeat` | `PATCH /iot/devices/:id/heartbeat` |
+| `handleStatus` | `POST /iot/devices/:id/status` | `PUT /iot/devices/:id/status` |
+| `handleAccessAttempt` | `POST .../access-attempt` (singular) | `POST .../access-attempts` (plural) |
+| `pollCommands` | `POST .../commands/pull` | `GET .../commands?limit=5` |
+| `handleCommandResult` | `POST .../commands/:id/ack` | `PATCH .../commands/:id/ack` |
+| `enqueueUnlockCommand` | `POST` (implícito) | `POST` (explícito) |
+
+#### 3. sensorProtocol e sensorModel no registro
+
+- `registerPayloadSchema` no broker aceita `sensorProtocol` (enum `"R30X"` | `"BOLAND"`) e `sensorModel` (string opcional)
+- Ambos são repassados ao backend no `PUT /iot/devices/:id`
+- `apiRegisterResponseSchema` inclui `sensorProtocol` e `sensorModel` na resposta
+- Log de registro exibe `sensorProtocol` e `sensorModel` após sucesso
+
+#### 4. Backend — rota de registro atualizada
+
+- `PUT /iot/devices/:id`: body aceita `sensorProtocol` e `sensorModel` (opcionais)
+- `registerControllerResponseSchema`: inclui `sensorProtocol` e `sensorModel` na resposta
+- Heartbeat response também inclui os dois campos
+- `bodyExample` e `registerControllerResponseExample` atualizados
+
+#### 5. Service door-controller.ts atualizado
+
+- `RegisterDoorControllerInput`: adicionados `sensorProtocol?` e `sensorModel?`
+- `RegisterDoorControllerResult.controller`: inclui `sensorProtocol` e `sensorModel`
+- `registerDoorController`: insere e atualiza `sensorProtocol`/`sensorModel`; update usa spread condicional (só atualiza se o campo foi enviado, evitando sobrescrever com null)
+- `registerDoorController` e `recordDoorHeartbeat`: `.returning()` agora é explícito, selecionando apenas os campos necessários incluindo os novos
+
+#### 6. Seed com door_controllers
+
+- `seed.ts` cria 3 controladores por bloco (12 no total) nas primeiras salas de cada bloco
+- Campos: `sensorProtocol: "R30X"`, `sensorModel: "ZN-53X"`, `firmwareVersion: "1.0.0"`, `lastSeenAt` variado
+- `db.insert(room)` passou a usar `.returning()` para obter os IDs das salas criadas
+
+**Arquivos modificados:**
+| Arquivo | Mudança |
+|---|---|
+| `iot/src/index.ts` | `callApi` refatorado; todos os handlers com método e path corretos; `sensorProtocol`/`sensorModel` no registro |
+| `server/src/api/routes/iot.ts` | `PUT /iot/devices/:id` aceita e retorna `sensorProtocol`/`sensorModel`; heartbeat response atualizado; schemas e exemplos atualizados |
+| `server/src/services/iot/door-controller.ts` | `registerDoorController` e `recordDoorHeartbeat` persistem e retornam `sensorProtocol`/`sensorModel`; `returning()` explícito |
+| `server/src/db/seed.ts` | Seed cria 12 `door_controller` com sensor ZN-53X/R30X nas primeiras salas de cada bloco |
+
+---
+
+## ARCH-003 — Modo Terminal Integrado às Fechaduras (revisa ARCH-002 parcialmente)
+
+**Data:** Sessão de revisão arquitetural — modo dual de operação do ESP32
+**Escopo:** `.claude/features/HARDWARE/hw-007-enrollment-terminal.md`, `.claude/architecture.md`, `.claude/features/index.md`, `.claude/features/todo.md`
+
+### Contexto
+
+A decisão anterior (ARCH-002) criou o conceito de `role = "enrollment_terminal"` em `door_controller` para representar um dispositivo ESP32 + ZN-53X dedicado exclusivamente ao cadastro de digitais, sem associação a nenhuma sala. Essa abordagem foi revisada: terminais dedicados exigem hardware extra, cabeamento adicional e um ponto físico permanente sem outra utilidade. Como cada sala já possui sua própria fechadura com ESP32 + ZN-53X, o hardware existente pode assumir o papel de terminal temporariamente.
+
+### Decisão
+
+**Toda fechadura é um terminal em potencial.** O ESP32 alterna entre dois modos de operação via MQTT:
+
+- **Modo Fechadura** (padrão): processa acessos normais, controla relé
+- **Modo Terminal** (temporário, TTL ~2 min): captura template biométrico para enrollment, ignora tentativas de acesso, retorna ao modo fechadura após concluir ou expirar
+
+O modo é um **estado de runtime do firmware**, não uma propriedade permanente do banco de dados.
+
+---
+
+### Ações e reversões em relação ao ARCH-002
+
+| Item | Ação |
+|---|---|
+| Campo `role` em `door_controller` | **Removido** do schema — todos os controladores são `"door"` implicitamente |
+| `roomId` nullable em `door_controller` | **Revertido para NOT NULL** — todo controlador está associado a uma sala |
+| `controllerRoleEnum` em `enums.ts` | **Removido** — enum sem uso |
+| Aba "Terminais" em `/rooms` (UI-019) | **Removida** — substituída por seletor de fechaduras inline no `FingerprintHandDrawer` |
+| Componente `_tab-terminals.tsx` | **Removido** ou deixado inativo — não há terminais dedicados para listar |
+| `sensorProtocol` e `sensorModel` em `door_controller` | **Mantidos** — essenciais para compatibilidade de templates entre sensores |
+| `enrolledByControllerId` em `access_credential` | **Mantido** — agora referencia a fechadura que realizou o enrollment em modo terminal |
+| Prefixo MQTT `enrollment/{terminalId}/...` | **Substituído** por `door/{id}/enter-enrollment-mode`, `door/{id}/enrollment-result`, `door/{id}/cancel-enrollment` — unifica tudo sob `door/{id}/` |
+
+---
+
+### Novos tópicos MQTT introduzidos
+
+| Tópico | Direção | Descrição |
+|---|---|---|
+| `door/{id}/enter-enrollment-mode` | Broker → Device | Coloca a fechadura em modo terminal; payload: `{ enrollmentId, userId, finger, expiresAt }` |
+| `door/{id}/cancel-enrollment` | Broker → Device | Cancela enrollment em andamento |
+| `door/{id}/enrollment-result` | Device → Broker | Template capturado (hex 512 chars) + status (`SUCCESS`/`FAILED`/`EXPIRED`) |
+| `door/{id}/sync-credentials` | Broker → Device | Lista de templates para carregar nos slots do ZN-53X |
+| `door/{id}/sync-result` | Device → Broker | Confirma slots carregados (e evictados) |
+| `door/{id}/delete-credential` | Broker → Device | Remove template de slot específico |
+
+---
+
+### Impacto no schema de banco
+
+```sql
+-- Reverter mudanças do ARCH-002 que não se aplicam mais:
+ALTER TABLE door_controller DROP COLUMN IF EXISTS role;
+ALTER TABLE door_controller ALTER COLUMN room_id SET NOT NULL;
+
+-- Manter do ARCH-002:
+--   sensor_protocol TEXT CHECK (sensor_protocol IN ('R30X', 'BOLAND'))
+--   sensor_model    TEXT
+--   (em access_credential) enrolled_by_controller_id FK → door_controller
+
+-- Novas tabelas a criar (migration pendente):
+-- enrollment_request ( id, user_id, controller_id, finger, status, expires_at, created_at )
+-- controller_credential_slot ( id, controller_id, credential_id, slot_id, synced_at, last_used_at )
+```
+
+---
+
+### Impacto na UI
+
+**UI-019** é redefinida: em vez de aba "Terminais" em `/rooms`, a funcionalidade de enrollment é acessada diretamente no `FingerprintHandDrawer`:
+- Botão "Cadastrar via Fechadura" ao clicar em um dedo não cadastrado
+- Dropdown com fechaduras online (query `GET /doors?online=true`)
+- Spinner com countdown do TTL após confirmar
+- Confirmação automática via polling `GET /iot/enrollment/:id/status`
+
+---
+
+### Arquivos de documentação atualizados
+
+| Arquivo | Mudança |
+|---|---|
+| `.claude/features/HARDWARE/hw-007-enrollment-terminal.md` | Reescrito completamente — modo dual, novos tópicos, schema revisado, CA atualizados |
+| `.claude/architecture.md` | Tópicos MQTT expandidos; fluxo de firmware com modo terminal; modelo de dados com novas tabelas; seção de enrollment biométrico adicionada |
+| `.claude/features/index.md` | DOOR-001, UI-005, UI-019, HW-007 atualizados; prioridades reordenadas com reversão de schema como item 2 |
+| `.claude/features/todo.md` | A atualizar nesta sessão |
+
+---
+
+## ARCH-002 — Decisões Arquiteturais de Hardware-Agnostic Biometria + UI de Terminais
+
+**Data:** Sessão de decisões arquiteturais e implementação de schema/frontend
+**Escopo:** `server/src/db/schema/`, `app/src/routes/rooms/`, `.claude/features/HARDWARE/`
+
+### Contexto
+
+Durante a discussão sobre possibilidade de uso do WA-28 USB no ESP32 e do CH340G como bridge, ficou definido que a arquitetura correta é: **mesmo protocolo de sensor (R30x) em terminal de enrollment e em fechaduras**, com sync de templates apenas entre dispositivos compatíveis. Isso levou a três decisões arquiteturais registradas aqui.
+
+---
+
+### 1. `door_controller` — suporte a terminais de enrollment (Opção A)
+
+> ⚠️ **Parcialmente revertido por ARCH-003.** O campo `role` e o `roomId` nullable foram descartados. `sensorProtocol` e `sensorModel` permanecem.
+
+**Decisão original:** em vez de criar tabela separada para terminais, adicionar campo `role` à tabela `door_controller` existente e tornar `roomId` nullable.
+
+**Ações:**
+- `server/src/db/schema/enums.ts` — adicionado `controllerRoleEnum` (`"door"` | `"enrollment_terminal"`) e `sensorProtocolEnum` (`"R30X"` | `"BOLAND"`) via `pgEnum`
+- `server/src/db/schema/room.ts` — campo `role` adicionado com default `"door"`; `roomId` tornado nullable; campos `sensorProtocol` e `sensorModel` adicionados
+- **Motivação original:** terminais reutilizam toda a infraestrutura de registro MQTT (heartbeat, `lastSeenAt`, `firmwareVersion`) sem duplicar código. Tabela separada seria overhead desnecessário para o TCC.
+
+**Revisão (ARCH-003):** `role` removido e `roomId` restaurado como NOT NULL — o modo terminal é estado de runtime do firmware, não propriedade do banco. `sensorProtocol` e `sensorModel` permanecem sem alteração.
+
+---
+
+### 2. `access_credential` — rastreio de dispositivo de captura (`enrolledByControllerId`)
+
+**Decisão:** registrar qual dispositivo físico (terminal de enrollment) capturou cada credencial biométrica.
+
+**Ações:**
+- `server/src/db/schema/access.ts` — adicionado campo `enrolledByControllerId` (FK para `door_controller`, `ON DELETE SET NULL`)
+
+**Motivação:**
+- **Auditoria:** saber qual terminal físico capturou cada digital permite rastrear problemas de qualidade de captura
+- **Compatibilidade de sync:** o backend deriva o `sensorProtocol` do terminal via este campo para decidir para quais fechaduras sincronizar o template
+- **Troca de hardware:** se o hardware do sensor mudar, o sistema nunca enviará templates antigos (de protocolo diferente) para novos controladores incompatíveis — o protocolo fica gravado implicitamente na credencial via esta FK
+
+---
+
+### 3. Regra de sync por `sensorProtocol`
+
+**Decisão:** o backend sincroniza templates SOMENTE para controladores com `sensorProtocol` igual ao controlador que gerou o template (a condição `role = "door"` foi removida com ARCH-003 — todos os controladores são fechaduras).
+
+**Documentado em:** `.claude/features/HARDWARE/hw-007-enrollment-terminal.md` — seção "Decisões Arquiteturais de Hardware-Agnostic"
+
+**Consequências:**
+- Troca de modelo de sensor (ex: ZN-53X → outro R30x-compatível): apenas `sensorModel` muda, `sensorProtocol = "R30X"` permanece — zero mudança de código
+- Migração para novo protocolo: novos terminais registram novo `sensorProtocol`; período de transição pode rodar dois protocolos em paralelo sem conflito
+
+---
+
+### 4. Feature HW-008 — Offline-First nas Fechaduras
+
+**Decisão:** formalizar a política de operação quando o MQTT está indisponível.
+
+**Ações:**
+- Criado `.claude/features/HARDWARE/hw-008-offline-first.md` com política completa:
+  - Matching local sempre primeiro (ZN-53X via `fingerFastSearch()`)
+  - Timeout de 3s aguardando `access-result` do broker
+  - Se timeout/sem MQTT: concessão local + log em LittleFS/Preferences
+  - Política de eviction quando 162 slots estão ocupados: evicta por `last_used_at` mais antigo (ou NULL)
+  - Ao reconectar: publica `door/{id}/offline-log` com tentativas acumuladas
+  - Novos tópicos MQTT: `offline-log`, `credential-used`
+  - Novos endpoints REST: `POST /iot/offline-log`, `PATCH /iot/devices/:id/credential-used`
+  - Novo campo `last_used_at` em `controller_credential_slot`
+
+---
+
+### 5. Aba "Terminais" no portal web (UI-019)
+
+> ⚠️ **Revertido por ARCH-003.** A aba "Terminais" foi removida. A funcionalidade de seleção de fechadura para enrollment foi movida para dentro do `FingerprintHandDrawer` (UI-019 redefinida). Ver ARCH-003 para detalhes.
+
+**Ações originais (revertidas ou inativas):**
+- `app/src/routes/rooms/types.ts` — `TABS` atualizado para incluir `"terminals"` ← **remover `"terminals"`**
+- `app/src/routes/rooms/_tabs.tsx` — novo `TabButton` "Terminais" com `terminalsCount` ← **remover**
+- `app/src/routes/rooms/_tab-terminals.tsx` — criado do zero ← **remover ou deixar inativo**
+- `app/src/routes/rooms/index.tsx` — query lazy por `role=enrollment_terminal` ← **remover query e renderização**
+
+**Nova definição de UI-019 (ARCH-003):** seletor de fechaduras inline no `FingerprintHandDrawer`, com dropdown de fechaduras online, spinner com countdown e polling de status do enrollment.
+
+---
+
+### Arquivos modificados
+
+| Arquivo | Tipo de mudança |
+|---|---|
+| `server/src/db/schema/enums.ts` | Adicionados `controllerRoleEnum` (⚠️ reverter — ARCH-003) e `sensorProtocolEnum` (manter) |
+| `server/src/db/schema/room.ts` | `doorController`: `role` (⚠️ reverter), `sensorProtocol`, `sensorModel` (manter); `roomId` nullable (⚠️ reverter para NOT NULL) |
+| `server/src/db/schema/access.ts` | `accessCredential`: `enrolledByControllerId` (manter) |
+| `app/src/routes/rooms/types.ts` | `TABS` com `"terminals"` (⚠️ reverter — ARCH-003) |
+| `app/src/routes/rooms/_tabs.tsx` | Prop `terminalsCount` + novo `TabButton` (⚠️ reverter — ARCH-003) |
+| `app/src/routes/rooms/_tab-terminals.tsx` | Criado (⚠️ remover ou inativar — ARCH-003) |
+| `app/src/routes/rooms/index.tsx` | Import + query lazy + renderização da aba (⚠️ reverter — ARCH-003) |
+| `.claude/features/HARDWARE/hw-007-enrollment-terminal.md` | Seções de decisões arquiteturais, novos campos de banco, CA-07b |
+| `.claude/features/HARDWARE/hw-008-offline-first.md` | Criado (nova feature) |
+| `.claude/features/index.md` | UI-019 e HW-008 adicionados; CRED-001, DOOR-001, UI-005, HW-007 atualizados |
+| `.claude/features/todo.md` | Task 0 (migração de banco) adicionada como prioritária; pendências de backend/IoT/frontend expandidas |
+
+---
+
 ## REFACTOR-001 — Refatoração de Performance e Conformidade com Diretrizes
 
 **Data:** Sessão de análise e refatoração geral

@@ -2,7 +2,7 @@ import { and, eq } from "drizzle-orm";
 import { db } from "@/db";
 import { accessCredential } from "@/db/schema/access";
 import { room } from "@/db/schema/room";
-import { checkUserRoomAccess } from "@/services/iot/access";
+import { checkUserRoomAccess } from "@/services/permissions/check-user-room-access";
 
 export const verifyAccess = async (payload: {
 	roomId: string;
@@ -45,6 +45,10 @@ export const verifyAccess = async (payload: {
 		return { granted: false, reason: "UNKNOWN_CREDENTIAL" } as const;
 	}
 
-	const result = await checkUserRoomAccess(cred.userId, payload.roomId, r.typeId);
+	const result = await checkUserRoomAccess(
+		cred.userId,
+		payload.roomId,
+		r.typeId,
+	);
 	return { granted: result.granted, reason: result.reason } as const;
 };
