@@ -45,8 +45,8 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/forgot-password': typeof ForgotPasswordRoute
   '/reset-password': typeof ResetPasswordRoute
-  '/rooms/': typeof RoomsIndexRoute
-  '/users/': typeof UsersIndexRoute
+  '/rooms': typeof RoomsIndexRoute
+  '/users': typeof UsersIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -65,12 +65,7 @@ export interface FileRoutesById {
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths:
-    | '/'
-    | '/forgot-password'
-    | '/reset-password'
-    | '/rooms/'
-    | '/users/'
+  fullPaths: '/' | '/forgot-password' | '/reset-password' | '/rooms' | '/users'
   fileRoutesByTo: FileRoutesByTo
   to: '/' | '/forgot-password' | '/reset-password' | '/rooms' | '/users'
   id:
@@ -116,14 +111,14 @@ declare module '@tanstack/react-router' {
     '/users/': {
       id: '/users/'
       path: '/users'
-      fullPath: '/users/'
+      fullPath: '/users'
       preLoaderRoute: typeof UsersIndexRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/rooms/': {
       id: '/rooms/'
       path: '/rooms'
-      fullPath: '/rooms/'
+      fullPath: '/rooms'
       preLoaderRoute: typeof RoomsIndexRouteImport
       parentRoute: typeof rootRouteImport
     }
