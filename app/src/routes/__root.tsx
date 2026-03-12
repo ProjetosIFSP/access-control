@@ -18,31 +18,47 @@ import appCss from "../styles.css?url";
 
 import type { QueryClient } from "@tanstack/react-query";
 
+const THEME_SCRIPT = `(function(){try{var s=localStorage.getItem("theme");var d=window.matchMedia("(prefers-color-scheme: dark)").matches;var dark=s?s==="dark":d;if(dark)document.documentElement.classList.add("dark");}catch(e){}})();`;
+
 interface MyRouterContext {
   queryClient: QueryClient;
 }
 
-const THEME_INIT_SCRIPT = `(function(){try{var stored=window.localStorage.getItem('theme');var mode=(stored==='light'||stored==='dark'||stored==='auto')?stored:'auto';var prefersDark=window.matchMedia('(prefers-color-scheme: dark)').matches;var resolved=mode==='auto'?(prefersDark?'dark':'light'):mode;var root=document.documentElement;root.classList.remove('light','dark');root.classList.add(resolved);if(mode==='auto'){root.removeAttribute('data-theme')}else{root.setAttribute('data-theme',mode)}root.style.colorScheme=resolved;}catch(e){}})();`;
-
 export const Route = createRootRouteWithContext<MyRouterContext>()({
   head: () => ({
     meta: [
+      { charSet: "utf-8" },
+      { name: "viewport", content: "width=device-width, initial-scale=1.0" },
+      { name: "theme-color", content: "#379936" },
+      { title: "Controle de Acesso — IFSP Presidente Epitácio" },
       {
-        charSet: "utf-8",
+        name: "description",
+        content:
+          "Sistema de controle de acesso e gerenciamento de ambientes baseado em IoT para o IFSP Campus Presidente Epitácio. Monitore portas, gerencie credenciais e visualize acessos em tempo real.",
       },
       {
-        name: "viewport",
-        content: "width=device-width, initial-scale=1",
+        name: "keywords",
+        content:
+          "controle de acesso, IoT, IFSP, Presidente Epitácio, biometria, RFID, fechadura eletrônica, gerenciamento de salas",
+      },
+      { name: "author", content: "Abner José da Silva" },
+      { property: "og:type", content: "website" },
+      {
+        property: "og:title",
+        content: "Controle de Acesso — IFSP Presidente Epitácio",
       },
       {
-        title: "IFSP-PEP — Controle de Salas",
+        property: "og:description",
+        content:
+          "Sistema IoT de controle de acesso e gerenciamento de ambientes com biometria e RFID para o IFSP Campus Presidente Epitácio.",
       },
+      { property: "og:image", content: "/app-icon.svg" },
+      { property: "og:locale", content: "pt_BR" },
     ],
     links: [
-      {
-        rel: "stylesheet",
-        href: appCss,
-      },
+      { rel: "stylesheet", href: appCss },
+      { rel: "icon", type: "image/svg+xml", href: "/favicon.svg" },
+      { rel: "manifest", href: "/manifest.json" },
     ],
   }),
   notFoundComponent: NotFound,
@@ -54,33 +70,38 @@ function RootDocument({ children }: { children: React.ReactNode }) {
   const { queryClient } = Route.useRouteContext();
 
   return (
-    <html lang="pt-BR" suppressHydrationWarning>
+    <html lang="pt-BR">
       <head>
-        <script dangerouslySetInnerHTML={{ __html: THEME_INIT_SCRIPT }} />
+        <script dangerouslySetInnerHTML={{ __html: THEME_SCRIPT }} />
         <HeadContent />
       </head>
-      <body>
-        <QueryClientProvider client={queryClient}>
-          <TooltipProvider>
-            <NuqsAdapter>
-              <Header />
-              {children}
-              <Toaster richColors closeButton position="top-right" />
-              <TanStackDevtools
-                config={{
-                  position: "bottom-right",
-                }}
-                plugins={[
-                  {
-                    name: "Tanstack Router",
-                    render: <TanStackRouterDevtoolsPanel />,
-                  },
-                  TanStackQueryDevtools,
-                ]}
-              />
-            </NuqsAdapter>
-          </TooltipProvider>
-        </QueryClientProvider>
+      <body className="bg-zinc-200 text-zinc-950 dark:bg-zinc-950 dark:text-zinc-50 min-h-dvh max-w-screen overflow-x-hidden [&::-webkit-scrollbar]:w-0!">
+        <div
+          id="app"
+          className="flex flex-col min-h-dvh w-screen max-w-screen overflow-x-hidden"
+        >
+          <QueryClientProvider client={queryClient}>
+            <TooltipProvider>
+              <NuqsAdapter>
+                <Header />
+                {children}
+                <Toaster richColors closeButton position="top-right" />
+                <TanStackDevtools
+                  config={{
+                    position: "bottom-right",
+                  }}
+                  plugins={[
+                    {
+                      name: "Tanstack Router",
+                      render: <TanStackRouterDevtoolsPanel />,
+                    },
+                    TanStackQueryDevtools,
+                  ]}
+                />
+              </NuqsAdapter>
+            </TooltipProvider>
+          </QueryClientProvider>
+        </div>
         <Scripts />
       </body>
     </html>
