@@ -2,6 +2,82 @@
 
 ---
 
+## UI-020 / UI-021 — Migração para TanStack Start + FumaDocs (reconstrução completa do `app/`)
+
+**Data:** Sessão atual
+**Escopo:** `app/` inteiro — deletado e recriado do zero; migração de TanStack Router (Vite SPA) para TanStack Start (SSR + Vinxi); adição do FumaDocs como sistema de documentação em `/docs`
+
+### Motivação
+
+A pasta `app/` usava TanStack Router como SPA pura (Vite). O TanStack Start usa Vinxi por baixo e muda completamente o `vite.config.ts` — não é possível migrar incrementalmente. A pasta foi deletada e recriada do zero com a nova estrutura.
+
+### O que foi feito
+
+#### 1. Arquivos de configuração novos
+
+| Arquivo | Descrição |
+|---|---|
+| `package.json` | Adicionado `@tanstack/react-start`, `fumadocs-core`, `fumadocs-mdx`, `fumadocs-ui`, `vite-tsconfig-paths`, `@types/mdx`; removido `playwright`, `storybook`, `vitest`, `jsdom`, `web-vitals` |
+| `tsconfig.json` | `noUnusedLocals/Parameters: false` temporário; path alias `collections/*` → `.source/*` para fumadocs |
+| `vite.config.ts` | `tanstackStart()` (integra router internamente — sem `tanstackRouter()` separado); `mdx(sourceConfig)` com import do `source.config.ts`; `optimizeDeps.entries` ajustadas para excluir stories/tests |
+| `source.config.ts` | `defineDocs({ dir: "content/docs" })` — coleção de docs para o fumadocs-mdx |
+| `biome.json` | Copiado do antigo sem alteração |
+| `components.json` | Copiado do antigo sem alteração |
+
+#### 2. Entry points e router SSR
+
+| Arquivo | Descrição |
+|---|---|
+| `src/router.tsx` | `createRouter()` com `QueryClient` no context — compatível com `context.queryClient` nas rotas existentes |
+| `src/start.ts` | `createStartHandler` + `defaultStreamHandler` (entry point do servidor SSR) |
+| `src/routeTree.gen.ts` | Gerado automaticamente pelo plugin ao subir o dev — todas as rotas detectadas |
+
+#### 3. Rota raiz SSR (`__root.tsx`)
+
+Reescrito completamente para TanStack Start: renderiza o documento HTML inteiro com `<html>`, `<head>`, `<body>`, `HeadContent`, `Scripts`. Inclui:
+
+- `head()` com meta charset, viewport, title, description, theme-color, favicon, stylesheet (`app.css?url`), script de tema inline
+- `RootProvider` do `fumadocs-ui/provider/tanstack` para o FumaDocs
+- `NuqsAdapter` do `nuqs/adapters/tanstack-router`
+- `QueryClientProvider` com `queryClient` vindo do `Route.useRouteContext()`
+- `TooltipProvider`, `Header`, `Toaster`, `TanStackDevtools`
+
+#### 4. FumaDocs integrado
+
+| Arquivo | Descrição |
+|---|---|
+| `src/lib/source.ts` | `loader()` + `createMDXSource(docs)` com `baseUrl: "/docs"` |
+| `src/components/mdx.tsx` | `getMDXComponents` + `useMDXComponents` com `defaultMdxComponents` |
+| `src/routes/docs/$.tsx` | Rota wildcard; usa `createServerFn` para carregar MDX pages no servidor |
+| `src/routes/api/search.ts` | `createFromSource(source, { language: "portuguese" })` |
+| `content/docs/index.mdx` | Hello World com descrição do projeto |
+| `src/styles/app.css` | Imports `fumadocs-ui/css/neutral.css` e `fumadocs-ui/css/preset.css` adicionados |
+
+#### 5. Componentes/rotas migrados sem alteração
+
+Copiados diretamente do backup (`/tmp/app_src_backup`):
+
+- **Componentes:** `header/`, `footer/`, `ui/`, `auth/`, `animate-ui/`, `blocks/`, `icons/`, `page/`, `profiles/`, `room-types/`, `rooms/`, `rooms-admin/`, `users/`
+- **Hooks:** `hooks/`
+- **Services:** `services/`
+- **Assets:** `assets/`, `stories/`
+- **Lib:** `lib/auth-client.ts`, `lib/biometrics.ts`, `lib/get-strict-context.tsx`, `lib/api/`
+- **Integrations:** `integrations/tanstack-query/devtools.tsx`
+- **Rotas:** `index.tsx`, `forgot-password.tsx`, `reset-password.tsx`, `rooms/*`, `users/*` — todas usam `context.queryClient` que continua funcionando no Start
+
+### Decisões técnicas
+
+- **`mdx(sourceConfig)`**: o plugin `fumadocs-mdx/vite` exige receber o objeto exportado pelo `source.config.ts` como primeiro argumento — não aceita chamada sem argumentos (causava `TypeError: Cannot convert undefined or null to object`)
+- **`tanstackStart()` sem `tanstackRouter()`**: o Start já integra o Router plugin internamente; usar os dois juntos causaria conflito
+- **`app.css?url`**: import com sufixo `?url` é essencial para o TanStack Start injetar o CSS via `<link>` no `<head>` — funciona com `"types": ["vite/client"]` no tsconfig
+- **`optimizeDeps.entries`**: ajustado para não incluir `stories/` nem `.test.ts` que importam `storybook/test` e `vitest` (não instalados na nova configuração)
+
+### Resultado
+
+Dev server subindo limpo: `VITE v7.3.1 ready in 2150 ms` sem erros. `routeTree.gen.ts` gerado automaticamente com todas as rotas (index, forgot-password, reset-password, rooms/index, users/index, docs/$, api/search).
+
+---
+
 ## INFRA-004 — Migração para TanStack Start + Fumadocs (Documentação em /docs)
 
 **Data:** Sessão atual

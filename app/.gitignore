@@ -3,8 +3,14 @@ node_modules
 dist
 dist-ssr
 *.local
-count.txt
 .env*
+!.env.local
 !.env.example
 .nitro
 .tanstack
+.wrangler
+.output
+.vinxi
+__unconfig*
+todos.json
+mcp-todos.json

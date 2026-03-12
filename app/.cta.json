@@ -2,16 +2,23 @@
   "projectName": "app",
   "mode": "file-router",
   "typescript": true,
-  "tailwind": true,
   "packageManager": "npm",
-  "git": true,
+  "includeExamples": false,
+  "tailwind": true,
+  "addOnOptions": {},
+  "envVarValues": {},
+  "git": false,
+  "routerOnly": false,
   "version": 1,
-  "framework": "react-cra",
+  "framework": "react",
   "chosenAddOns": [
     "biome",
     "form",
-    "tanstack-query",
+    "mcp",
     "shadcn",
-    "table"
+    "table",
+    "better-auth",
+    "storybook",
+    "tanstack-query"
   ]
 }

@@ -1,25 +1,17 @@
-import type { StorybookConfig } from "@storybook/react-vite";
-import { fileURLToPath } from "node:url";
-import { dirname, resolve } from "node:path";
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
+import type { StorybookConfig } from '@storybook/react-vite'
 
 const config: StorybookConfig = {
-  stories: ["../src/**/*.stories.@(ts|tsx)"],
+  stories: ['../src/**/*.stories.@(js|jsx|mjs|ts|tsx)'],
   addons: [],
   framework: {
-    name: "@storybook/react-vite",
+    name: '@storybook/react-vite',
     options: {},
   },
-  viteFinal(config) {
-    config.resolve ??= {};
-    config.resolve.alias = {
-      ...config.resolve.alias,
-      "@": resolve(__dirname, "../src"),
-    };
-    return config;
+  async viteFinal(config) {
+    const { default: tailwindcss } = await import('@tailwindcss/vite')
+    config.plugins = config.plugins || []
+    config.plugins.push(tailwindcss())
+    return config
   },
-};
-
-export default config;
+}
+export default config

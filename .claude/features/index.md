@@ -85,6 +85,8 @@
 | UI-017 | Paginação nas tabelas de admin                                  | ⬜     | Usuários, salas, logs                                                     |
 | UI-018 | Navbar sticky                                                   | ⬜     | Não implementado                                                          |
 | UI-019 | Seletor de fechadura no drawer de digitais (`FingerprintHandDrawer`) | ⬜ | Botão "Cadastrar via Fechadura" com dropdown de fechaduras online; spinner com countdown do TTL; polling de `GET /iot/enrollment/:id/status`; substitui aba "Terminais" removida |
+| UI-020 | Migração para TanStack Start (SSR + Vinxi)                          | ✅ | `app/` recriado do zero; `vite.config.ts` com `tanstackStart()`; `__root.tsx` com `<html>/<head>/<body>`, `HeadContent`, `Scripts`; `router.tsx` com `QueryClient` no context; `start.ts` como entry SSR |
+| UI-021 | Documentação integrada com FumaDocs                                 | ✅ | `source.config.ts`, `content/docs/index.mdx`; rota wildcard `/docs/$`; API de busca `/api/search`; `RootProvider` do fumadocs-ui/provider/tanstack; CSS do fumadocs integrado no `app.css` |
 
 ---
 
