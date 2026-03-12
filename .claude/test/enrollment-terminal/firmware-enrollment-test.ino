@@ -1,6 +1,12 @@
 // =============================================================================
 // firmware-enrollment-test.ino
-// Terminal de Enrollment Biométrico — ESP32S + ZN-53X / A21 UART
+// Terminal de Enrollment Biométrico — ESP32-CAM (AI-Thinker) + ZN-53X / A21 UART
+//
+// Hardware alvo: ESP32-CAM AI-Thinker
+//   - Câmera OV2640 desabilitada no firmware (libera GPIOs adicionais)
+//   - ZN-53X conectado via UART1 (GPIO33=RX, GPIO32=TX por padrão)
+//   - LEDs de feedback: GPIO12 (vermelho), GPIO13 (verde), GPIO15 (azul)
+//     ⚠️ GPIO12 e GPIO15 afetam boot mode — usar com pull-down / sem pull-up externo
 //
 // Propósito: validar incrementalmente o fluxo de enrollment biométrico
 //   Passo 1: compatibilidade do ZN-53X com protocolo R30x (Adafruit)
@@ -21,6 +27,12 @@
 // Fluxo MQTT automático:
 //   Recebe: enrollment/{TERMINAL_ID}/start → executa enrollment completo
 //   Publica: enrollment/{TERMINAL_ID}/result → template + status
+//
+// Pinout ZN-53X → ESP32-CAM (ajustar se necessário após mapeamento físico do P4):
+//   ZN-53X TX  → GPIO33 (RX do ESP32-CAM, UART1)
+//   ZN-53X RX  → GPIO32 (TX do ESP32-CAM, UART1)
+//   ZN-53X VCC → 3.3V ou 5V (verificar datasheet — usar divisor se 5V)
+//   ZN-53X GND → GND
 // =============================================================================
 
 #include <Adafruit_Fingerprint.h>
@@ -49,9 +61,12 @@ const uint16_t TEST_SLOT = 5;
 const unsigned long FINGER_TIMEOUT_MS = 30000;
 
 // Pinos dos LEDs de feedback (opcional — comentar se não usar)
-const int PIN_LED_RED   = 25;
-const int PIN_LED_GREEN = 26;
-const int PIN_LED_BLUE  = 27;
+// ESP32-CAM AI-Thinker: GPIOs livres quando câmera desabilitada
+// ⚠️ GPIO12 afeta boot (strapping): manter sem pull-up externo
+// ⚠️ GPIO15 afeta boot (strapping): manter sem pull-up externo
+const int PIN_LED_RED   = 12;   // era GPIO25 no ESP32S
+const int PIN_LED_GREEN = 13;   // era GPIO26 no ESP32S
+const int PIN_LED_BLUE  = 15;   // era GPIO27 no ESP32S
 
 // -----------------------------------------------------------------------------
 // Tópicos MQTT
@@ -65,7 +80,12 @@ char topicEnrollResult[64];
 // Objetos globais
 // -----------------------------------------------------------------------------
 
-HardwareSerial sensorSerial(2);          // UART2: GPIO16 (RX2), GPIO17 (TX2)
+// UART1 do ESP32-CAM — GPIO33=RX, GPIO32=TX
+// (UART2 não está disponível no ESP32-CAM AI-Thinker da forma padrão)
+// Ajustar os pinos abaixo após mapeamento físico do conector P4 da relay board
+#define SENSOR_RX_PIN 33
+#define SENSOR_TX_PIN 32
+HardwareSerial sensorSerial(1);          // UART1: GPIO33 (RX), GPIO32 (TX)
 Adafruit_Fingerprint finger(&sensorSerial);
 
 WiFiClient   wifiClient;
@@ -138,12 +158,14 @@ uint16_t hexToBytes(const char* hex, uint8_t* out, uint16_t maxLen) {
 // Sensor — Inicialização
 // -----------------------------------------------------------------------------
 
+// Inicializa o sensor ZN-53X tentando múltiplos baudrates.
+// No ESP32-CAM, o begin() do HardwareSerial exige pinos explícitos.
 bool initSensor() {
   for (int i = 0; i < SENSOR_BAUDRATE_COUNT; i++) {
     uint32_t baud = SENSOR_BAUDRATES[i];
     Serial.printf("[SENSOR] Tentando conectar ao ZN-53X em %lu baud...\n", baud);
 
-    sensorSerial.begin(baud, SERIAL_8N1, 16, 17);  // RX2=GPIO16, TX2=GPIO17
+    sensorSerial.begin(baud, SERIAL_8N1, SENSOR_RX_PIN, SENSOR_TX_PIN);  // UART1: GPIO33=RX, GPIO32=TX (ESP32-CAM)
     finger.begin(baud);
     delay(200);
 
@@ -781,8 +803,10 @@ void setup() {
   delay(500);
 
   Serial.println("\n=======================================================");
-  Serial.println("  Terminal de Enrollment Biométrico — ESP32S + ZN-53X");
-  Serial.println("  Firmware de Teste v0.1.0");
+  Serial.println("  Terminal de Enrollment Biométrico — ESP32-CAM + ZN-53X");
+  Serial.println("  Firmware de Teste v0.2.0 (ESP32-CAM AI-Thinker)");
+  Serial.printf ("  Sensor UART: RX=GPIO%d TX=GPIO%d\n", SENSOR_RX_PIN, SENSOR_TX_PIN);
+  Serial.printf ("  LEDs: R=GPIO%d G=GPIO%d B=GPIO%d\n", PIN_LED_RED, PIN_LED_GREEN, PIN_LED_BLUE);
   Serial.println("=======================================================\n");
 
   // Configurar LEDs

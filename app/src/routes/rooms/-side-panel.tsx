@@ -8,7 +8,7 @@ import { SplitViewPanel } from "@/components/ui/split-view";
 import { SplitViewPanelHeader } from "@/components/ui/split-view-panel-header";
 import type { BlockSummary, RoomType } from "@/services/rooms/types";
 
-import type { PanelMode } from "./types";
+import type { PanelMode } from "./-types";
 
 interface RoomsSidePanelProps {
   panelMode: PanelMode;

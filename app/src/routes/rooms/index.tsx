@@ -40,8 +40,8 @@ import { TabRooms } from "./-tab-rooms";
 import { TabRoomTypes } from "./-tab-types";
 import { RoomsTabs } from "./-tabs";
 import { RoomsToolbar } from "./-toolbar";
-import { PAGE_SIZE, roomsSearchParams } from "./types";
-import type { ActiveTab, PanelMode } from "./types";
+import { PAGE_SIZE, roomsSearchParams } from "./-types";
+import type { ActiveTab, PanelMode } from "./-types";
 
 // ── Route ─────────────────────────────────────────────────────────────────────
 

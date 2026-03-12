@@ -1,4 +1,4 @@
-# HW-007 — Modo Terminal de Enrollment Biométrico nas Fechaduras (ZN-53X + ESP32)
+# HW-007 — Modo Terminal de Enrollment Biométrico nas Fechaduras (ZN-53X + ESP32-CAM)
 
 ## Informações Gerais
 
@@ -15,16 +15,16 @@
 
 ## Descrição
 
-Implementação do **modo terminal de enrollment** diretamente nas fechaduras existentes. Cada controlador ESP32 + ZN-53X já instalado em uma porta pode alternar temporariamente entre dois modos de operação:
+Implementação do **modo terminal de enrollment** diretamente nas fechaduras existentes. Cada controlador NodeMCU v3 + ZN-53X + leitor NFC + módulo relê simples já instalado em uma porta pode alternar temporariamente entre dois modos de operação:
 
-- **Modo Fechadura** (padrão): lê digital → matching local → envia `access-attempt` → aguarda decisão do backend → aciona relé
+- **Modo Fechadura** (padrão): lê digital/NFC → matching local ou consulta backend → aciona relé via relay control board
 - **Modo Terminal**: captura digital de um usuário específico → extrai template via UART → envia ao backend para persistência e sincronização
 
 A troca de modo é disparada remotamente pelo backend via MQTT e tem duração limitada (TTL configurável, padrão 2 minutos). Ao expirar ou após enrollment bem-sucedido/cancelado, o controlador retorna automaticamente ao modo fechadura.
 
 ### Por que não um terminal dedicado?
 
-Terminais dedicados exigiriam hardware extra (outro ESP32 + ZN-53X), cabeamento adicional e um ponto físico permanente que não serve a nenhuma outra função fora do enrollment. Como cada sala já possui sua própria fechadura com ESP32 + ZN-53X, aproveitar esse hardware existente é mais eficiente e elimina a necessidade de cadastro e gerenciamento de um novo tipo de dispositivo.
+Terminais dedicados exigiriam hardware extra, cabeamento adicional e um ponto físico permanente que não serve a nenhuma outra função fora do enrollment. Como cada sala já possui sua própria fechadura com NodeMCU v3 + ZN-53X + leitor NFC + módulo relê simples, aproveitar esse hardware existente é mais eficiente e elimina a necessidade de cadastro e gerenciamento de um novo tipo de dispositivo.
 
 O admin simplesmente escolhe **qual fechadura** será usada para o enrollment, essa fechadura entra em modo terminal temporariamente, o usuário passa o dedo nela, e o template é extraído e distribuído para todas as demais fechaduras com o mesmo `sensorProtocol`.
 
@@ -73,15 +73,15 @@ Admin abre portal → navega até usuário X → aba Digitais
 ### Fase 2: Captura física na fechadura em modo terminal
 
 ```
-ESP32 recebe MQTT door/{id}/enter-enrollment-mode
+ESP32-CAM recebe MQTT door/{id}/enter-enrollment-mode
 → salva estado atual (modo fechadura)
 → entra em modo terminal
-→ acende LED azul pulsante (sinaliza: "passe o dedo — modo cadastro")
+→ acende LED azul pulsante via GPIO (sinaliza: "passe o dedo — modo cadastro")
 → ignora tentativas de acesso normais durante o enrollment
 
-→ chama getImage() → image2Tz(slot=1) — 1ª captura
+→ chama getImage() → image2Tz(slot=1) — 1ª captura via ZN-53X
 → acende LED roxo (pede 2ª passagem)
-→ chama getImage() → image2Tz(slot=2) — 2ª captura
+→ chama getImage() → image2Tz(slot=2) — 2ª captura via ZN-53X
 → chama createModel() — combina as duas capturas em um template
 → chama getModel() (UploadTemplate 0x08) — extrai 256 bytes via UART
 → converte bytes para string hex (512 chars)
@@ -97,7 +97,7 @@ ESP32 recebe MQTT door/{id}/enter-enrollment-mode
 **Timeout de segurança:**
 ```
 Se o usuário não passar o dedo dentro do TTL (expiresAt):
-→ ESP32 retorna ao modo fechadura automaticamente
+→ ESP32-CAM retorna ao modo fechadura automaticamente
 → Publica door/{id}/enrollment-result com status: EXPIRED
 → Backend marca enrollment_request como EXPIRED
 → Portal exibe mensagem de timeout amigável
@@ -133,7 +133,7 @@ hardware transparente — basta ajustar o sensorProtocol dos novos dispositivos.
 ### Fase 4: Recepção nos controladores de acesso
 
 ```
-Cada ESP32 recebe door/{id}/sync-credentials
+Cada ESP32-CAM recebe door/{id}/sync-credentials
 → para cada credencial recebida:
    carrega template no ZN-53X via DownloadTemplate (0x09) em slot livre
    registra mapeamento: slotId → credentialId → userId
@@ -147,11 +147,11 @@ Cada ESP32 recebe door/{id}/sync-credentials
 Usuário apresenta dedo na porta (modo fechadura — padrão)
 → ZN-53X executa fingerFastSearch() — matching local contra templates armazenados
 → retorna: slotId + confidence (ou NOTFOUND)
-→ ESP32 resolve slotId → credentialId → userId via mapeamento local
+→ ESP32-CAM resolve slotId → credentialId → userId via mapeamento local
 → publica door/{id}/access-attempt
    payload: { credentialType: FINGERPRINT, credentialValue: credentialId }
 → backend verifica permissão → GRANTED / DENIED
-→ ESP32 aciona relé ou exibe feedback negativo
+→ ESP32-CAM envia comando à relay control board → aciona relé ou exibe feedback negativo
 ```
 
 ---
@@ -161,9 +161,10 @@ Usuário apresenta dedo na porta (modo fechadura — padrão)
 ```
 ┌─────────────────────────────────────────────────────────────┐
 │                    MODO FECHADURA (padrão)                  │
-│  - Lê digitais para acesso                                  │
-│  - Processa access-attempt / access-result                  │
-│  - Controla relé                                            │
+│  - Lê digitais para acesso (ZN-53X via P4 da board)         │
+│  - Lê cartões NFC para acesso (leitor NFC via relay board)  │
+│  - Processa access-attempt / access-result                   │
+│  - Controla relé via relay control board                     │
 │  - LED branco/verde fixo (porta fechada/aberta)             │
 └──────────────────────────┬──────────────────────────────────┘
                            │ door/{id}/enter-enrollment-mode
@@ -194,9 +195,45 @@ Usuário apresenta dedo na porta (modo fechadura — padrão)
 A principal mudança arquitetural é eliminar o conceito de `role = "enrollment_terminal"` na tabela `door_controller`. Todos os controladores têm `role = "door"` e todos são capazes de alternar para o modo terminal. O modo é um **estado de runtime do firmware**, não uma propriedade permanente do dispositivo.
 
 Consequências:
-- `roomId` em `door_controller` volta a ser **NOT NULL** — todo controlador está associado a uma sala
+- `roomId` em `door_controller` é **NOT NULL** — todo controlador está associado a uma sala
 - Não há mais aba "Terminais" no portal — a seleção de fechadura para enrollment é feita diretamente no drawer de digitais do usuário
 - A infraestrutura MQTT é unificada sob o prefixo `door/{id}/` — sem prefixo `enrollment/{terminalId}/`
+
+### Relay control board descartada — módulo relê simples adotado
+
+A **relay control board** adquirida (AliExpress) é um **controlador de acesso autônomo** — não um simples módulo de relê controlado por GPIO. Ela processa impressão digital, NFC e cartão IC internamente e aciona o relê por conta própria.
+
+Interfaces físicas da board:
+
+| Interface | Tipo | Função |
+|---|---|---|
+| **Fingerprint Interface** | Conector JST 4 pinos (topo centro) | Entrada para ZN-53X — processado internamente pela board |
+| **Inductive Interface** | Conector 3 pinos (topo direito) | Leitor NFC/RFID embutido — lógica autônoma interna |
+| **Switch Interface** | Conector 2 pinos (lateral direita) | Botão de saída físico — **ponto de integração do ESP8266/ESP32** |
+| **Set button** | Botão tátil | Configuração de modo de operação da board |
+| **Relay** | TONGLING JQC-T78-DC5V-C | Bobina 5V interna; contatos 20A 125VAC / 20A 14VDC |
+| **NO / COM / NC** | Terminais azuis (direita) | Saída do relê — conecta à fechadura solenoide |
+| **Power+ / Power−** | Terminais azuis (esquerda) | Alimentação da board — DC 10V–120V |
+| **Buzzer** | Piezo integrado | Feedback sonoro acionado pela lógica interna da board |
+
+**O ESP8266/ESP32-CAM não controla o relê diretamente via GPIO.** O relê (TONGLING JQC-T78-DC5V-C, bobina 5V interna) é acionado pela lógica interna da board. A integração correta é via **Switch Interface**: o MCU simula o apertar do botão de saída físico com um pulso curto de ~200ms no GPIO.
+
+```
+Integração via Switch Interface:
+  ESP8266 GPIO5 (D1) ───► Switch Interface pino 1
+  ESP8266 GND        ───► Switch Interface pino 2
+  ⚠️  GND DEVE ser comum entre ESP8266 e relay board
+
+Como o pulso funciona:
+  Estado de repouso:  GPIO = HIGH  →  "botão solto"
+  Pulso de unlock:    GPIO = LOW   →  "botão pressionado" (~200ms)
+                      GPIO = HIGH  →  "botão solto" novamente
+  A board detecta a transição e aciona o relê internamente.
+```
+
+> **Consequência arquitetural importante:** como o relê é acionado **autonomamente** pela board (via biometria/NFC internos), o sistema MQTT via ESP8266 atua como **camada adicional de autorização remota** — não como controlador exclusivo. O acesso físico via credenciais cadastradas na própria board ainda é possível independentemente do ESP8266.
+>
+> Para o protótipo do TCC, essa limitação é aceitável: o ESP8266 responde ao UNLOCK do backend enviando o pulso, e o acesso presencial via NFC/biometria da board serve como fallback offline.
 
 ### `sensorProtocol` como garantia de compatibilidade
 
@@ -208,6 +245,15 @@ Consequências práticas:
 - **Troca de hardware futura:** substituir ZN-53X por outro sensor R30x-compatível não exige mudança de código
 - **Migração para novo protocolo:** novos controladores com protocolo diferente registram um novo `sensorProtocol`; templates antigos nunca chegam a eles
 - **Auditoria:** `enrolledByControllerId` permite rastrear qual fechadura física capturou cada digital
+
+### NFC via leitor standalone direto no NodeMCU
+
+A relay control board possui leitor NFC **embutido com lógica autônoma** — ela é capaz de reconhecer cartões IC sem nenhum microcontrolador externo. Para o sistema ser o ponto de autoridade (e não a board), o ESP32-CAM precisa interceptar a leitura do cartão NFC **antes** do relé ser acionado autonomamente.
+
+Alternativas:
+1. **Usar apenas o leitor NFC standalone externo** (o já possuído no inventário) conectado diretamente ao ESP32-CAM via I2C/SPI/UART — mantém o ESP32-CAM como autoridade total. ✅ Recomendado para protótipo.
+2. **Usar o NFC da board em modo passivo** — desabilitar a lógica autônoma da board (se houver jumper ou modo de bypass) e fazer o ESP32-CAM processar os UIDs. ⚠️ Requer validação física.
+3. **Aceitar o NFC autônomo da board para acesso físico** e apenas logar via ESP32-CAM — simplifica o firmware mas perde controle centralizado de permissões. ❌ Não recomendado para o TCC.
 
 ### Segurança durante o modo terminal
 
@@ -337,30 +383,71 @@ CREATE TABLE controller_credential_slot (
 
 ## Hardware Utilizado
 
-Nenhum hardware adicional é necessário além do já definido para cada fechadura:
+### Stack completo por fechadura (protótipo atual)
 
-| Componente | Especificação | Função |
+| Componente | Modelo | Status | Função |
+|---|---|---|---|
+| Microcontrolador | NodeMCU v3 (ESP8266MOD) | ✅ Possuído | Processamento central, Wi-Fi, MQTT, SoftSerial para ZN-53X, I2C para NFC |
+| Sensor biométrico | ZN-53X | ✅ Possuído | Captura e matching de impressão digital (protocolo R30x) |
+| Leitor NFC standalone | Módulo NFC (já possuído) | ✅ Possuído | Leitura de UIDs NFC via I2C (D7/D3) sob controle direto do NodeMCU |
+| Módulo relê simples | 1 canal 5V (optoacoplador) | ❌ A adquirir | Acionamento direto via GPIO5 (D1); ~R$5–10 |
+| Reed switch + ímã | Genérico | ❌ A adquirir | Detecção de porta aberta/fechada via GPIO4 (D2) |
+| LED RGB (ou 3 LEDs) | Individual | ❌ A adquirir | Feedback visual durante modo terminal e acesso |
+| Fechadura solenoide | 12V | ❌ A adquirir | Atuador eletromecânico conectado ao NO/COM do módulo relê |
+| Relay control board | AliExpress (descartada) | ✅ Possuído | ⚠️ Não usada no protótipo principal — mantida como referência/failsafe |
+
+### Sobre a Relay Control Board (descartada do protótipo principal)
+
+A board é um **controlador de acesso autônomo** — não um simples módulo de relê. Foi descartada porque intercepta dados do ZN-53X e NFC internamente, impedindo que o backend MQTT seja a autoridade de acesso. Mantida como referência histórica e possível failsafe físico futuro.
+
+| Interface | Tipo | Motivo da incompatibilidade |
 |---|---|---|
-| ESP32S | Já possuído | Processamento central, Wi-Fi, MQTT, UART |
-| ZN-53X / A21 UART | Já possuído | Captura e extração de template biométrico |
-| LED RGB (ou 3 LEDs) | A adquirir (baixo custo) | Feedback visual durante modo terminal |
-| Fechadura solenoide | 12V | Permanece inativa durante o enrollment |
+| **Fingerprint Interface** | Conector JST 4 pinos | Board intercepta stream UART do ZN-53X — MCU não recebe dados do sensor |
+| **Inductive Interface** | Conector 3 pinos | Lógica autônoma interna — UID nunca exposto ao MCU |
+| **Switch Interface** | Conector 2 pinos | Único ponto de controle externo — apenas simula botão físico, sem feedback real |
 
-### Pinout ESP32 ↔ ZN-53X
+Ver análise completa em `.claude/guides/nodemcu-v3-simple-relay-architecture.md`.
 
-| Pino ESP32 | Pino ZN-53X | Função |
-|---|---|---|
-| GPIO16 (RX2) | TX | Recebe dados do sensor |
-| GPIO17 (TX2) | RX | Envia comandos ao sensor |
-| 3.3V ou 5V | VCC | Alimentação (verificar datasheet do módulo) |
-| GND | GND | Terra comum |
-| GPIO25 | LED Vermelho | Erro / negado / falha no enrollment |
-| GPIO26 | LED Verde | Sucesso no acesso / enrollment concluído |
-| GPIO27 | LED Azul | Aguardando dedo (modo terminal ativo) |
+### Pinout NodeMCU v3 ↔ ZN-53X (SoftwareSerial direto)
 
-> **Nota:** verificar fisicamente se o ZN-53X/A21 opera em 3.3V ou 5V para lógica UART.
-> O ESP32 opera em 3.3V — se o sensor for 5V, usar divisor de tensão na linha
-> TX do sensor para o RX do ESP32.
+| Pino NodeMCU | Label | Conecta em | Função |
+|---|---|---|---|
+| GPIO14 | D5 | ZN-53X TX | SoftwareSerial RX — recebe dados do sensor |
+| GPIO12 | D6 | ZN-53X RX | SoftwareSerial TX — envia comandos ao sensor |
+| 3V3 (ou VIN) | 3V3 | ZN-53X VCC | Alimentação — confirmar se sensor aceita 3.3V ou exige 5V |
+| GND | GND | ZN-53X GND | Terra comum |
+
+> Se o ZN-53X operar em lógica 5V, usar divisor de tensão na linha TX do sensor → D5:
+> `ZN-53X TX (5V) ── 1kΩ ── D5 (GPIO14) ── 2kΩ ── GND`
+
+### Pinout NodeMCU v3 ↔ Leitor NFC standalone (I2C direto)
+
+| Pino NodeMCU | Label | Conecta em | Função |
+|---|---|---|---|
+| GPIO13 | D7 | NFC SDA | I2C data |
+| GPIO0 | D3 | NFC SCL | I2C clock — GPIO0 é pulled HIGH no boot ✅ compatível com I2C |
+| 3V3 | 3V3 | NFC VCC | Alimentação |
+| GND | GND | NFC GND | Terra comum |
+
+> Inicializar com `Wire.begin(13, 0)` no ESP8266 (SDA=GPIO13, SCL=GPIO0).
+> Protocolo exato (I2C/SPI/UART) a confirmar fisicamente com o modelo do leitor NFC possuído.
+
+### Pinout NodeMCU v3 ↔ Módulo relê simples
+
+| Pino NodeMCU | Label | Conecta em | Função |
+|---|---|---|---|
+| GPIO5 | D1 | Relê IN | Controle direto — LOW = acionar (UNLOCK); HIGH = liberar (LOCK) |
+| VIN | VIN | Relê VCC | 5V do step-down — alimenta a bobina do relê |
+| GND | GND | Relê GND | Terra comum |
+| — | — | Relê COM | Polo positivo da fechadura solenoide |
+| — | — | Relê NO | Polo positivo da fonte 12V |
+
+### Pinout NodeMCU v3 ↔ Reed switch
+
+| Pino NodeMCU | Label | Conecta em | Função |
+|---|---|---|---|
+| GPIO4 | D2 | Reed switch pino 1 | `INPUT_PULLUP` — LOW = porta fechada (ímã próximo) |
+| GND | GND | Reed switch pino 2 | Terra comum |
 
 ---
 
@@ -385,6 +472,9 @@ Nenhum hardware adicional é necessário além do já definido para cada fechadu
 - [ ] **CA-16** — Ao excluir uma credencial no portal, o backend publica `door/{id}/delete-credential` e os controladores removem o slot correspondente
 - [ ] **CA-17** — Template duplicado (mesmo dedo passado duas vezes) é rejeitado com 409 Conflict pelo backend
 - [ ] **CA-18** — Portal exibe seletor de fechaduras online no drawer de digitais ao clicar em "Cadastrar via Fechadura"
+- [ ] **CA-19** — Leitura de cartão NFC pelo leitor standalone retorna UID corretamente ao ESP32-CAM via I2C/SPI/UART
+- [ ] **CA-20** — UID NFC lido pelo ESP32-CAM é publicado em `door/{id}/access-attempt` com `credentialType: NFC`
+- [ ] **CA-21** — Relay control board aciona o relé corretamente quando o ESP32-CAM envia sinal de controle após decisão GRANTED do backend
 
 ---
 
@@ -434,6 +524,38 @@ O campo `role` definido em ARCH-002 é **revertido**. O campo `roomId` nullable 
 
 ## Notas de Implementação
 
+### NodeMCU v3: mapeamento de GPIOs e restrições
+
+O NodeMCU v3 (ESP8266MOD) possui 11 GPIOs digitais utilizáveis. A alocação do projeto:
+
+| GPIO | Label | Uso | Nível em boot | Observação |
+|---|---|---|---|---|
+| GPIO0 | D3 | NFC SCL | HIGH (pull-up) | ✅ Compatível com I2C — pulled HIGH em repouso |
+| GPIO4 | D2 | Reed switch | Livre | `INPUT_PULLUP` |
+| GPIO5 | D1 | Módulo relê | Livre | Inicializar HIGH (trancado) no `setup()` |
+| GPIO12 | D6 | ZN-53X RX | Livre | SoftwareSerial TX |
+| GPIO13 | D7 | NFC SDA | Livre | I2C data |
+| GPIO14 | D5 | ZN-53X TX | Livre | SoftwareSerial RX |
+| GPIO15 | D8 | **Não usado** | LOW (obrigatório) | ⚠️ Não usar como SCL — conflito com I2C em repouso |
+| GPIO1 | TX | Serial0 debug | — | Não usar para periféricos |
+| GPIO3 | RX | Serial0 debug | — | Não usar para periféricos |
+
+GPIOs livres para expansão futura: D0 (GPIO16), D4 (GPIO2), D8 (GPIO15 — com restrição), A0 (ADC analógico).
+
+> O NodeMCU v3 tem USB nativo via CH340 — não precisa de adaptador FTDI para programação.
+> Serial de debug disponível diretamente via cabo USB.
+
+### Relay control board — decisão arquitetural documentada
+
+A relay control board foi analisada e descartada do protótipo principal. Os pontos de investigação que motivaram a decisão:
+
+1. **Fingerprint Interface (P4):** a board processa o ZN-53X internamente — o MCU não acessa o stream UART do sensor. Conectar o ZN-53X diretamente ao NodeMCU via SoftwareSerial é a única forma de ter acesso aos dados biométricos
+2. **Inductive Interface (NFC):** lógica autônoma interna — o UID nunca é exposto ao MCU. O leitor NFC standalone deve ser conectado diretamente ao NodeMCU via I2C
+3. **Switch Interface:** apenas simula um botão físico (pulso LOW ~200ms) — não expõe o estado real da fechadura e não permite controle fino do relê
+4. **Conclusão:** com a relay board, o sistema MQTT vira observador passivo. A board substituta (módulo relê simples de 1 canal) garante controle GPIO direto
+
+Ver análise completa e justificativa em `.claude/guides/nodemcu-v3-simple-relay-architecture.md`.
+
 ### Compatibilidade do ZN-53X com a biblioteca Adafruit
 
 O ZN-53X e o módulo A21 UART Boland usam o protocolo serial padrão do chip GROW R30x
@@ -442,13 +564,22 @@ implementa exatamente este protocolo. A compatibilidade precisa ser **confirmada
 como primeiro passo:
 
 ```cpp
-// Teste mínimo de compatibilidade
-Adafruit_Fingerprint finger(&Serial2);
-finger.begin(57600);
-if (finger.verifyPassword()) {
-  Serial.println("ZN-53X encontrado e respondendo!");
-} else {
-  Serial.println("Sensor não encontrado — verificar baudrate e fiação");
+// Teste mínimo de compatibilidade — NodeMCU v3 via SoftwareSerial
+#include <SoftwareSerial.h>
+#include <Adafruit_Fingerprint.h>
+
+SoftwareSerial ss(14, 12); // RX=D5 (GPIO14), TX=D6 (GPIO12)
+Adafruit_Fingerprint finger(&ss);
+
+void setup() {
+  Serial.begin(115200); // debug via USB nativo do NodeMCU
+  ss.begin(57600);
+  finger.begin(57600);
+  if (finger.verifyPassword()) {
+    Serial.println("ZN-53X encontrado e respondendo!");
+  } else {
+    Serial.println("Sensor não encontrado — verificar baudrate e fiação");
+  }
 }
 ```
 
@@ -480,6 +611,17 @@ no payload de `sync-credentials`. Quando todos os slots estão cheios, o backend
 campo `evict` no payload indicando qual slot deve ser liberado (política LRU via `lastUsedAt`).
 Ver HW-008 para detalhes da política de eviction.
 
+### Leitura NFC via leitor standalone
+
+O leitor NFC standalone possuído deve ser identificado (PN532, MFRC522 ou similar) e a
+biblioteca correspondente usada no firmware do NodeMCU v3:
+
+- **PN532 (I2C):** biblioteca `Adafruit_PN532` — inicializar com `Wire.begin(13, 0)` (SDA=D7, SCL=D3); ler UID com `readPassiveTargetID()`
+- **MFRC522 (SPI):** biblioteca `MFRC522` — usar GPIOs livres para SPI (SS, RST, MOSI, MISO, SCK); ler UID com `uid.uidByte[]` após `PICC_IsNewCardPresent()`
+
+O UID lido é publicado em `door/{id}/access-attempt` com `credentialType: NFC` e `credentialValue: uid_hex`.
+O backend resolve o UID para a credencial cadastrada em `access_credential` (type = NFC).
+
 ### Isolamento do modo terminal no firmware
 
 A máquina de estados do firmware deve garantir que:
@@ -501,3 +643,12 @@ O WA26 e o hook `useFingerprintReader` permanecem no codebase para demonstraçã
 O cadastro real de digitais passa pela fechadura em modo terminal. Isso deve ser documentado
 na monografia como decisão arquitetural motivada pela incompatibilidade de templates entre
 fabricantes diferentes (Boland vs. R30x).
+
+### Próximos passos físicos recomendados (em ordem)
+
+1. **Conectar ZN-53X ao NodeMCU v3** via SoftwareSerial (D5/D6) e rodar teste `verifyPassword()` — confirmar baudrate e nível de tensão (3.3V vs 5V)
+2. **Identificar modelo do leitor NFC standalone** — fazer I2C scan (`Wire.begin(13, 0)`) para confirmar endereço e biblioteca adequada
+3. **Adquirir módulo relê simples 1 canal (5V)** e testar acionamento via GPIO5 (D1) com multímetro nos terminais NO/COM
+4. **Montar circuito completo** conforme diagrama em `.claude/guides/nodemcu-v3-simple-relay-architecture.md` e testar periféricos simultâneos (SoftSerial + I2C + relê)
+5. **Integrar com MQTT** — testar `door/{id}/heartbeat`, `door/{id}/access-attempt` e `door/{id}/access-result`
+6. **Confirmar GPIOs definitivos** e atualizar `config.h` com valores físicos validados

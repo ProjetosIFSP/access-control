@@ -169,26 +169,29 @@ Broker MQTT baseado em Aedes (Node.js). Recebe mensagens dos controladores físi
 
 ### 4. Hardware / Firmware (`core/`)
 
-Firmware para microcontroladores ESP32S (e futuramente ESP8266) que atuam como controladores de acesso instalados em cada porta.
+Firmware para o microcontrolador **NodeMCU v3 (ESP8266MOD)** que atua como controlador de acesso instalado em cada porta.
 
 **Principais responsabilidades:**
 - Conectar ao Wi-Fi e ao broker MQTT
 - Enviar heartbeat periódico
-- Ler credenciais (biometria ZN-53X, RFID RC522)
-- Detectar estado da porta (reed switch ou SCT-013)
+- Ler credenciais (biometria ZN-53X, NFC via IC V1.3A — protocolo Wiegand ou I2C a confirmar)
+- Detectar estado da porta (reed switch)
 - Controlar o relé da fechadura solenoide
 - Executar comandos recebidos via MQTT
 
 **Hardware utilizado:**
-| Componente | Modelo | Função |
-|------------|--------|--------|
-| Microcontrolador | ESP32S | Processamento central |
-| Sensor biométrico | ZN-53X / DY50 | Captura de digitais |
-| Leitor RFID | RC522 | Leitura de cartões NFC |
-| Sensor de corrente | SCT-013 | Detecção de estado da fechadura |
-| Reed switch | Genérico | Detecção porta aberta/fechada |
-| Relé | 5V 1 canal | Acionamento da fechadura |
-| Fechadura | Solenoide 12V | Atuador eletromecânico |
+| Componente | Modelo | Status | Função |
+|------------|--------|--------|--------|
+| Microcontrolador | NodeMCU v3 (ESP8266MOD) | ✅ Possuído | Processamento central, Wi-Fi, MQTT |
+| Sensor biométrico | ZN-53X (protocolo R30x) | ✅ Possuído | Captura e matching de digitais via SoftwareSerial |
+| Leitor NFC | IC V1.3A — 2 pinos (C1/P1) | ✅ Possuído ⚠️ | Leitura de UIDs NFC — protocolo Wiegand (D0/D1) ou I2C a confirmar fisicamente |
+| Reed switch | Genérico | ❌ A adquirir | Detecção porta aberta/fechada |
+| Módulo relê | 5V 1 canal com optoacoplador | ❌ A adquirir | Acionamento da fechadura via GPIO5 (D1) |
+| Fechadura | Solenoide 12V (fail-secure) | ❌ A adquirir | Atuador eletromecânico |
+| Fonte | 12V / 2A | ❌ A adquirir | Alimentar fechadura + step-down |
+| Step-down | LM2596 ou módulo buck | ❌ A adquirir | 12V → 5V para NodeMCU via VIN |
+
+> ⚠️ **Leitor NFC IC V1.3A:** o conector de 2 pinos marcado "C1" e "P1" aponta para saída **Wiegand 26** (D0/D1), protocolo padrão de leitores de acesso standalone. A alimentação provavelmente fica em um pad separado na PCB. Se o módulo operar em 5V TTL, os sinais D0/D1 exigem divisor de tensão (1kΩ + 2kΩ) antes dos GPIOs 3,3V do ESP8266. Inspecionar o chip principal da PCB e medir a tensão antes de conectar. Ver análise completa em `.claude/guides/nodemcu-v3-simple-relay-architecture.md` (Seção 7).
 
 **Modos de operação do dispositivo:**
 

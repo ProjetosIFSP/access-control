@@ -1,12 +1,64 @@
 # Todo — Sistema de Controle de Acesso IoT
 
-> Última atualização: PERM-005 resolvido; broker IoT corrigido (métodos HTTP, paths, sensorProtocol/sensorModel); checkUserRoomAccess movido para módulo de permissões; seed com controladores. Ver `implemented.md` → PERM-005 e INFRA-IOT-001.
+> Última atualização: **INFRA-004** — Migração do frontend de Vite SPA para TanStack Start (SSR). Fumadocs integrado e acessível em `/docs`. Primeira página "Olá Mundo!" funcionando com SSR. Ver `implemented.md` → INFRA-004.
+> Última atualização anterior: **HW-BIOMETRIC-ESP8266** — Tutorial de conexão e firmware de teste criados para NodeMCU v3 + ZN-53X + A21 UART. Dois sensores testáveis simultaneamente via `#define DUAL_SENSOR 1`. Ver `.claude/test/esp8266-biometric/`. PERM-005 resolvido; broker IoT corrigido (métodos HTTP, paths, sensorProtocol/sensorModel); checkUserRoomAccess movido para módulo de permissões; seed com controladores. Ver `implemented.md` → PERM-005 e INFRA-IOT-001.
+> Última atualização (análise): HW-007-ALT criado — análise de viabilidade do HLK-ZW111 (Hi-Link) como alternativa ao ZN-53X. Ver `.claude/features/HARDWARE/hw-007-alt-hlk-zw111.md`.
+> Última atualização (hardware): Hardware real de teste confirmado — ESP32-CAM (AI-Thinker), ZN-53X, relay control board multifuncional (NFC + P4 biometria + relé), leitor NFC standalone. `hw-007-enrollment-terminal.md` e `items.md` atualizados com nova stack de hardware.
+> Última atualização (firmware): **HW-007-RELAY-DISCOVERY** — Relay control board confirmada como controlador autônomo. Integração via Switch Interface (pulso GPIO ~200ms). Firmware v0.2.0 atualizado; README e hw-007 revisados. Ver `implemented.md` → HW-007-RELAY-DISCOVERY.
+> Última atualização (hardware — NFC): **NFC-DISCOVERY** — Confirmado que o "leitor NFC standalone" **não existe como item independente**: a placa **IC V1.3A** (conector 2 pinos C1/P1) é a **bobina de antena indutiva passiva** do kit da relay control board — sem lógica ou protocolo utilizável pelo ESP8266 isoladamente. Para leitura NFC pelo firmware, é necessário **adquirir um módulo leitor independente (PN532 recomendado)**. `items.md`, `architecture.md` e `nodemcu-v3-simple-relay-architecture.md` atualizados.
 
 > Última atualização anterior: ARCH-003 — modo terminal integrado às próprias fechaduras, sem dispositivo dedicado.
 
 ---
 
 ## ✅ Tasks concluídas (esta sessão)
+
+### INFRA-004 — Migração para TanStack Start + Fumadocs (Documentação em /docs)
+
+- Migração completa do `app/` de Vite SPA para TanStack Start 1.166 (SSR com Vite nativo, sem Vinxi)
+- Criado `src/client.tsx`, `src/server.tsx`, `src/router.tsx` (entry points SSR)
+- Layout pathless `_app` para isolar rotas da aplicação do `/docs`
+- Fumadocs MDX integrado: `source.config.ts`, `src/lib/source.ts`, `src/lib/mdx-components.tsx`
+- Rota `/docs` com `RootProvider` Fumadocs + rota coringa `/docs/$` para páginas MDX
+- Primeira página `content/docs/index.mdx` com "Olá Mundo!"
+- Correções de SSR: `MobileNavDrawer` (`document`), `Footer` (`window`), loader `/docs/$` (serialização do MDXContent)
+- Arquivos auxiliares `types.ts` e `loading.tsx` renomeados com prefixo `-`
+
+### HW-BIOMETRIC-ESP8266 — Tutorial de conexão + firmware de enrollment biométrico no NodeMCU v3 (ZN-53X e A21) com Wi-Fi + MQTT
+
+- [x] **Tutorial de conexão criado** — `.claude/test/esp8266-biometric/README.md` com:
+  - Diagrama do fluxo MQTT ponta a ponta (Portal → ESP8266 → Broker → Backend → banco)
+  - Mapeamento completo dos 6 fios coloridos do A21 UART Boland (laranja=VCC, preto=GND, amarelo=TX, verde=RX, azul=NC, branco=NC)
+  - Mapeamento do ZN-53X por função (cores típicas)
+  - Tabelas fio a fio e diagramas ASCII de conexão ao NodeMCU v3
+  - Procedimento de verificação de tensão com multímetro antes de conectar (divisor 1kΩ+2kΩ para TX em 5V)
+  - Passos de validação incremental: sensor → Wi-Fi → MQTT → enrollment real → verificação no banco
+  - Diagnóstico de problemas comuns (sensor, Wi-Fi, MQTT state codes, payload size)
+- [x] **Firmware completo criado** — `.claude/test/esp8266-biometric/firmware-biometric-esp8266.ino` com:
+  - Wi-Fi (ESP8266WiFi) + MQTT (PubSubClient) + ArduinoJson
+  - Sensor único via SoftwareSerial: D5 (GPIO14 RX) / D6 (GPIO12 TX)
+  - Detecção automática de baudrate (57600, 9600, 19200, 38400, 115200)
+  - Protocolo R30x via `Adafruit Fingerprint Sensor Library >= 2.1.0`
+  - Extração do template via `getModel()` + leitura manual dos data packets (256 bytes → hex 512 chars)
+  - Publicação do resultado em `enrollment/{CONTROLLER_ID}/result`
+  - Registro automático no sistema via `door/{id}/register` no boot
+  - Heartbeat periódico a cada 30s via `door/{id}/heartbeat`
+  - Enrollment executado no `loop()` (fora do callback MQTT) para não bloquear o PubSubClient durante as capturas
+  - LEDs de feedback: azul (aguardando dedo), verde (sucesso), vermelho (erro)
+  - `mqtt.setBufferSize(1300)` para comportar o payload de 512 chars hex
+- [x] **Broker IoT atualizado** — `tcc/iot/src/index.ts` com:
+  - Novo schema `enrollmentResultPayloadSchema`
+  - Novo matcher `enrollmentResult: /^enrollment\/([^/]+)\/result$/`
+  - Handler `handleEnrollmentResult()` que chama `POST /iot/devices/{id}/enrollment`
+  - Persiste apenas status `COMPLETED` com template; loga e descarta `FAILED`/`TIMEOUT`
+- [x] **Rota IoT interna criada** — `tcc/server/src/api/routes/iot.ts`:
+  - `POST /iot/devices/:controllerId/enrollment` — sem `requireAdmin`, autenticada pelo controllerId
+  - Aceita `{ userId, finger, template, enrollmentId? }` no body
+  - Chama `registerFingerprint()` com `enrolledByControllerId: controllerId`
+  - Retorna 201 em sucesso, 409 em conflito de dedo ou template duplicado
+- [x] **Service de fingerprint atualizado** — `tcc/server/src/services/user/fingerprint/register-fingerprint.ts`:
+  - Campo `enrolledByControllerId?: string` adicionado ao `RegisterFingerprintInput`
+  - Persistido no INSERT via spread condicional
 
 ### Correções de bugs + fluxo IoT com sensorProtocol/sensorModel — PERM-005 / INFRA-IOT-001
 
@@ -128,24 +180,79 @@
 
 ## 🔜 Próxima tarefa recomendada
 
-### 1. HW-007 (Passo 1) — Validar compatibilidade física do ZN-53X
+### 0. HW-007 (Pré-passo) — Investigar relay control board (sem MCU, só multímetro)
 
-**Por quê agora?** É o pré-requisito de toda a arquitetura biométrica. Se o ZN-53X não responder ao protocolo R30x da biblioteca Adafruit, o fluxo de enrollment não funciona e a decisão arquitetural precisa ser revisada.
+**Por quê agora?** A relay control board possui lógica interna autônoma. Os resultados desta investigação definem: como o ZN-53X se conecta ao MCU, se o leitor NFC standalone é obrigatório, como o relé será controlado, e — crítico — **qual MCU usar (ESP8266 ou ESP32)**. Nada disso pode ser decidido antes.
 
-**O que fazer:**
-1. Montar o circuito: ESP32S + ZN-53X/A21 via UART2 (GPIO16/17)
-2. Carregar o firmware em `.claude/test/enrollment-terminal/firmware-enrollment-test.ino`
-3. Verificar no Serial Monitor se `verifyPassword()` retorna `FINGERPRINT_OK`
-4. Registrar o baudrate que funcionou e os primeiros bytes do template
-5. Preencher a tabela de validações no `README.md` do teste
+**O que fazer:** seguir o guia `.claude/test/relay-board-investigation/README.md` na ordem dos 4 passos:
+1. **Passo 1** — Identificar conectores e medir tensões em repouso com multímetro (mapear P4 e NFC pino a pino)
+2. **Passo 2** — Verificar se o relé pode ser acionado externamente (testar conector do botão de saída; montar LED de teste no lugar da fechadura)
+3. **Passo 3** — Conectar o ZN-53X no P4 e observar se a board envia dados UART para o sensor (P4 passivo vs. ativo)
+4. **Passo 4** — Aproximar cartão NFC e medir pinos do conector NFC — verificar se o UID é exposto ou se a board é opaca
+5. Preencher a **tabela geral de resultados** no final do README e a **tabela de decisão de arquitetura** (MCU, conexão do ZN-53X, controle do relé)
+6. Atualizar `hw-007-enrollment-terminal.md` e `items.md` com os pinos reais e o MCU escolhido
 
 **Arquivos envolvidos:**
-- `.claude/test/enrollment-terminal/firmware-enrollment-test.ino` (firmware de teste)
-- `.claude/test/enrollment-terminal/README.md` (guia de execução)
+- `.claude/test/relay-board-investigation/README.md` ← **guia principal deste passo**
+- `.claude/features/HARDWARE/hw-007-enrollment-terminal.md` (atualizar pinout e decisões após o teste)
+- `.claude/items.md` (confirmar MCU escolhido, remover ou manter ESP32-CAM)
 
 ---
 
-### 2. HW-007 (Passos 2–6) — Validar fluxo completo de enrollment em modo terminal
+### 0.5 — Testar controle do relé com ESP8266 via MQTT (Switch Interface)
+
+**Por quê agora?** Antes de envolver o ZN-53X ou o NFC, é preciso confirmar que o ESP8266 consegue se comunicar com o broker MQTT e acionar o relé da board via Switch Interface. É o teste mais simples possível — sem biometria, sem NFC — e valida toda a camada de conectividade Wi-Fi + MQTT + sinal de unlock de uma vez.
+
+**Descoberta importante:** a relay control board é um **controlador autônomo** — o relé é acionado internamente pela board. O ESP8266 **não controla o relé diretamente por GPIO**; a integração correta é simular o botão de saída físico via **Switch Interface** (pulso de ~200ms). Firmware e README já foram atualizados para refletir isso (v0.2.0).
+
+**Depende de:** identificar fisicamente os pinos do Switch Interface na board (teste manual com jumper antes de conectar o ESP8266).
+
+**O que fazer:** seguir o guia `.claude/test/esp8266-relay/README.md` na ordem:
+1. **Teste 0 (manual, sem ESP8266):** curto-circuitar os 2 pinos do Switch Interface com um jumper — confirmar que o relé aciona (clique audível + LED da board muda)
+2. Configurar o Arduino IDE para o ESP8266 (instalar pacote + bibliotecas PubSubClient e ArduinoJson)
+3. Montar o LED de teste nos terminais COM/NO do relé (para visualizar acionamento)
+4. Conectar `GPIO5 (D1)` → Switch Interface pino 1; `GND` → Switch Interface pino 2 + GND da board
+5. Conectar `GPIO4 (D2)` ao botão/reed switch simulando estado da porta
+6. Editar `WIFI_SSID`, `WIFI_PASSWORD`, `MQTT_SERVER` e `ROOM_ID` no firmware (v0.2.0)
+7. Carregar o firmware e abrir o Serial Monitor (115200 baud)
+8. Confirmar Wi-Fi + MQTT conectados, registro enviado e "Modo: pulso via Switch Interface"
+9. Enviar comando UNLOCK via `mosquitto_pub` e verificar Serial: `[RELAY] Pulso enviado (200ms)`
+10. Confirmar que o relé da board aciona após o pulso e que o LED de teste acende
+11. Preencher a tabela de validações no README (incluindo seção "Switch Interface")
+
+**⚠️ GND comum é obrigatório:** sem o GND compartilhado entre ESP8266 e relay board, o sinal do Switch Interface não tem referência e o relé não aciona. Este é o erro mais comum nesta etapa.
+
+**Arquivos envolvidos:**
+- `.claude/test/esp8266-relay/README.md` ← **guia principal deste passo** (atualizado — v0.2.0)
+- `.claude/test/esp8266-relay/firmware-relay-esp8266.ino` ← firmware do ESP8266 (v0.2.0 — usa Switch Interface)
+
+---
+
+### 1. HW-007 (Passo 1) — Validar compatibilidade física do ZN-53X com o MCU escolhido
+
+**Depende de:** Pré-passo 0 concluído — MCU definido e pinout do P4 mapeado.
+
+**Por quê agora?** É o pré-requisito de toda a arquitetura biométrica. Se o ZN-53X não responder ao protocolo R30x da biblioteca Adafruit, o fluxo de enrollment não funciona independente do MCU.
+
+**O que fazer:**
+1. Montar o circuito com o MCU escolhido (ESP32S recomendado por ter micro-USB e UART2 livre) + ZN-53X:
+   - **Se ESP32S:** UART2 nos GPIO16 (RX) / GPIO17 (TX) — firmware já está configurado para isso
+   - **Se ESP8266:** UART0 nos GPIO3 (RX) / GPIO1 (TX) — adaptar firmware e desabilitar Serial Monitor ou usar `Serial.swap()`
+   - **Se P4 passivo (Cenário A):** conectar os pinos TX/RX do P4 nos GPIOs do MCU, passando pela board
+   - **Se P4 ativo (Cenário B):** conectar o ZN-53X diretamente no MCU, ignorando o P4
+2. Carregar o firmware `.claude/test/enrollment-terminal/firmware-enrollment-test.ino` (ajustar `SENSOR_RX_PIN` / `SENSOR_TX_PIN` conforme o MCU)
+3. Verificar no Serial Monitor se `verifyPassword()` retorna `FINGERPRINT_OK`
+4. Testar baudrates alternativos se necessário: 57600 (padrão), 9600, 115200
+5. Registrar o baudrate que funcionou e os primeiros bytes do template
+6. Preencher a tabela de validações no `README.md` do teste
+
+**Arquivos envolvidos:**
+- `.claude/test/enrollment-terminal/firmware-enrollment-test.ino` (ajustar pinos conforme MCU e Cenário do P4)
+- `.claude/test/enrollment-terminal/README.md` (guia de execução — preencher tabela de validações)
+
+---
+
+### 2. HW-007 (Passos 2–6) — Validar fluxo completo de enrollment em modo terminal (ESP32-CAM)
 
 **Depende de:** HW-007 Passo 1 (compatibilidade ZN-53X) concluído com sucesso + schema revertido (tarefa 0)
 
@@ -311,17 +418,29 @@
 - [ ] UI-019 futuro: ao clicar em uma fechadura na listagem de salas, exibir side panel com credenciais sincronizadas e status dos slots
 
 ### Hardware pendente de aquisição
-- [ ] Fechadura solenoide 12V
-- [ ] Módulo relé 5V (1 canal)
-- [ ] Fonte 12V / 2A
-- [ ] Sensor reed switch + ímã
-- [ ] LEDs RGB e buzzer para feedback ao usuário
+- [ ] Fechadura solenoide 12V (conecta ao relé NO/NC da relay control board — item mais crítico)
+- [ ] Fonte 12V / 2A (alimentar relay board e fechadura — board aceita DC 10V–120V direto)
+- [ ] Regulador step-down (12V → 5V/3.3V para alimentar ESP32-CAM sem USB)
+- [ ] Sensor reed switch + ímã (detectar estado real da porta)
+- [ ] LEDs RGB e buzzer para feedback ao usuário (modo terminal e acesso)
+- [ ] Diodo de proteção 1N4007 (verificar primeiro se relay board já possui proteção interna)
 
 ### Infraestrutura
 - [ ] INFRA-004 — Monitoramento de logs em produção (Loki + Grafana ou similar)
 
 ### Testes físicos pendentes
-- [ ] **[PRIORITÁRIO]** Validar compatibilidade ZN-53X com protocolo R30x — ver `.claude/test/enrollment-terminal/README.md` Passo 1
+- [ ] **[PASSO 0 — PRIMEIRO]** Executar os 4 passos de `.claude/test/relay-board-investigation/README.md` — mapear P4, verificar controle externo do relé, comportamento com ZN-53X e exposição de UID NFC; preencher tabela de resultados e decidir MCU
+- [ ] **[PASSO 0.5 — APÓS PASSO 0]** Testar controle do relé com ESP8266 via MQTT — ver `.claude/test/esp8266-relay/README.md`; validar Wi-Fi + MQTT + acionamento físico do relé + detecção de estado da porta
+- [ ] **[PASSO 1 — APÓS PASSO 0.5]** Validar compatibilidade ZN-53X com protocolo R30x via MCU escolhido — ver `.claude/test/enrollment-terminal/README.md` Passo 1
+- [ ] **[NFC — AQUISIÇÃO OBRIGATÓRIA]** Adquirir módulo leitor NFC independente para o NodeMCU v3:
+  - A placa IC V1.3A (conector C1/P1) é apenas a **bobina de antena passiva** da relay board — não possui lógica utilizável pelo firmware isoladamente
+  - **PN532 recomendado** (I2C, 3,3V, biblioteca `Adafruit_PN532`) — buscar `"módulo PN532 NFC"` no Mercado Livre / Shopee (~R$15–25); confirmar jumpers para modo I2C na descrição do produto
+  - Alternativa: **MFRC522** (SPI, 3,3V, ~R$8–12) — mais barato, porém usa pinos SPI (D5/D6/D7/D8) que conflitam com o ZN-53X no pinout atual; exigiria realocação de GPIOs
+  - Ver análise completa em `.claude/guides/nodemcu-v3-simple-relay-architecture.md` (Seção 7 e Passo 2)
+- [ ] **[NFC — PÓS-AQUISIÇÃO]** Validar leitura de UID com o módulo adquirido:
+  - PN532: executar scan I2C (`Wire.begin(13, 0)`) e confirmar endereço `0x24`; depois executar sketch de leitura passiva e aproximar tag NFC
+  - Ver sketch de teste completo em `.claude/guides/nodemcu-v3-simple-relay-architecture.md` (Passo 2)
+- [ ] Mapear e documentar GPIOs definitivos do NodeMCU v3 para cada periférico (ZN-53X, módulo NFC a adquirir, LEDs, controle do relé)
 - [ ] Executar Passos 2–6 do guia de enrollment e preencher tabela de validações
 - [ ] Validar alternância de modo fechadura → modo terminal ao receber `door/{id}/enter-enrollment-mode` e retorno após `enrollment-result`
 - [ ] Validar que `sensorProtocol = "R30X"` e `sensorModel` são publicados corretamente no payload de `door/{id}/register`

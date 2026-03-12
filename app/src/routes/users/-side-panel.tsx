@@ -5,7 +5,7 @@ import { UserFormPanel } from "@/components/users/user-form-panel";
 import type { ProfileSummary } from "@/services/profiles/types";
 import type { UserSummary } from "@/services/users/types";
 
-import type { PanelMode } from "./types";
+import type { PanelMode } from "./-types";
 
 interface UsersSidePanelProps {
   panelMode: PanelMode;

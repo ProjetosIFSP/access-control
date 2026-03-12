@@ -2,6 +2,195 @@
 
 ---
 
+## INFRA-004 — Migração para TanStack Start + Fumadocs (Documentação em /docs)
+
+**Data:** Sessão atual
+**Escopo:** `app/` inteiro — migração de Vite SPA para TanStack Start; adição do Fumadocs como sistema de documentação acessível em `/docs`
+
+### Motivação
+
+O app era uma SPA pura (Vite + TanStack Router file-based). Para integrar o Fumadocs (que requer SSR para renderizar MDX e hidratar corretamente), foi necessário migrar para o TanStack Start — o meta-framework SSR oficial do TanStack Router.
+
+### O que foi feito
+
+#### 1. Migração Vite SPA → TanStack Start
+
+| Arquivo | Ação |
+|---|---|
+| `vite.config.ts` | Substituído: `tanstackRouter` + `viteReact` → `tanstackStart()` plugin |
+| `src/main.tsx` | Substituído por `src/client.tsx` (entry SSR client) + `src/server.tsx` (entry SSR server) |
+| `src/router.tsx` | Criado: fábrica `createRouter()` + `getRouter()` (singleton para o módulo virtual `#tanstack-router-entry`) |
+| `src/routes/__root.tsx` | Atualizado: adicionado `<html>`, `<head>`, `<HeadContent />`, `<Scripts />` e `QueryClientProvider` via `router.context` |
+| `package.json` | Scripts `dev`/`build`/`serve` agora usam `vite dev`/`vite build`/`vite preview` (TanStack Start usa Vite nativo, não Vinxi) |
+
+#### 2. Layout pathless `_app` para isolar docs
+
+- Criado `src/routes/_app.tsx` — layout sem path que envolve as rotas da aplicação com `<Header />` e `<Toaster />`
+- Rotas movidas: `index.tsx`, `rooms/`, `users/`, `forgot-password.tsx`, `reset-password.tsx` → `src/routes/_app/`
+- Arquivos auxiliares `types.ts` e `loading.tsx` renomeados com prefixo `-` para não serem detectados como rotas
+
+#### 3. Fumadocs MDX integrado
+
+| Arquivo | Descrição |
+|---|---|
+| `source.config.ts` | Define a coleção `docs` apontando para `content/docs/` |
+| `src/lib/source.ts` | Conecta a coleção ao loader Fumadocs Core com `baseUrl: '/docs'` |
+| `src/lib/mdx-components.tsx` | Helper de componentes MDX com defaults do Fumadocs UI |
+| `src/routes/docs.tsx` | Layout pai `/docs` com `RootProvider` do Fumadocs (TanStack variant) |
+| `src/routes/docs/$.tsx` | Rota coringa que resolve a página MDX pelo slug |
+| `content/docs/index.mdx` | Primeira página: "Olá Mundo!" |
+| `src/styles.css` | Adicionados imports `fumadocs-ui/css/neutral.css` e `fumadocs-ui/css/preset.css` |
+| `tsconfig.json` | Alias `collections/*` → `.source/*` para o Fumadocs MDX |
+
+#### 4. Correções de compatibilidade SSR
+
+- `MobileNavDrawer`: `createPortal(..., document.body)` protegido com `if (typeof document === "undefined") return null`
+- `Footer`: `window.location` protegido com `typeof window !== "undefined"` (fallback para `"http://localhost:"`)
+- Loader da rota `/docs/$`: retorna apenas o `slug` (string serializável), não o `page` object (que contém `MDXContent` — uma função React não serializável pelo seroval do TanStack Start)
+
+### Pacotes adicionados
+
+```
+@tanstack/react-start@1.166.7
+fumadocs-core@16.6.16
+fumadocs-ui@16.6.16
+fumadocs-mdx@14.2.9
+@types/mdx@2.0.13
+```
+
+### Pacotes removidos / substituídos
+
+```
+vinxi (removido — TanStack Start 1.166+ usa Vite nativo)
+@tanstack/start (removido — renomeado para @tanstack/react-start)
+@tanstack/router-plugin → alinhado para 1.131.50 → depois 1.166.7
+```
+
+### Resultado
+
+- `GET /` → HTTP 200 (app principal com SSR)
+- `GET /docs` → HTTP 200 (Fumadocs com sidebar + "Olá Mundo!" renderizado via SSR)
+- `GET /rooms` → HTTP 307 (redirect para login — comportamento correto)
+- `GET /users` → HTTP 307 (redirect para login — comportamento correto)
+- Nenhum aviso de rota inválida no router generator
+- MDX gerado em ~12ms no startup
+
+
+---
+
+## NFC-DISCOVERY — Identificação da Bobina IC V1.3A como Antena da Relay Board e Atualização de Documentação
+
+**Data:** Sessão de análise de hardware físico — leitor NFC
+**Escopo:** `.claude/items.md`, `.claude/architecture.md`, `.claude/guides/nodemcu-v3-simple-relay-architecture.md`, `.claude/features/todo.md`, `.claude/features/implemented.md`
+
+### Contexto
+
+O item anteriormente denominado "leitor NFC standalone" foi identificado corretamente. As informações físicas do componente:
+
+- Placa pequena marcada como **IC V1.3A**
+- Conector de **2 pinos** com marcações **"C1"** e **"P1"** na PCB
+- O produto de origem é o mesmo kit da **relay control board multifuncional** (AliExpress) — a placa IC V1.3A é descrita no kit como **"induction coil"** (bobina de indução)
+
+### Conclusão
+
+A placa IC V1.3A **não é um leitor NFC autônomo** — é a **bobina de antena indutiva passiva** que integra o circuito NFC interno da relay board:
+
+- **C1** e **P1** são os dois terminais elétricos da bobina LC ressonante a **13,56 MHz** — não carregam dados, protocolo ou endereçamento
+- A bobina apenas irradia/capta o campo eletromagnético; o circuito que detecta o UID do cartão está integrado na PCB da relay board
+- Sem a relay board, a bobina IC V1.3A **não produz nenhum dado utilizável** pelo ESP8266
+- O "Inductive Interface" (conector 3 pinos) da relay board é onde essa bobina se encaixa; a lógica NFC interna da board é autônoma — o UID nunca é exposto ao MCU externo
+
+### Impacto no projeto
+
+O protótipo **não possui um módulo leitor NFC independente** conectável ao NodeMCU v3. Para que o firmware possa ler UIDs de tags/cartões NFC, é **obrigatório adquirir um módulo leitor NFC com interface de dados própria**:
+
+- **PN532 (recomendado)** — suporta I2C (D7/D3), opera em 3,3V, biblioteca `Adafruit_PN532` madura; ~R$15–25
+- **MFRC522 (alternativa)** — SPI, 3,3V, ~R$8–12; porém conflita com o pinout atual do ZN-53X nos pinos D5/D6
+
+### Ações tomadas
+
+- **`items.md` atualizado:**
+  - Seção RFID/NFC: entrada do "leitor NFC standalone" marcada como item inexistente com referência à relay board
+  - Relay control board: sub-item do Inductive Interface expandido com descrição da bobina IC V1.3A (C1/P1 = terminais da bobina LC passiva, sem lógica)
+  - Necessários: nova seção "Leitura NFC" com módulo PN532 como item obrigatório (~R$15–25)
+  - Tabela de prioridades: módulo PN532 adicionado como item de alta prioridade
+  - Notas: entrada sobre o "leitor NFC standalone" corrigida para refletir a realidade (bobina passiva da relay board)
+
+- **`architecture.md` atualizado:**
+  - Tabela de hardware do firmware reescrita — NodeMCU v3 (MCU atual), ZN-53X, leitor NFC como "PN532 ou MFRC522 (a adquirir)", status por item
+  - SCT-013 e RC522 removidos (não fazem parte da stack atual)
+  - Nota sobre a bobina IC V1.3A adicionada abaixo da tabela
+
+- **`nodemcu-v3-simple-relay-architecture.md` atualizado:**
+  - Stack de hardware (Seção 3): leitor NFC corrigido para "PN532 ou MFRC522 (a adquirir)"; nota sobre IC V1.3A como bobina passiva adicionada
+  - Pinout (Seção 4): diagrama simplificado para cenário único PN532 via I2C (D7/D3); tabela de GPIOs atualizada; nota sobre MFRC522 via SPI e conflito de pinos adicionada
+  - Diagrama de conexão (Seção 5): cenários Wiegand removidos; diagrama único com PN532 I2C mantido
+  - Seção 7 (Leitor NFC): completamente reescrita — contexto da bobina IC V1.3A, tabela comparativa PN532 vs MFRC522, tabela de conexão PN532 I2C, snippet de inicialização, notas sobre pull-ups e jumpers
+  - Seção 12 (Itens a adquirir): módulo PN532 adicionado como obrigatório com termo de busca
+  - Passo 2 dos próximos passos: reescrito para validação do PN532 via I2C (scan de endereço + leitura de UID com `Adafruit_PN532`)
+
+- **`todo.md` atualizado:**
+  - Cabeçalho com nota corrigida — conclusão da bobina IC V1.3A e necessidade de aquisição de módulo NFC independente
+  - Testes físicos pendentes: tarefa de "identificar protocolo IC V1.3A" substituída por "adquirir PN532" + "validar leitura pós-aquisição"
+
+---
+
+## DOC-HW-001 — Confirmação do Hardware Real de Teste e Atualização de Documentação
+
+**Data:** Sessão de definição de hardware físico disponível
+**Escopo:** `.claude/features/HARDWARE/hw-007-enrollment-terminal.md`, `.claude/items.md`, `.claude/features/todo.md`
+
+### Contexto
+
+Hardware real disponível para o protótipo de fechadura foi confirmado pelo desenvolvedor:
+
+- **ESP32-CAM (AI-Thinker)** — microcontrolador principal (substitui o ESP32S genérico nos testes anteriores)
+- **ZN-53X** — sensor biométrico UART (protocolo R30x), sem alteração
+- **Relay control board multifuncional** (AliExpress) — placa que integra: relé NO/NC (DC 10V–120V), leitor NFC/cartão IC autônomo embutido, conector **P4** para sensor biométrico externo, entrada para botão de saída
+- **Leitor NFC standalone** — já possuído; deve ser conectado diretamente ao ESP32-CAM para controle via firmware
+
+### Decisões tomadas
+
+- **ESP32-CAM como microcontrolador principal** — possui GPIOs suficientes quando a câmera OV2640 é desabilitada no firmware (GPIOs livres esperados: 12, 13, 14, 15, 32, 33); câmera não é necessária para a fechadura
+- **Relay control board como hub de atuação** — já integra o relé, eliminando a necessidade de adquirir um módulo relé separado (5V); o item "Módulo relé 5V (1 canal)" foi removido da lista de necessários
+- **NFC standalone tem prioridade sobre NFC da board** — o leitor NFC embutido na board possui lógica autônoma (aciona relé sem MCU externo); para manter o ESP32-CAM como autoridade de decisão, o leitor NFC standalone é conectado diretamente ao ESP32-CAM
+- **Investigação do conector P4 é pré-requisito crítico** — antes de qualquer firmware de integração, é necessário mapear TX/RX/VCC/GND do P4 e verificar se a board permite modo bypass (controle externo via GPIO do ESP32-CAM)
+
+### Ações tomadas
+
+- **`hw-007-enrollment-terminal.md` atualizado:**
+  - Título e informações gerais refletem ESP32-CAM
+  - Nova seção "Relay control board como hub de atuação e leitura" com tabela de conectores identificados (NFC, P4, saída relé, botão de saída, alimentação)
+  - Nova seção arquitetural "NFC via relay control board vs. NFC via ESP32-CAM" com 3 alternativas avaliadas
+  - Tabela de hardware por fechadura atualizada (ESP32-CAM, ZN-53X, relay board, leitor NFC standalone)
+  - Pinout reescrito para ESP32-CAM (com advertência sobre GPIOs limitados e câmera)
+  - Nova tabela de pinout ESP32-CAM ↔ leitor NFC standalone
+  - 3 novos critérios de aceite (CA-19, CA-20, CA-21) para leitura NFC e acionamento via board
+  - Nova seção "ESP32-CAM: limitações de GPIO" com tabela de pinos livres
+  - Nova seção "Investigação da relay control board (passo crítico antes do firmware)" com 4 etapas de análise física
+  - Firmware de teste adaptado para `HardwareSerial mySerial(1)` com pinos explícitos
+  - Nova seção "Leitura NFC via leitor standalone" (PN532 / MFRC522)
+  - Nova seção "Próximos passos físicos recomendados (em ordem)" com 6 etapas sequenciais
+
+- **`items.md` atualizado:**
+  - ESP32-CAM adicionado aos possuídos como hardware principal do protótipo
+  - ESP32S reclassificado como placa de desenvolvimento/debug secundária
+  - Leitor NFC standalone reclassificado com nota de uso direto no ESP32-CAM
+  - Nova seção "Módulos de Atuação" com a relay control board e suas características
+  - "Módulo relé 5V (1 canal)" removido dos necessários (substituído pela relay board)
+  - Fonte 12V e proteções atualizadas para contexto da relay board
+  - Tabela de prioridade de aquisição atualizada
+  - Notas atualizadas com ESP32-CAM, relay board e leitor NFC standalone
+
+- **`todo.md` atualizado:**
+  - Cabeçalho com nota de atualização de hardware
+  - Novo passo 0 "Investigar relay control board e mapear hardware físico" como pré-requisito de HW-007 Passo 1
+  - HW-007 Passo 1 atualizado: referência ao ESP32-CAM e adaptação de pinos (GPIO33/32)
+  - Seção "Hardware pendente de aquisição" atualizada (relé removido, regulador step-down adicionado, diodo com verificação prévia da board)
+  - Testes físicos pendentes reordenados com investigação da board como primeiro passo
+
+---
+
 ## PERM-005 + INFRA-IOT-001 — Verificação de Acesso Unificada + Broker IoT Corrigido
 
 **Data:** Sessão de correção de bugs e fluxo IoT com sensorProtocol/sensorModel
@@ -701,6 +890,86 @@ Registro consolidado de todas as tasks implementadas, com ID, descrição e aç�
 
 ---
 
+## HW-007-RELAY-DISCOVERY — Relay Control Board é Controlador Autônomo (Switch Interface)
+
+**Data:** sessão atual
+
+### Contexto
+
+Durante preparação do teste de controle de relê com ESP8266, foi identificado que a relay control board adquirida (AliExpress) **não é um simples módulo de relê controlado por GPIO** — é um **controlador de acesso autônomo** com impressão digital, NFC e cartão IC integrados que aciona o relê internamente por conta própria.
+
+### Descoberta
+
+- O ESP8266/ESP32-CAM **não pode controlar o relê diretamente via GPIO**
+- O relê é acionado pela lógica interna da board (biometria / NFC / cartão IC)
+- O único ponto de controle externo é o **Switch Interface** — conector de 2 pinos que simula um botão de saída físico
+- A integração correta: GPIO do ESP8266 vai para LOW por ~200ms (simulando apertar o botão) e retorna a HIGH
+- **GND deve ser comum** entre ESP8266 e relay board — sem isso o sinal do Switch Interface não tem referência
+
+### Pinout de integração confirmado
+
+```
+ESP8266 GPIO5 (D1) ───► Switch Interface pino 1
+ESP8266 GND        ───► Switch Interface pino 2
+Fonte 12V DC       ───► Power+ / Power- da board
+ESP8266 USB        ───► alimentação independente (não conectar ao 12V da board)
+```
+
+### Ações tomadas
+
+1. **`firmware-relay-esp8266.ino` atualizado** (v0.1.0 → v0.2.0):
+   - `PIN_RELAY` renomeado para `PIN_SWITCH` — semântica correta para Switch Interface
+   - `pinMode(PIN_SWITCH, OUTPUT)` + estado inicial `HIGH` (botão solto)
+   - `activateRelay()` reescrita: pulso `LOW → delay(200ms) → HIGH` em vez de `digitalWrite HIGH` permanente
+   - `deactivateRelay()` removida — board controla travamento autonomamente; firmware apenas reseta flag `relayActive`
+   - Constante `RELAY_PULSE_MS` renomeada para `SWITCH_PULSE_MS` (200ms) e adicionada `RELAY_ACTIVE_MS` (3000ms) para janela de status
+   - Tópico `access-result` e variável `topicAccessAttempt` removidos (não usados neste firmware)
+   - Comentário de cabeçalho completamente reescrito explicando a arquitetura de integração via Switch Interface
+   - Versão atualizada para `0.2.0-esp8266`
+
+2. **`.claude/test/esp8266-relay/README.md` atualizado**:
+   - Título atualizado para "Relay Control Board Autônoma"
+   - Seção nova "Como a relay board funciona" explicando o modelo autônomo e o Switch Interface
+   - Cenário A (pino de controle externo) e Cenário B (transistor NPN) **substituídos** por diagrama único de conexão via Switch Interface
+   - Tabela de pinos simplificada: `GPIO5 → Switch Interface pino 1`, `GND → Switch Interface pino 2`
+   - **Teste 0** adicionado: verificar Switch Interface manualmente com jumper antes de conectar o ESP8266
+   - Seção 4.4 atualizada: `PIN_RELAY` → `PIN_SWITCH`, explicação do pulso
+   - Seção 4.5 nova: ajuste de `SWITCH_PULSE_MS` e `RELAY_ACTIVE_MS`
+   - Tabela de validações atualizada com seção "Switch Interface" e "Pulso"
+   - Seção de problemas comuns reescrita: foco em GND comum, pulso insuficiente, alimentação 12V
+
+3. **`hw-007-enrollment-terminal.md` atualizado**:
+   - Seção "Relay control board como hub de atuação e leitura" renomeada e reescrita como "Relay control board como controlador autônomo (integração via Switch Interface)"
+   - Tabela de interfaces da board atualizada com Switch Interface em destaque
+   - Bloco de código de integração adicionado (GPIO5/GND → Switch Interface, lógica do pulso)
+   - Consequência arquitetural documentada: ESP8266 como camada adicional de autorização remota; acesso presencial via NFC/biometria da board como fallback offline
+   - Seção "Sobre a Relay Control Board" (em Hardware Utilizado) completamente reescrita
+   - Nova tabela "Pinout ESP32-CAM / ESP8266 ↔ Switch Interface" adicionada
+   - Lista "A investigar fisicamente" simplificada (foco no P4, não mais no controle do relê)
+
+### Confirmação por foto da board (sessão seguinte)
+
+Foto real da board recebida e analisada. Interfaces físicas confirmadas e nomes corrigidos em toda a documentação:
+
+| Interface confirmada | Tipo físico | Observação |
+|---|---|---|
+| **Fingerprint Interface** | Conector JST 4 pinos (topo centro) | Nome real do "P4" — VCC, GND, TX, RX para o ZN-53X |
+| **Inductive Interface** | Conector 3 pinos (topo direito) | Nome real do "leitor NFC embutido" |
+| **Switch Interface** | Conector 2 pinos (lateral direita) | Confirmado — único ponto de controle externo |
+| **Set button** | Botão tátil (topo direito) | Configuração de modo da board |
+| **Relay** | TONGLING JQC-T78-**DC5V**-C | Bobina 5V interna — board converte a entrada 10V–120V internamente; contatos 20A 125VAC / 20A 14VDC |
+| **NO / COM / NC** | Terminais azuis (direita) | Saída do relê para fechadura solenoide |
+| **Power+ / Power−** | Terminais azuis (esquerda) | Entrada de alimentação DC 10V–120V |
+| **Buzzer** | Piezo integrado (base) | Feedback sonoro da lógica interna |
+
+**Descoberta crítica pela foto:** o relê é o TONGLING JQC-T78-**DC5V**-C — bobina de 5V. A board converte internamente a alimentação de entrada (10V–120V) para 5V para acionar a bobina. Esse 5V interno **não é acessível externamente** — não alimentar o ESP8266 a partir da board.
+
+**Arquivos atualizados nesta sub-sessão:**
+- `hw-007-enrollment-terminal.md` — nomes "P4" e "NFC embutido" substituídos por "Fingerprint Interface" e "Inductive Interface" em todas as ocorrências; modelo do relê adicionado; aviso sobre bobina DC5V adicionado
+- `items.md` — entrada da relay control board expandida com todas as interfaces confirmadas pela foto e nota sobre o modelo TONGLING JQC-T78-DC5V-C
+
+---
+
 ## HW-007 — Terminal de Enrollment Biométrico (ZN-53X + ESP32) — Arquitetura definida
 
 **Status:** ⬜ Não iniciado no firmware — arquitetura documentada
@@ -780,6 +1049,65 @@ As três rotas de página gerenciavam query params via `validateSearch` + `Route
 - `use-debounce.ts` — mantido, pois ainda é usado em `use-crud-page.ts` para estado local (sem URL)
 - `use-crud-page.ts` — mantido sem alterações; o hook é para estado puramente local de UI, não gerencia URL
 - Lógica de queries TanStack Query, mutations, panel state (`PanelMode`) — sem alterações
+
+## HW-BIOMETRIC-ESP8266 — Tutorial de Conexão + Firmware de Enrollment Biométrico no NodeMCU v3 (ZN-53X e A21)
+
+**Contexto:**
+Primeiro teste dos dois sensores biométricos possuídos (ZN-53X e A21 UART Boland) conectados diretamente ao MCU definitivo do protótipo (NodeMCU v3 / ESP8266MOD), com fluxo real de enrollment integrado ao sistema via Wi-Fi + MQTT.
+
+**Fluxo implementado:**
+```
+Portal Web → publica enrollment/{id}/start
+  → ESP8266 captura 2× o dedo → extrai template (256 bytes → hex 512 chars)
+  → publica enrollment/{id}/result { status, template, finger, userId }
+  → Broker recebe → POST /iot/devices/{id}/enrollment (rota IoT interna)
+  → Backend persiste access_credential com enrolledByControllerId
+```
+
+**Ações tomadas:**
+- Criado `.claude/test/esp8266-biometric/README.md` — tutorial completo com:
+  - Diagrama do fluxo MQTT ponta a ponta
+  - Mapeamento dos 6 fios coloridos do A21 (laranja=VCC, preto=GND, amarelo=TX, verde=RX, azul=NC, branco=NC)
+  - Mapeamento do ZN-53X por função (cores típicas)
+  - Tabelas fio a fio e diagramas ASCII para conexão ao NodeMCU v3
+  - Procedimento de verificação de tensão com multímetro (divisor 1kΩ+2kΩ para TX em 5V)
+  - Passos de validação incremental (sensor → Wi-Fi → MQTT → enrollment real → persistência no banco)
+  - Diagnóstico de problemas comuns (sensor, Wi-Fi, MQTT, payload size)
+
+- Criado `.claude/test/esp8266-biometric/firmware-biometric-esp8266.ino` — firmware completo com:
+  - Wi-Fi (ESP8266WiFi) + MQTT (PubSubClient) + ArduinoJson
+  - Sensor único via SoftwareSerial: D5 (GPIO14 RX) / D6 (GPIO12 TX)
+  - Detecção automática de baudrate (57600, 9600, 19200, 38400, 115200)
+  - Protocolo R30x (GROW) via `Adafruit Fingerprint Sensor Library >= 2.1.0`
+  - Extração do template via `getModel()` + leitura manual dos data packets (256 bytes)
+  - Conversão para hex (512 chars) e publicação em `enrollment/{id}/result`
+  - Registro automático no sistema via `door/{id}/register` no boot
+  - Heartbeat periódico a cada 30s via `door/{id}/heartbeat`
+  - Enrollment executado no `loop()` (fora do callback MQTT) para não bloquear o PubSubClient
+  - LEDs de feedback: azul (aguardando dedo), verde (sucesso), vermelho (erro)
+  - `mqtt.setBufferSize(1300)` para comportar o payload de 512 chars hex
+
+- Atualizado `tcc/iot/src/index.ts` (broker) com:
+  - Novo schema `enrollmentResultPayloadSchema`
+  - Novo matcher `enrollmentResult: /^enrollment\/([^/]+)\/result$/`
+  - Handler `handleEnrollmentResult()` que chama `POST /iot/devices/{id}/enrollment`
+  - Loga status `FAILED`/`TIMEOUT` sem persistir; persiste apenas `COMPLETED` com template
+
+- Atualizado `tcc/server/src/api/routes/iot.ts` com:
+  - Nova rota `POST /iot/devices/:controllerId/enrollment` (sem `requireAdmin` — autenticada pelo controllerId)
+  - Aceita `{ userId, finger, template, enrollmentId? }` no body
+  - Chama `registerFingerprint()` com `enrolledByControllerId: controllerId`
+  - Retorna 201 em sucesso, 409 em conflito de dedo ou template duplicado
+
+- Atualizado `tcc/server/src/services/user/fingerprint/register-fingerprint.ts`:
+  - Campo `enrolledByControllerId?: string` adicionado ao `RegisterFingerprintInput`
+  - Persistido no INSERT via spread condicional `...(enrolledByControllerId ? { enrolledByControllerId } : {})`
+
+**Notas técnicas:**
+- SoftwareSerial no ESP8266: baudrate máximo estável é 57600 bps; Wi-Fi pode causar jitter — enrollment executado fora do callback MQTT mitiga isso
+- `mqtt.setBufferSize(1300)` obrigatório — padrão do PubSubClient (256 bytes) é insuficiente para o payload do template
+- Senha padrão R30x `0x00000000` é o default do construtor `Adafruit_Fingerprint` — sem necessidade de configurar
+- Rota `/iot/devices/:id/enrollment` é interna (broker → backend) e não exige cookie de sessão; o controllerId registrado no banco serve como contexto de autenticação implícita
 
 ## HW-001 (teste) — Firmware de Teste ESP32S [L453-460]
 

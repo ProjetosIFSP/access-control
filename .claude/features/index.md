@@ -99,6 +99,7 @@
 | HW-005 | Detecção de estado da porta (reed switch / SCT-013) | 🔧     | SCT-013 testado no firmware de teste; reed switch como botão simulado        |
 | HW-006 | Protocolo de reconexão e fallback offline           | ⬜     | Não implementado                                                             |
 | HW-007 | Modo terminal de enrollment nas próprias fechaduras (ZN-53X + ESP32) | ⬜ | Toda fechadura alterna entre modo fechadura (padrão) e modo terminal via MQTT; sem dispositivo dedicado; `sensorProtocol`, `sensorModel` e `enrolledByControllerId` no schema; `role` removido do `door_controller`; `roomId` NOT NULL |
+| HW-007-ALT | Análise de viabilidade: HLK-ZW111 (Hi-Link) como alternativa ao ZN-53X | 📋 Análise | Protocolo UART proprietário Hi-Link; vantagem de low power nativo (FINGER_DET IRQ); risco crítico: exportação/importação de template raw não confirmada; recomendação: manter ZN-53X por ora. Ver `.claude/features/HARDWARE/hw-007-alt-hlk-zw111.md` |
 | HW-008 | Offline-first nas fechaduras (N últimas credenciais)| ⬜     | Política definida em `.claude/features/HARDWARE/hw-008-offline-first.md`; matching local sempre primeiro; eviction por `lastUsedAt`; log offline via LittleFS |
 
 ---

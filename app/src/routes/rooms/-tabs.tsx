@@ -1,6 +1,6 @@
 import { TabButton } from "@/components/ui/tab-button";
 
-import type { ActiveTab } from "./types";
+import type { ActiveTab } from "./-types";
 
 interface RoomsTabsProps {
   activeTab: ActiveTab;

@@ -36,8 +36,8 @@ import { UsersTabs } from "./-tabs";
 import { TabProfiles } from "./-tab-profiles";
 import { UsersTab } from "./-tab-users";
 import { UsersToolbar } from "./-toolbar";
-import { PAGE_SIZE, usersSearchParams } from "./types";
-import type { ActiveTab, PanelMode } from "./types";
+import { PAGE_SIZE, usersSearchParams } from "./-types";
+import type { ActiveTab, PanelMode } from "./-types";
 
 // ── Route ─────────────────────────────────────────────────────────────────────
 

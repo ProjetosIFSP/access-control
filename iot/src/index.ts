@@ -127,12 +127,22 @@ const apiRoomStatusResponseSchema = z.object({
 	}),
 });
 
+const enrollmentResultPayloadSchema = z.object({
+	enrollmentId: z.string().min(1),
+	userId: z.string().min(1),
+	finger: z.string().min(1),
+	status: z.enum(["COMPLETED", "FAILED", "TIMEOUT"] as const),
+	template: z.string().optional(),
+	quality: z.number().optional(),
+});
+
 const topicMatchers = {
 	register: /^door\/([^/]+)\/register$/,
 	heartbeat: /^door\/([^/]+)\/heartbeat$/,
 	status: /^door\/([^/]+)\/status$/,
 	access: /^door\/([^/]+)\/access-attempt$/,
 	commandResult: /^door\/([^/]+)\/command-result$/,
+	enrollmentResult: /^enrollment\/([^/]+)\/result$/,
 } as const;
 
 type TopicKind = keyof typeof topicMatchers;
@@ -179,7 +189,8 @@ broker.on("publish", (packet: AedesPublishPacket, client: Client | null) => {
 	if (handleTopic("heartbeat", topic, payloadString, handleHeartbeat)) return;
 	if (handleTopic("status", topic, payloadString, handleStatus)) return;
 	if (handleTopic("access", topic, payloadString, handleAccessAttempt)) return;
-	handleTopic("commandResult", topic, payloadString, handleCommandResult);
+	if (handleTopic("commandResult", topic, payloadString, handleCommandResult)) return;
+	handleTopic("enrollmentResult", topic, payloadString, handleEnrollmentResult);
 });
 
 function handleTopic<TBody>(
@@ -295,6 +306,53 @@ async function handleAccessAttempt(controllerId: string, payload: string) {
 	if (decision.status === "GRANTED") {
 		await enqueueUnlockCommand(controllerId);
 	}
+}
+
+async function handleEnrollmentResult(controllerId: string, payload: string) {
+	const parsed = safeParseJson(payload);
+	const data = enrollmentResultPayloadSchema.parse(parsed);
+
+	logger.info(
+		{
+			controllerId,
+			enrollmentId: data.enrollmentId,
+			userId: data.userId,
+			finger: data.finger,
+			status: data.status,
+		},
+		"Enrollment result received",
+	);
+
+	if (data.status !== "COMPLETED" || !data.template) {
+		logger.warn(
+			{ controllerId, enrollmentId: data.enrollmentId, status: data.status },
+			"Enrollment did not complete — skipping credential registration",
+		);
+		return;
+	}
+
+	// Usa a rota IoT interna que não exige cookie de sessão.
+	// O controllerId autentica a origem — apenas controladores registrados chegam aqui.
+	await callApi(
+		"POST",
+		`/iot/devices/${controllerId}/enrollment`,
+		JSON.stringify({
+			userId: data.userId,
+			finger: data.finger,
+			template: data.template,
+			enrollmentId: data.enrollmentId,
+		}),
+	);
+
+	logger.info(
+		{
+			controllerId,
+			enrollmentId: data.enrollmentId,
+			userId: data.userId,
+			finger: data.finger,
+		},
+		"Fingerprint credential registered via MQTT enrollment",
+	);
 }
 
 async function handleCommandResult(controllerId: string, payload: string) {

@@ -6,7 +6,7 @@ import { FilterBar } from "@/components/ui/filter-bar";
 import { SearchToolbar } from "@/components/ui/search-toolbar";
 import { SelectFilter } from "@/components/ui/select-filter";
 
-import type { ActiveTab } from "./types";
+import type { ActiveTab } from "./-types";
 
 interface Option {
   value: string;

@@ -61,6 +61,8 @@ interface MobileNavDrawerProps {
 }
 
 function MobileNavDrawer({ open, onClose, isAdmin }: MobileNavDrawerProps) {
+  if (typeof document === "undefined") return null;
+
   // Close on Escape
   useEffect(() => {
     if (!open) return;

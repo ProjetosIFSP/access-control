@@ -1,6 +1,13 @@
 import { HeaderLogo } from "../header/header-logo";
 import { Button } from "../ui/button";
 import { Icon } from "@iconify/react";
+
+const origin =
+  typeof window !== "undefined"
+    ? window.location
+        .toString()
+        .substring(0, window.location.toString().length - 5)
+    : "http://localhost:";
 export function Footer() {
   return (
     <footer className="overflow-hidden mt-auto flex flex-col-reverse md:flex-row gap-8 py-8 bg-white dark:bg-black px-4 sm:px-8 md:px-16 lg:px-32 transition-all">
@@ -92,16 +99,11 @@ export function Footer() {
           Endpoints:{" "}
           <Button variant="link" asChild>
             <a
-              href={`${window.location
-                .toString()
-                .substring(0, window.location.toString().length - 5)}3333/docs`}
+              href={`${origin}3333/docs`}
               target="_blank"
               rel="noopener noreferrer"
             >
-              {window.location
-                .toString()
-                .substring(0, window.location.toString().length - 5)}
-              3333/docs
+              {origin}3333/docs
             </a>
           </Button>
         </span>

@@ -10,6 +10,8 @@ export interface RegisterFingerprintInput {
 	finger: FingerKey;
 	/** Raw template captured by the reader (hex string or keyboard-emulation string) */
 	template: string;
+	/** ID do controlador físico que realizou a captura (terminal de enrollment via MQTT) */
+	enrolledByControllerId?: string;
 }
 
 export interface RegisteredFingerprintRecord {
@@ -36,7 +38,7 @@ export class FingerprintDuplicateTemplateError extends Error {
 export async function registerFingerprint(
 	input: RegisterFingerprintInput,
 ): Promise<RegisteredFingerprintRecord> {
-	const { userId, finger, template } = input;
+	const { userId, finger, template, enrolledByControllerId } = input;
 
 	try {
 		const [inserted] = await db
@@ -48,6 +50,7 @@ export async function registerFingerprint(
 				finger,
 				value: template,
 				isActive: true,
+				...(enrolledByControllerId ? { enrolledByControllerId } : {}),
 			})
 			.returning({
 				id: accessCredential.id,

@@ -6,6 +6,7 @@ import {
 	doorCommandStatusEnum,
 	doorCommandTypeEnum,
 	doorStateEnum,
+	fingerKeyEnum,
 } from "@/db/schema/enums";
 import { z } from "@/lib/zod";
 import { processAccessAttempt } from "@/services/iot/access";
@@ -19,6 +20,11 @@ import {
 	registerDoorController,
 	updateDoorStatus,
 } from "@/services/iot/door-controller";
+import {
+	FingerprintConflictError,
+	FingerprintDuplicateTemplateError,
+	registerFingerprint,
+} from "@/services/user/fingerprint/register-fingerprint";
 
 const doorStateValues = doorStateEnum.enumValues as [
 	(typeof doorStateEnum.enumValues)[number],
@@ -31,6 +37,12 @@ const credentialTypeValues = credentialTypeEnum.enumValues as [
 	...(typeof credentialTypeEnum.enumValues)[number][],
 ];
 const credentialTypeSchema = z.enum(credentialTypeValues);
+
+const fingerKeyValues = fingerKeyEnum.enumValues as [
+	(typeof fingerKeyEnum.enumValues)[number],
+	...(typeof fingerKeyEnum.enumValues)[number][],
+];
+const fingerKeySchema = z.enum(fingerKeyValues);
 
 const commandTypeValues = doorCommandTypeEnum.enumValues as [
 	(typeof doorCommandTypeEnum.enumValues)[number],
@@ -563,6 +575,80 @@ export const iotRoute: FastifyPluginAsyncZod = async (app) => {
 				})),
 			};
 			return reply.status(200).send(payload);
+		},
+	);
+
+	// POST /iot/devices/:controllerId/enrollment
+	// Rota interna chamada pelo broker MQTT após receber enrollment/{id}/result
+	// Não exige sessão — o contexto de autenticação é o controllerId registrado no banco
+	app.post(
+		"/devices/:controllerId/enrollment",
+		{
+			schema: {
+				params: z.object({
+					controllerId: z.string().min(1),
+				}),
+				body: z.object({
+					userId: z.string().uuid(),
+					finger: fingerKeySchema,
+					template: z.string().min(1),
+					enrollmentId: z.string().min(1).optional(),
+				}),
+				tags: ["iot"],
+				summary: "Registrar digital via terminal de enrollment",
+				description:
+					"Endpoint interno chamado pelo broker MQTT ao processar o resultado de enrollment biométrico capturado por um controlador físico. Não exige cookie de sessão — autenticado pelo controllerId.",
+				response: {
+					201: z.object({
+						id: z.string().uuid(),
+						finger: fingerKeySchema,
+						isActive: z.boolean(),
+						createdAt: z.string().datetime(),
+					}),
+					409: z.object({ message: z.string() }),
+					404: z.object({ message: z.string() }),
+				},
+				paramsExample: {
+					controllerId: sampleControllerId,
+				},
+				bodyExample: {
+					userId: "7b3cf58e-353f-48de-b2fd-6f203d64d3f8",
+					finger: "right_index",
+					template: "4152010000000000...",
+					enrollmentId: "enroll-abc-123",
+				},
+			} satisfies SchemaWithExamples,
+		},
+		async (request, reply) => {
+			const { controllerId } = request.params;
+			const { userId, finger, template, enrollmentId } = request.body;
+
+			try {
+				const record = await registerFingerprint({
+					userId,
+					finger,
+					template,
+					enrolledByControllerId: controllerId,
+				});
+
+				request.log.info(
+					{ controllerId, userId, finger, enrollmentId },
+					"Fingerprint registered via MQTT enrollment",
+				);
+
+				return reply.status(201).send({
+					...record,
+					createdAt: record.createdAt.toISOString(),
+				});
+			} catch (err) {
+				if (
+					err instanceof FingerprintConflictError ||
+					err instanceof FingerprintDuplicateTemplateError
+				) {
+					return reply.status(409).send({ message: (err as Error).message });
+				}
+				throw err;
+			}
 		},
 	);
 
