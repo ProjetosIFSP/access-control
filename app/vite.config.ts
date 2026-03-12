@@ -9,6 +9,8 @@ import tailwindcss from "@tailwindcss/vite";
 import mdx from "fumadocs-mdx/vite";
 import * as MdxConfig from "./source.config";
 
+const BACKEND_URL = "http://localhost:3333";
+
 const config = defineConfig({
   plugins: [
     devtools(),
@@ -20,6 +22,18 @@ const config = defineConfig({
   ],
   optimizeDeps: {
     entries: ["./src/**/*.{ts,tsx}"],
+  },
+  server: {
+    proxy: {
+      "/auth": {
+        target: BACKEND_URL,
+        changeOrigin: true,
+      },
+      "/api": {
+        target: BACKEND_URL,
+        changeOrigin: true,
+      },
+    },
   },
 });
 

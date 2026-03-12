@@ -1,13 +1,32 @@
 @import url("https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,700&family=Manrope:wght@400;500;600;700;800&display=swap");
 @import "tailwindcss";
-@import "fumadocs-ui/css/neutral.css";
-@import "fumadocs-ui/css/preset.css";
-
 @plugin '@tailwindcss/typography';
 
 @import "tw-animate-css";
 
 @custom-variant dark (&:is(.dark *));
+
+@layer utilities {
+  /* Hide scrollbar for Chrome, Safari and Opera */
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+  /* Hide scrollbar for IE, Edge and Firefox */
+  .no-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+
+  /* Reserve scrollbar gutter so layout width never shifts when a drawer opens */
+  html {
+    scrollbar-gutter: stable;
+  }
+
+  /* Applied to <html> when a drawer/modal is open */
+  html.drawer-open {
+    overflow: hidden;
+  }
+}
 
 :root {
   --sea-ink: #173a40;
