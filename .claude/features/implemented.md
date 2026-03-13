@@ -2,6 +2,57 @@
 
 ---
 
+## DOCS-001 — Documentação completa com FumaDocs
+
+**Data:** Sessão atual
+**Escopo:** `app/content/docs/` (22 arquivos MDX) + rotas `src/routes/docs/` e `src/routes/api/search.ts`
+
+### Motivação
+
+O FumaDocs já estava pré-configurado no projeto (`source.config.ts`, `fumadocs-mdx/vite` no `vite.config.ts`, `lib/source.ts` com `loader()`), mas nenhum conteúdo havia sido criado. Esta task preencheu toda a estrutura de documentação técnica do sistema.
+
+### O que foi feito
+
+#### 1. Estrutura de conteúdo (`app/content/docs/`)
+
+| Arquivo | Descrição |
+|---|---|
+| `index.mdx` | Página inicial — visão geral, cards de navegação, fluxo principal de acesso, status de features |
+| `meta.json` | Ordem e agrupamento da navegação raiz |
+| `guia/inicio-rapido.mdx` | Passo a passo de setup local — pré-requisitos, Docker, migrations, seeds, comandos úteis |
+| `guia/arquitetura.mdx` | Quatro camadas do sistema, modelo de dados, diagrama ASCII, comunicação entre serviços, decisões de design |
+| `guia/permissoes.mdx` | Os 4 níveis de permissão (PERM-001 a PERM-004), perfis, fluxo IoT, deduplicação visual |
+| `guia/autenticacao.mdx` | better-auth, cookie HttpOnly, login, logout, sessão, forgot/reset password, guards |
+| `guia/deploy.mdx` | CI/CD GitHub Actions, Docker Compose, script `deploy.sh`, variáveis de ambiente, checklist |
+| `api/visao-geral.mdx` | URL base, autenticação, formato de resposta, status HTTP, IDs, convenções |
+| `api/autenticacao.mdx` | Referência dos endpoints `/auth/*` — sign-in, sign-out, get-session, forget/reset-password |
+| `api/usuarios.mdx` | CRUD de usuários, relações, credenciais biométricas (enrollment), permissões diretas, perfis |
+| `api/salas.mdx` | CRUD de salas, blocos e tipos de sala; relações; endpoint `/rooms/summary` com comportamento por autenticação |
+| `api/perfis.mdx` | CRUD de perfis, relações, usuários vinculados, permissões por sala e tipo de sala |
+| `api/iot.mdx` | Endpoints internos usados pelo broker — registro, heartbeat, status, acesso, comandos, enrollment, sync |
+| `iot/protocolo-mqtt.mdx` | Todos os 14 tópicos MQTT com payloads de ida e volta, QoS e referência rápida |
+| `iot/fluxo-acesso.mdx` | Fluxo completo do acesso — firmware → broker → backend → banco → fechadura; latência esperada; gap PERM-005 |
+| `iot/fluxo-enrollment.mdx` | 9 etapas do enrollment biométrico; máquina de estados; cancelamento; gestão de slots ZN-53X; política de eviction |
+| `hardware/componentes.mdx` | Lista de componentes, pinagem NodeMCU v3, leitor NFC IC V1.3A (Wiegand 26), relé, fechadura, step-down, diagrama de conexão |
+| `hardware/firmware.mdx` | Estrutura PlatformIO, `config.h`, loop principal não-bloqueante, modos de operação, exemplos C++, reconexão MQTT |
+| `hardware/sensor-biometrico.mdx` | Especificações ZN-53X, protocolo R30x, todos os comandos com exemplos C++, fluxo de enrollment/matching, tratamento de erros, cuidados com RAM |
+
+#### 2. Rotas TanStack
+
+| Arquivo | Descrição |
+|---|---|
+| `src/routes/docs/route.tsx` | Layout com `DocsLayout` + `RootProvider` do FumaDocs; navbar com link de volta ao Portal |
+| `src/routes/docs/$.tsx` | Rota wildcard — `loader` retorna apenas o `slug` (evita erro de serialização de função MDX); componente chama `source.getPage(slug)` diretamente |
+| `src/routes/api/search.ts` | API de busca full-text com `createSearchAPI("advanced")` mapeando `source.getPages()` |
+
+#### 3. Decisões técnicas
+
+- **Loader não serializa a função MDX** — o `body` de uma página MDX é uma função React, não serializável pelo TanStack Start (SSR). A solução foi retornar apenas o `slug` no loader e chamar `source.getPage(slug)` no componente, que roda no cliente.
+- **CSS do FumaDocs já no `styles.css` global** — `@import "fumadocs-ui/css/neutral.css"` e `@import "fumadocs-ui/css/preset.css"` já estavam em `styles.css`; não foi necessário injetar CSS adicional na rota `/docs`.
+- **API de busca usa o padrão `createFileRoute` com `server.handlers`** — padrão adotado pelo projeto (igual ao `/api/auth/$`), não o `createServerFileRoute` da versão anterior do TanStack Start.
+
+---
+
 ## UI-020 / UI-021 — Migração para TanStack Start + FumaDocs (reconstrução completa do `app/`)
 
 **Data:** Sessão atual

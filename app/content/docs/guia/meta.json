@@ -1,0 +1,10 @@
+{
+  "title": "Guias",
+  "pages": [
+    "inicio-rapido",
+    "arquitetura",
+    "permissoes",
+    "autenticacao",
+    "deploy"
+  ]
+}

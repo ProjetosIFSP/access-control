@@ -1,8 +1,8 @@
 import {
-  parseAsArrayOf,
-  parseAsInteger,
-  parseAsString,
-  parseAsStringLiteral,
+	parseAsArrayOf,
+	parseAsInteger,
+	parseAsString,
+	parseAsStringLiteral,
 } from "nuqs";
 
 import type { ProfileSummary } from "@/services/profiles/types";
@@ -18,17 +18,17 @@ export const TABS = ["users", "profiles"] as const;
 export type ActiveTab = (typeof TABS)[number];
 
 export type PanelMode =
-  | { kind: "none" }
-  | { kind: "createUser" }
-  | { kind: "editUser"; item: UserSummary }
-  | { kind: "createProfile" }
-  | { kind: "editProfile"; item: ProfileSummary };
+	| { kind: "none" }
+	| { kind: "createUser" }
+	| { kind: "editUser"; item: UserSummary }
+	| { kind: "createProfile" }
+	| { kind: "editProfile"; item: ProfileSummary };
 
 // ── Search params parsers ──────────────────────────────────────────────────────
 
 export const usersSearchParams = {
-  q: parseAsString.withDefault(""),
-  tab: parseAsStringLiteral(TABS).withDefault("users"),
-  profileIds: parseAsArrayOf(parseAsString).withDefault([]),
-  page: parseAsInteger.withDefault(1),
+	q: parseAsString.withDefault(""),
+	tab: parseAsStringLiteral(TABS).withDefault("users"),
+	profileIds: parseAsArrayOf(parseAsString).withDefault([]),
+	page: parseAsInteger.withDefault(1),
 };

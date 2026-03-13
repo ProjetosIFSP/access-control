@@ -1,0 +1,505 @@
+---
+title: Firmware ESP8266
+description: Estrutura do firmware embarcado no NodeMCU v3 — loop principal, modos de operação, temporização não-bloqueante e integração com MQTT.
+---
+
+O firmware é desenvolvido em **C/C++ com o framework Arduino** e gerenciado pelo **PlatformIO**. Ele roda no **NodeMCU v3 (ESP8266MOD)** instalado em cada porta e é responsável por conectar ao Wi-Fi, comunicar-se com o broker MQTT e controlar todos os periféricos físicos.
+
+---
+
+## Estrutura de diretórios
+
+```
+core/
+├── platformio.ini          # Configuração do PlatformIO (placa, libs, flags)
+├── src/
+│   ├── main.cpp            # Entry point — setup() e loop()
+│   ├── config.h            # Constantes de configuração (Wi-Fi, MQTT, pins)
+│   ├── wifi/
+│   │   ├── wifi.h
+│   │   └── wifi.cpp        # Conexão e reconexão Wi-Fi
+│   ├── mqtt/
+│   │   ├── mqtt.h
+│   │   └── mqtt.cpp        # Conexão, publicação e callback MQTT
+│   ├── fingerprint/
+│   │   ├── fingerprint.h
+│   │   └── fingerprint.cpp # Integração ZN-53X via SoftwareSerial (R30x)
+│   ├── nfc/
+│   │   ├── nfc.h
+│   │   └── nfc.cpp         # Decodificação Wiegand 26 (IC V1.3A)
+│   ├── door/
+│   │   ├── door.h
+│   │   └── door.cpp        # Reed switch + controle do relé
+│   └── led/
+│       ├── led.h
+│       └── led.cpp         # Feedback visual (LED RGB ou single-color)
+└── .claude/test/
+    └── hardware-porta/     # Código de teste funcional (não modularizado)
+```
+
+> ⚠️ **Status atual (HW-001):** o código de teste em `.claude/test/hardware-porta/` é funcional mas não modularizado. A estrutura acima representa o estado-alvo do módulo `core/`.
+
+---
+
+## Configuração (`config.h`)
+
+Todas as constantes de configuração ficam centralizadas em `config.h`. **Nunca hardcode credenciais ou IDs em `main.cpp`**.
+
+```cpp
+// core/src/config.h
+#pragma once
+
+// ── Wi-Fi ──────────────────────────────────────────────────────
+#define WIFI_SSID       "NomeDoWifi"
+#define WIFI_PASSWORD   "SenhaDoWifi"
+#define WIFI_TIMEOUT_MS 15000
+
+// ── MQTT ───────────────────────────────────────────────────────
+#define MQTT_BROKER     "192.168.1.100"
+#define MQTT_PORT       1883
+#define MQTT_CLIENT_ID  "ctrl-bloco-a-lab-101"  // Armazenar em EEPROM
+
+// ── Tópicos MQTT ───────────────────────────────────────────────
+#define TOPIC_REGISTER          "door/" MQTT_CLIENT_ID "/register"
+#define TOPIC_HEARTBEAT         "door/" MQTT_CLIENT_ID "/heartbeat"
+#define TOPIC_STATUS            "door/" MQTT_CLIENT_ID "/status"
+#define TOPIC_ACCESS_ATTEMPT    "door/" MQTT_CLIENT_ID "/access-attempt"
+#define TOPIC_ACCESS_RESULT     "door/" MQTT_CLIENT_ID "/access-result"
+#define TOPIC_COMMAND           "door/" MQTT_CLIENT_ID "/command"
+#define TOPIC_COMMAND_RESULT    "door/" MQTT_CLIENT_ID "/command-result"
+#define TOPIC_ENTER_ENROLLMENT  "door/" MQTT_CLIENT_ID "/enter-enrollment-mode"
+#define TOPIC_CANCEL_ENROLLMENT "door/" MQTT_CLIENT_ID "/cancel-enrollment"
+#define TOPIC_ENROLLMENT_RESULT "door/" MQTT_CLIENT_ID "/enrollment-result"
+#define TOPIC_SYNC_CREDENTIALS  "door/" MQTT_CLIENT_ID "/sync-credentials"
+#define TOPIC_SYNC_RESULT       "door/" MQTT_CLIENT_ID "/sync-result"
+
+// ── Sala vinculada ─────────────────────────────────────────────
+#define ROOM_ID "cdea3efb-650d-4c8a-a9c0-8ee97d739f5c"  // Armazenar em EEPROM
+
+// ── Hardware ───────────────────────────────────────────────────
+#define SENSOR_PROTOCOL   "R30X"
+#define SENSOR_MODEL      "ZN-53X"
+
+// ── Pinos GPIO ─────────────────────────────────────────────────
+#define PIN_RELAY         5   // D1 — controle do relé da fechadura
+#define PIN_REED_SWITCH   4   // D2 — sensor de estado da porta
+#define PIN_LED_STATUS    2   // D4 — LED de status (azul)
+#define PIN_NFC_D0        14  // D5 — Wiegand D0 do leitor NFC
+#define PIN_NFC_D1        12  // D6 — Wiegand D1 do leitor NFC
+#define PIN_FP_TX         1   // D10 — SoftwareSerial TX → ZN-53X RX
+#define PIN_FP_RX         3   // D9  — SoftwareSerial RX ← ZN-53X TX
+
+// ── Temporização ───────────────────────────────────────────────
+#define HEARTBEAT_INTERVAL_MS     30000   // 30 segundos
+#define DOOR_STATUS_INTERVAL_MS     500   // 500ms
+#define ACCESS_RESULT_TIMEOUT_MS   3000   // 3 segundos
+#define RELAY_UNLOCK_DURATION_MS   4000   // 4 segundos aberto
+#define ENROLLMENT_LED_BLINK_MS     500   // pisca a cada 500ms
+```
+
+---
+
+## Loop principal (`main.cpp`)
+
+O firmware utiliza **temporização não-bloqueante** com `millis()`. O uso de `delay()` é proibido no loop principal — ele bloquearia a leitura de mensagens MQTT e a detecção de eventos de hardware.
+
+```cpp
+// core/src/main.cpp
+#include <Arduino.h>
+#include "config.h"
+#include "wifi/wifi.h"
+#include "mqtt/mqtt.h"
+#include "fingerprint/fingerprint.h"
+#include "nfc/nfc.h"
+#include "door/door.h"
+#include "led/led.h"
+
+// ── Estado global ──────────────────────────────────────────────
+enum DeviceMode { MODE_DOOR, MODE_ENROLLMENT };
+DeviceMode currentMode = MODE_DOOR;
+
+// ── Temporização ───────────────────────────────────────────────
+unsigned long lastHeartbeat   = 0;
+unsigned long lastDoorStatus  = 0;
+unsigned long relayOpenSince  = 0;
+bool          relayOpen       = false;
+
+void setup() {
+  Serial.begin(115200);
+
+  pinMode(PIN_RELAY,       OUTPUT);
+  pinMode(PIN_REED_SWITCH, INPUT_PULLUP);
+  pinMode(PIN_LED_STATUS,  OUTPUT);
+
+  digitalWrite(PIN_RELAY, LOW);  // Fechadura travada por padrão
+
+  wifiConnect(WIFI_SSID, WIFI_PASSWORD, WIFI_TIMEOUT_MS);
+  mqttSetup(MQTT_BROKER, MQTT_PORT, MQTT_CLIENT_ID, onMqttMessage);
+  fingerprintSetup(PIN_FP_TX, PIN_FP_RX);
+  nfcSetup(PIN_NFC_D0, PIN_NFC_D1);
+
+  mqttPublishRegister();  // door/{id}/register
+}
+
+void loop() {
+  unsigned long now = millis();
+
+  // Manter conexões ativas
+  if (!wifiConnected())   wifiReconnect();
+  if (!mqttConnected())   mqttReconnect();
+  mqttLoop();  // Processa mensagens recebidas
+
+  if (currentMode == MODE_DOOR) {
+    // Heartbeat periódico
+    if (now - lastHeartbeat >= HEARTBEAT_INTERVAL_MS) {
+      mqttPublishHeartbeat();
+      lastHeartbeat = now;
+    }
+
+    // Status da porta periódico
+    if (now - lastDoorStatus >= DOOR_STATUS_INTERVAL_MS) {
+      bool doorOpen = (digitalRead(PIN_REED_SWITCH) == LOW);
+      bool locked   = !relayOpen;
+      mqttPublishDoorStatus(doorOpen ? "OPEN" : "CLOSED", locked);
+      lastDoorStatus = now;
+    }
+
+    // Fechar relé automaticamente após RELAY_UNLOCK_DURATION_MS
+    if (relayOpen && (now - relayOpenSince >= RELAY_UNLOCK_DURATION_MS)) {
+      digitalWrite(PIN_RELAY, LOW);
+      relayOpen = false;
+      ledOff();
+    }
+
+    // Leitura de credencial biométrica (evento)
+    String fpTemplate = fingerprintRead();
+    if (fpTemplate.length() > 0) {
+      handleAccessAttempt("FINGERPRINT", fpTemplate);
+    }
+
+    // Leitura de credencial NFC (evento via interrupção Wiegand)
+    String nfcUid = nfcGetUid();
+    if (nfcUid.length() > 0) {
+      handleAccessAttempt("NFC_TAG", nfcUid);
+    }
+  }
+
+  // Modo terminal: lógica de enrollment gerenciada em fingerprint.cpp
+  if (currentMode == MODE_ENROLLMENT) {
+    enrollmentLoop(now);
+  }
+}
+```
+
+---
+
+## Modos de operação
+
+### Modo Fechadura (padrão)
+
+Comportamento normal do controlador:
+
+- Processa tentativas de acesso via biometria e NFC
+- Envia heartbeat a cada 30 segundos
+- Publica o estado da porta a cada 500ms
+- Executa comandos recebidos via MQTT (UNLOCK, LOCK, SYNC_STATE)
+- Aciona o relé por `RELAY_UNLOCK_DURATION_MS` quando recebe decisão GRANTED
+
+### Modo Terminal (temporário)
+
+Ativado ao receber `door/{id}/enter-enrollment-mode`:
+
+- Para de processar tentativas de acesso (relé permanece inativo)
+- LED azul pisca a cada 500ms (aguardando dedo)
+- Captura 2 passagens do dedo com o ZN-53X
+- Publica `door/{id}/enrollment-result` com o template ou status de falha
+- Retorna ao **Modo Fechadura** imediatamente após publicar o resultado
+- Expira automaticamente ao atingir `expiresAt`
+
+```cpp
+// Alternância de modo via callback MQTT
+void onMqttMessage(const char* topic, const byte* payload, unsigned int length) {
+  String topicStr = String(topic);
+  String body     = String((char*)payload, length);
+
+  if (topicStr == TOPIC_ACCESS_RESULT) {
+    handleAccessResult(body);
+
+  } else if (topicStr == TOPIC_COMMAND) {
+    handleCommand(body);
+
+  } else if (topicStr == TOPIC_ENTER_ENROLLMENT) {
+    currentMode = MODE_ENROLLMENT;
+    enrollmentBegin(body);  // Extrai enrollmentId, finger, expiresAt
+
+  } else if (topicStr == TOPIC_CANCEL_ENROLLMENT) {
+    enrollmentCancel();
+    currentMode = MODE_DOOR;
+
+  } else if (topicStr == TOPIC_SYNC_CREDENTIALS) {
+    handleSyncCredentials(body);
+  }
+}
+```
+
+---
+
+## Fluxo de acesso (Modo Fechadura)
+
+```cpp
+void handleAccessAttempt(const char* type, const String& value) {
+  // Publica tentativa de acesso
+  mqttPublishAccessAttempt(type, value);
+
+  // Aguarda door/{id}/access-result por até ACCESS_RESULT_TIMEOUT_MS
+  unsigned long waitStart = millis();
+  accessResultReceived    = false;
+
+  while (!accessResultReceived && (millis() - waitStart < ACCESS_RESULT_TIMEOUT_MS)) {
+    mqttLoop();
+    yield();
+  }
+
+  if (!accessResultReceived) {
+    // Timeout → política offline (HW-008, pendente)
+    ledRed(2000);
+    return;
+  }
+
+  if (lastAccessDecision == "GRANTED") {
+    digitalWrite(PIN_RELAY, HIGH);  // Abre a fechadura
+    relayOpen      = true;
+    relayOpenSince = millis();
+    ledGreen();
+    buzzerShortBeep();
+  } else {
+    ledRed(2000);
+    buzzerLongBeep();
+  }
+}
+```
+
+---
+
+## Fluxo de enrollment (Modo Terminal)
+
+```cpp
+// fingerprint/fingerprint.cpp
+
+EnrollmentState enrollState;
+
+void enrollmentBegin(const String& jsonPayload) {
+  // Extrai campos do JSON
+  enrollState.enrollmentId = extractField(jsonPayload, "enrollmentId");
+  enrollState.finger       = extractField(jsonPayload, "finger");
+  enrollState.expiresAt    = extractField(jsonPayload, "expiresAt");
+  enrollState.step         = ENROLL_STEP_WAITING_FIRST;
+
+  ledBlueBlinkStart(ENROLLMENT_LED_BLINK_MS);
+}
+
+void enrollmentLoop(unsigned long now) {
+  // Verifica expiração
+  if (isExpired(enrollState.expiresAt, now)) {
+    publishEnrollmentResult(enrollState.enrollmentId, "", 0, "EXPIRED");
+    enrollmentReset();
+    currentMode = MODE_DOOR;
+    return;
+  }
+
+  // Máquina de estados do ZN-53X
+  switch (enrollState.step) {
+    case ENROLL_STEP_WAITING_FIRST:
+      if (fingerprintGenImg() == OK) {
+        fingerprintImg2Tz(1);
+        enrollState.step = ENROLL_STEP_WAITING_SECOND;
+        ledBlueSolid();  // Indica sucesso da primeira passagem
+      }
+      break;
+
+    case ENROLL_STEP_WAITING_SECOND:
+      if (fingerprintGenImg() == OK) {
+        fingerprintImg2Tz(2);
+        enrollState.step = ENROLL_STEP_CREATE_MODEL;
+      }
+      break;
+
+    case ENROLL_STEP_CREATE_MODEL: {
+      uint8_t result = fingerprintCreateModel();
+      if (result != OK) {
+        publishEnrollmentResult(enrollState.enrollmentId, "", 0, "FAILED");
+        enrollmentReset();
+        currentMode = MODE_DOOR;
+        return;
+      }
+
+      // Extrai template (256 bytes → 512 chars hex)
+      uint8_t templateBuffer[256];
+      uint8_t quality = 0;
+      fingerprintGetModel(templateBuffer, &quality);
+      String templateHex = bytesToHex(templateBuffer, 256);
+
+      publishEnrollmentResult(enrollState.enrollmentId, templateHex, quality, "SUCCESS");
+      enrollmentReset();
+      currentMode = MODE_DOOR;
+      break;
+    }
+  }
+}
+```
+
+---
+
+## Temporização não-bloqueante
+
+Regra fundamental: **nunca usar `delay()` no `loop()`**. Use sempre `millis()`:
+
+```cpp
+// ✅ CORRETO — não bloqueia o loop
+unsigned long lastHeartbeat = 0;
+const unsigned long HEARTBEAT_INTERVAL = 30000;
+
+void loop() {
+  unsigned long now = millis();
+  if (now - lastHeartbeat >= HEARTBEAT_INTERVAL) {
+    sendHeartbeat();
+    lastHeartbeat = now;
+  }
+  // Outras tarefas continuam rodando normalmente
+}
+
+// ❌ ERRADO — bloqueia o loop inteiro por 30 segundos
+void loop() {
+  sendHeartbeat();
+  delay(30000);  // Nenhuma mensagem MQTT é processada durante este tempo
+}
+```
+
+---
+
+## Publicação MQTT
+
+Todas as publicações usam JSON construído manualmente (sem biblioteca de JSON para economizar RAM no ESP8266):
+
+```cpp
+void mqttPublishRegister() {
+  char payload[256];
+  snprintf(payload, sizeof(payload),
+    "{\"roomId\":\"%s\",\"sensorProtocol\":\"%s\",\"sensorModel\":\"%s\"}",
+    ROOM_ID, SENSOR_PROTOCOL, SENSOR_MODEL
+  );
+  mqttClient.publish(TOPIC_REGISTER, payload, /*retained=*/false);
+}
+
+void mqttPublishAccessAttempt(const char* type, const String& value) {
+  char payload[600];
+  snprintf(payload, sizeof(payload),
+    "{\"credentialType\":\"%s\",\"credentialValue\":\"%s\"}",
+    type, value.c_str()
+  );
+  mqttClient.publish(TOPIC_ACCESS_ATTEMPT, payload);
+}
+
+void mqttPublishDoorStatus(const char* doorState, bool isLocked) {
+  char payload[64];
+  snprintf(payload, sizeof(payload),
+    "{\"doorState\":\"%s\",\"isLocked\":%s}",
+    doorState, isLocked ? "true" : "false"
+  );
+  mqttClient.publish(TOPIC_STATUS, payload);
+}
+```
+
+> ℹ️ Para parsing de JSON recebido (payloads dos comandos), use a biblioteca **ArduinoJson** com `DynamicJsonDocument` dimensionado ao tamanho esperado do payload.
+
+---
+
+## Reconexão automática
+
+```cpp
+void mqttReconnect() {
+  int attempts = 0;
+  while (!mqttClient.connected() && attempts < 5) {
+    if (mqttClient.connect(MQTT_CLIENT_ID)) {
+      // Reinscrever em todos os tópicos de entrada
+      mqttClient.subscribe(TOPIC_ACCESS_RESULT);
+      mqttClient.subscribe(TOPIC_COMMAND);
+      mqttClient.subscribe(TOPIC_ENTER_ENROLLMENT);
+      mqttClient.subscribe(TOPIC_CANCEL_ENROLLMENT);
+      mqttClient.subscribe(TOPIC_SYNC_CREDENTIALS);
+
+      // Reanunciar presença
+      mqttPublishRegister();
+    } else {
+      delay(2000);  // delay permitido aqui — estamos fora do loop normal
+      attempts++;
+    }
+  }
+}
+```
+
+---
+
+## Configuração do PlatformIO
+
+```ini
+; core/platformio.ini
+[env:nodemcuv2]
+platform   = espressif8266
+board      = nodemcuv2
+framework  = arduino
+
+monitor_speed = 115200
+upload_speed  = 921600
+
+build_flags =
+  -DDEBUG_ESP_PORT=Serial
+  -Os
+
+lib_deps =
+  knolleary/PubSubClient @ ^2.8
+  adafruit/Adafruit Fingerprint Sensor Library @ ^2.1.0
+  bblanchon/ArduinoJson @ ^6.21.3
+```
+
+---
+
+## Logs de debug
+
+Todos os logs usam `Serial.println()` condicionalmente via macro `DEBUG`:
+
+```cpp
+// config.h
+#ifdef DEBUG
+  #define LOG(msg)    Serial.println(msg)
+  #define LOGF(...)   Serial.printf(__VA_ARGS__)
+#else
+  #define LOG(msg)
+  #define LOGF(...)
+#endif
+```
+
+```cpp
+// Ativado via build_flag no platformio.ini:
+// build_flags = -DDEBUG
+```
+
+Em produção, remova `-DDEBUG` dos `build_flags` para eliminar completamente os logs e reduzir o binário.
+
+---
+
+## Status de implementação
+
+| Feature | ID | Status |
+|---|---|---|
+| Wi-Fi + MQTT + heartbeat | HW-001 | 🔧 Funcional em teste; não modularizado |
+| Integração ZN-53X (enrollment + matching) | HW-002 | ⬜ Aguarda definição do formato do template |
+| Integração NFC IC V1.3A (Wiegand) | HW-003 | ⬜ Hardware possuído; sem implementação |
+| Controle do relé | HW-004 | ⬜ Hardware ainda não adquirido |
+| Reed switch (estado da porta) | HW-005 | 🔧 Testado com botão simulado |
+| Reconexão e fallback offline | HW-006 | ⬜ Não implementado |
+| Modo terminal de enrollment | HW-007 | ⬜ Definição de protocolo concluída; firmware pendente |
+| Offline-first (N últimas credenciais) | HW-008 | ⬜ Aguarda HW-002 funcional |
+```
+
+Now I need to create the sensor biometric page and then set up the TanStack route for the docs:

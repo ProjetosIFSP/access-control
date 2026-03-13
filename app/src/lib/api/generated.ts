@@ -9,13 +9,13 @@ import mutator from "./mutator";
 
 const fetch = async (path: string, options?: RequestInit) => {
 	const method = options?.method ?? "GET";
-	let body: any;
+	let body: unknown;
 	if (options && "body" in options && options.body !== undefined) {
 		try {
 			body =
 				typeof options.body === "string"
 					? JSON.parse(options.body as string)
-					: (options.body as any);
+					: (options.body as unknown);
 		} catch {
 			body = options.body;
 		}
@@ -24,7 +24,7 @@ const fetch = async (path: string, options?: RequestInit) => {
 		path,
 		method,
 		body,
-		headers: (options as any)?.headers,
+		headers: (options as RequestInit)?.headers,
 	});
 	return {
 		status: result?.status ?? 200,

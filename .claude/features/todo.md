@@ -1,6 +1,7 @@
 # Todo — Sistema de Controle de Acesso IoT
 
-> Última atualização: **UI-020 / UI-021** — Migração completa do `app/` de TanStack Router (Vite SPA) para TanStack Start (SSR + Vinxi). Pasta `app/` recriada do zero. FumaDocs integrado com rota `/docs/$`, API de busca `/api/search` e página "Hello World" em MDX. Dev server subindo limpo em ~2s. Ver `implemented.md` → UI-020 e UI-021.
+> Última atualização: **DOCS-001** — Documentação completa criada com FumaDocs. 22 arquivos MDX cobrindo guias, API REST, protocolo MQTT e hardware. Rotas `/docs/$` e `/api/search` implementadas. Ver `implemented.md` → DOCS-001.
+> Última atualização anterior: **UI-020 / UI-021** — Migração completa do `app/` de TanStack Router (Vite SPA) para TanStack Start (SSR + Vinxi). Pasta `app/` recriada do zero. FumaDocs integrado com rota `/docs/$`, API de busca `/api/search` e página "Hello World" em MDX. Dev server subindo limpo em ~2s. Ver `implemented.md` → UI-020 e UI-021.
 > Última atualização anterior: **HW-BIOMETRIC-ESP8266** — Tutorial de conexão e firmware de teste criados para NodeMCU v3 + ZN-53X + A21 UART. Dois sensores testáveis simultaneamente via `#define DUAL_SENSOR 1`. Ver `.claude/test/esp8266-biometric/`. PERM-005 resolvido; broker IoT corrigido (métodos HTTP, paths, sensorProtocol/sensorModel); checkUserRoomAccess movido para módulo de permissões; seed com controladores. Ver `implemented.md` → PERM-005 e INFRA-IOT-001.
 > Última atualização (análise): HW-007-ALT criado — análise de viabilidade do HLK-ZW111 (Hi-Link) como alternativa ao ZN-53X. Ver `.claude/features/HARDWARE/hw-007-alt-hlk-zw111.md`.
 > Última atualização (hardware): Hardware real de teste confirmado — ESP32-CAM (AI-Thinker), ZN-53X, relay control board multifuncional (NFC + P4 biometria + relé), leitor NFC standalone. `hw-007-enrollment-terminal.md` e `items.md` atualizados com nova stack de hardware.
@@ -12,6 +13,27 @@
 ---
 
 ## ✅ Tasks concluídas (esta sessão)
+
+### DOCS-001 — Documentação completa com FumaDocs
+
+- [x] **22 arquivos MDX criados** em `app/content/docs/` organizados em 4 seções:
+  - `index.mdx` — página inicial com visão geral, fluxo principal e status das features
+  - `guia/` — início rápido, arquitetura, permissões, autenticação, deploy
+  - `api/` — visão geral, autenticação, usuários, salas, perfis, IoT
+  - `iot/` — protocolo MQTT (todos os 14 tópicos), fluxo de acesso, fluxo de enrollment
+  - `hardware/` — componentes, firmware ESP8266, sensor biométrico ZN-53X
+- [x] **meta.json** criado em cada diretório para controlar a navegação da sidebar
+- [x] **Rota `/docs/route.tsx`** — layout com `DocsLayout` + `RootProvider` do FumaDocs
+- [x] **Rota `/docs/$.tsx`** — rota wildcard que renderiza qualquer página MDX via `source.getPage()`
+- [x] **Rota `/api/search.ts`** — API de busca full-text usando `createSearchAPI("advanced")` com `source.getPages()`
+- [x] **Conteúdo técnico detalhado** incluindo:
+  - Diagramas ASCII de arquitetura e fluxos
+  - Tabelas de referência de todos os endpoints REST com exemplos de payload
+  - Documentação dos 14 tópicos MQTT com payloads de ida e volta
+  - Comandos de protocolo R30x do ZN-53X com exemplos em C++
+  - Pinagem do NodeMCU v3, diagramas de conexão e cuidados com tensão
+  - Gap atual PERM-005 documentado com impacto real no fluxo IoT
+  - Status de implementação de cada feature de hardware
 
 ### UI-020 / UI-021 — Migração para TanStack Start + FumaDocs (reconstrução completa do `app/`)
 

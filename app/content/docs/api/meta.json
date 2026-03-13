@@ -1,0 +1,11 @@
+{
+  "title": "API REST",
+  "pages": [
+    "visao-geral",
+    "autenticacao",
+    "usuarios",
+    "salas",
+    "perfis",
+    "iot"
+  ]
+}

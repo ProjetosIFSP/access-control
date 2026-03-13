@@ -1,0 +1,388 @@
+---
+title: Usuários
+description: Endpoints para criação, listagem, atualização e exclusão de usuários, além de gestão de credenciais biométricas.
+---
+
+Endpoints para gerenciamento de usuários do sistema. Todos os endpoints exigem autenticação de administrador.
+
+## Listar usuários
+
+```http
+GET /users
+```
+
+**Auth:** ✅ Administrador
+
+**Resposta `200 OK`:**
+
+```json
+[
+  {
+    "id": "01951234-abcd-7000-8000-000000000001",
+    "name": "Ana Souza",
+    "email": "ana.souza@ifsp.edu.br",
+    "createdAt": "2025-01-15T10:00:00.000Z"
+  }
+]
+```
+
+---
+
+## Criar usuário
+
+```http
+POST /users
+```
+
+**Auth:** ✅ Administrador
+
+**Body:**
+
+```json
+{
+  "name": "Ana Souza",
+  "email": "ana.souza@ifsp.edu.br",
+  "password": "Senha@123"
+}
+```
+
+**Resposta `201 Created`:**
+
+```json
+{
+  "id": "01951234-abcd-7000-8000-000000000001",
+  "name": "Ana Souza",
+  "email": "ana.souza@ifsp.edu.br",
+  "createdAt": "2025-01-15T10:00:00.000Z"
+}
+```
+
+**Erros:**
+
+| Status | Quando |
+|---|---|
+| `409 Conflict` | E-mail já cadastrado |
+| `400 Bad Request` | Campos obrigatórios ausentes ou inválidos |
+
+---
+
+## Buscar usuário
+
+```http
+GET /users/:id
+```
+
+**Auth:** ✅ Administrador
+
+**Parâmetros de rota:**
+
+| Parâmetro | Tipo | Descrição |
+|---|---|---|
+| `id` | UUID v7 | ID do usuário |
+
+**Resposta `200 OK`:**
+
+```json
+{
+  "id": "01951234-abcd-7000-8000-000000000001",
+  "name": "Ana Souza",
+  "email": "ana.souza@ifsp.edu.br",
+  "createdAt": "2025-01-15T10:00:00.000Z"
+}
+```
+
+---
+
+## Atualizar usuário
+
+```http
+PATCH /users/:id
+```
+
+**Auth:** ✅ Administrador
+
+**Body (todos os campos são opcionais):**
+
+```json
+{
+  "name": "Ana Maria Souza",
+  "email": "ana.maria@ifsp.edu.br"
+}
+```
+
+**Resposta `200 OK`:** objeto do usuário atualizado.
+
+---
+
+## Excluir usuário
+
+```http
+DELETE /users/:id
+```
+
+**Auth:** ✅ Administrador
+
+**Resposta `204 No Content`:** sem corpo de resposta.
+
+> ⚠️ A exclusão de um usuário remove também todas as suas credenciais físicas, permissões diretas e vínculos com perfis.
+
+---
+
+## Relações do usuário
+
+```http
+GET /users/:id/relations
+```
+
+**Auth:** ✅ Administrador
+
+Retorna todos os dados de relacionamento do usuário em uma única chamada: perfis vinculados, permissões diretas por sala e permissões por tipo de sala.
+
+**Resposta `200 OK`:**
+
+```json
+{
+  "profiles": [
+    {
+      "id": "01951234-abcd-7000-8000-000000000010",
+      "name": "Docente"
+    }
+  ],
+  "roomPermissions": [
+    {
+      "id": "01951234-abcd-7000-8000-000000000020",
+      "name": "Laboratório 101"
+    }
+  ],
+  "roomTypePermissions": [
+    {
+      "id": "01951234-abcd-7000-8000-000000000030",
+      "name": "Laboratório de Informática"
+    }
+  ]
+}
+```
+
+---
+
+## Credenciais biométricas (digitais)
+
+### Listar digitais
+
+```http
+GET /users/:id/fingerprints
+```
+
+**Auth:** ✅ Administrador
+
+Retorna as digitais cadastradas para o usuário. O template biométrico completo **não é exposto** — apenas metadados.
+
+**Resposta `200 OK`:**
+
+```json
+[
+  {
+    "id": "01951234-abcd-7000-8000-000000000050",
+    "finger": "RIGHT_INDEX",
+    "enrolledByControllerId": "01951234-abcd-7000-8000-000000000099",
+    "createdAt": "2025-06-01T09:30:00.000Z"
+  }
+]
+```
+
+**Dedos disponíveis (`finger`):**
+
+| Valor | Dedo |
+|---|---|
+| `RIGHT_THUMB` | Polegar direito |
+| `RIGHT_INDEX` | Indicador direito |
+| `RIGHT_MIDDLE` | Médio direito |
+| `RIGHT_RING` | Anelar direito |
+| `RIGHT_PINKY` | Mínimo direito |
+| `LEFT_THUMB` | Polegar esquerdo |
+| `LEFT_INDEX` | Indicador esquerdo |
+| `LEFT_MIDDLE` | Médio esquerdo |
+| `LEFT_RING` | Anelar esquerdo |
+| `LEFT_PINKY` | Mínimo esquerdo |
+
+---
+
+### Iniciar enrollment biométrico
+
+```http
+POST /users/:id/fingerprints/enroll-request
+```
+
+**Auth:** ✅ Administrador
+
+Inicia o fluxo de captura biométrica via uma fechadura física. O endpoint cria um `enrollment_request` com TTL de ~2 minutos e publica o tópico MQTT `door/{controllerId}/enter-enrollment-mode` para colocar a fechadura em modo terminal.
+
+**Body:**
+
+```json
+{
+  "finger": "RIGHT_INDEX",
+  "controllerId": "01951234-abcd-7000-8000-000000000099"
+}
+```
+
+**Resposta `201 Created`:**
+
+```json
+{
+  "enrollmentId": "01951234-abcd-7000-8000-000000000060",
+  "expiresAt": "2025-07-01T12:02:00.000Z"
+}
+```
+
+**Erros:**
+
+| Status | Quando |
+|---|---|
+| `409 Conflict` | Já existe uma digital cadastrada para este dedo |
+| `404 Not Found` | Controlador não encontrado ou offline |
+
+---
+
+### Consultar status do enrollment
+
+```http
+GET /iot/enrollment/:enrollmentId/status
+```
+
+**Auth:** ✅ Administrador
+
+Usado pelo frontend em polling para saber se a captura biométrica foi concluída.
+
+**Resposta `200 OK`:**
+
+```json
+{
+  "status": "PENDING",
+  "enrollmentId": "01951234-abcd-7000-8000-000000000060",
+  "expiresAt": "2025-07-01T12:02:00.000Z"
+}
+```
+
+**Valores de `status`:**
+
+| Valor | Descrição |
+|---|---|
+| `PENDING` | Aguardando captura da digital na fechadura |
+| `SUCCESS` | Digital capturada e cadastrada com sucesso |
+| `FAILED` | Falha na captura (qualidade insuficiente) |
+| `EXPIRED` | TTL expirou sem captura |
+
+---
+
+### Excluir digital
+
+```http
+DELETE /users/:id/fingerprints/:fingerprintId
+```
+
+**Auth:** ✅ Administrador
+
+Remove a credencial biométrica do banco e dispara a sincronização de remoção em todos os controladores que possuem o template carregado.
+
+**Resposta `204 No Content`:** sem corpo de resposta.
+
+---
+
+## Permissões diretas do usuário
+
+### Conceder acesso a uma sala
+
+```http
+POST /users/:id/room-permissions
+```
+
+**Auth:** ✅ Administrador
+
+**Body:**
+
+```json
+{
+  "roomId": "01951234-abcd-7000-8000-000000000020"
+}
+```
+
+**Resposta `201 Created`:** objeto da permissão criada.
+
+---
+
+### Revogar acesso a uma sala
+
+```http
+DELETE /users/:id/room-permissions/:roomId
+```
+
+**Auth:** ✅ Administrador
+
+**Resposta `204 No Content`:** sem corpo de resposta.
+
+---
+
+### Conceder acesso a um tipo de sala
+
+```http
+POST /users/:id/room-type-permissions
+```
+
+**Auth:** ✅ Administrador
+
+**Body:**
+
+```json
+{
+  "roomTypeId": "01951234-abcd-7000-8000-000000000030"
+}
+```
+
+**Resposta `201 Created`:** objeto da permissão criada.
+
+---
+
+### Revogar acesso a um tipo de sala
+
+```http
+DELETE /users/:id/room-type-permissions/:roomTypeId
+```
+
+**Auth:** ✅ Administrador
+
+**Resposta `204 No Content`:** sem corpo de resposta.
+
+---
+
+## Vínculos com perfis
+
+### Vincular usuário a um perfil
+
+```http
+POST /users/:id/profiles
+```
+
+**Auth:** ✅ Administrador
+
+**Body:**
+
+```json
+{
+  "profileId": "01951234-abcd-7000-8000-000000000010"
+}
+```
+
+**Resposta `201 Created`:** objeto do vínculo criado.
+
+---
+
+### Desvincular usuário de um perfil
+
+```http
+DELETE /users/:id/profiles/:profileId
+```
+
+**Auth:** ✅ Administrador
+
+**Resposta `204 No Content`:** sem corpo de resposta.

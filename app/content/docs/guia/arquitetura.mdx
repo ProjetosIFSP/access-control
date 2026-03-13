@@ -1,0 +1,272 @@
+---
+title: Arquitetura do Sistema
+description: Visão completa das quatro camadas do sistema, modelo de dados, fluxos de comunicação e decisões de design.
+---
+
+O sistema é composto por quatro camadas independentes que se comunicam via **HTTP REST** e **MQTT**. Cada camada tem responsabilidade única e pode ser escalada ou substituída sem impactar as demais.
+
+## Diagrama geral
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                     PORTAL WEB (app/)                           │
+│          React 19 · Vite · TanStack Router/Query                │
+│                  Tailwind CSS · shadcn/ui                       │
+└──────────────────────────┬──────────────────────────────────────┘
+                           │ HTTP REST (Orval / TanStack Query)
+                           ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                    BACKEND API (server/)                        │
+│           Fastify · Drizzle ORM · PostgreSQL                    │
+│              better-auth · Zod · UUID v7                        │
+└──────────┬──────────────────────────────┬───────────────────────┘
+           │ HTTP REST (undici)            │ TCP
+           ▼                              ▼
+┌───────────────────────┐     ┌──────────────────────────────────┐
+│   BROKER MQTT (iot/)  │     │         BANCO DE DADOS           │
+│  Node.js · Aedes      │     │           PostgreSQL             │
+│  TCP :1883 · WS :9001 │     └──────────────────────────────────┘
+└──────────┬────────────┘
+           │ MQTT / TCP
+           ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                     HARDWARE (core/)                            │
+│     ESP8266 · Sensor Biométrico ZN-53X · Leitor NFC IC V1.3A   │
+│           Reed Switch · Relé + Fechadura Solenoide              │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+---
+
+## Camada 1 — Portal Web (`app/`)
+
+Interface de administração e monitoramento construída com **React 19** e roteamento file-based via TanStack Router. Todo o código de chamada à API é gerado automaticamente pelo **Orval** a partir do OpenAPI do backend.
+
+### Responsabilidades
+
+- Autenticação de administradores via cookie de sessão (better-auth)
+- CRUD de usuários, perfis, salas, blocos e tipos de sala
+- Atribuição de permissões em múltiplos níveis
+- Gestão de credenciais físicas (biometria, NFC)
+- Visualização do estado das portas em tempo real
+- Histórico de acessos com filtros
+
+### Estrutura de diretórios
+
+```
+app/src/
+├── routes/          # Páginas (TanStack Router — file-based)
+├── components/      # Componentes por domínio
+│   ├── users/
+│   ├── rooms/
+│   ├── profiles/
+│   └── ui/          # Componentes base (shadcn/ui)
+├── services/        # Funções de chamada à API por domínio
+├── hooks/           # Hooks customizados
+├── lib/             # Utilitários e constantes
+└── integrations/    # Configuração de clientes externos
+```
+
+### Tecnologias
+
+| Biblioteca | Uso |
+|---|---|
+| React 19 | UI declarativa |
+| TanStack Router | Roteamento type-safe file-based com SSR |
+| TanStack Query | Cache, fetch e invalidação de dados do servidor |
+| TanStack Start | Framework SSR com Vinxi |
+| Tailwind CSS 4 | Estilização utilitária |
+| shadcn/ui (Radix) | Componentes base acessíveis |
+| Orval | Geração de código de API client a partir do OpenAPI |
+| FumaDocs | Motor de documentação integrado |
+| Biome | Linting e formatação |
+
+---
+
+## Camada 2 — Backend API (`server/`)
+
+API REST construída com **Fastify**. É o único serviço com acesso direto ao banco de dados — toda lógica de negócio, autenticação e verificação de permissão passa por aqui.
+
+### Responsabilidades
+
+- Autenticação e gestão de sessões (better-auth + cookie HttpOnly)
+- CRUD completo de todas as entidades do domínio
+- Sistema de permissões em 4 níveis
+- Endpoints para integração com o broker MQTT
+- Registro de log de acessos (GRANTED / DENIED)
+- Gestão de credenciais físicas (fingerprint, NFC)
+- Documentação interativa em `/docs` (Swagger UI)
+
+### Estrutura de diretórios
+
+```
+server/src/
+├── api/
+│   ├── routes/      # Rotas Fastify por domínio
+│   ├── server.ts    # Configuração e registro de plugins
+│   └── docs.ts      # Swagger / OpenAPI
+├── db/
+│   ├── schema/      # Schemas Drizzle ORM por domínio
+│   ├── index.ts     # Instância do banco
+│   └── seed.ts      # Dados iniciais
+├── services/        # Lógica de negócio por domínio
+│   ├── iot/         # Controladores, comandos, acesso
+│   ├── permissions/ # verifyAccess (4 níveis)
+│   ├── profile/
+│   ├── room/
+│   └── user/
+│       └── fingerprint/
+└── lib/
+    ├── auth.ts      # Configuração better-auth
+    └── zod.ts       # Instância Zod com extensões
+```
+
+### Tecnologias
+
+| Biblioteca | Uso |
+|---|---|
+| Fastify | HTTP framework performático |
+| fastify-type-provider-zod | Integração Zod com Fastify para tipagem automática |
+| Drizzle ORM | ORM type-safe para PostgreSQL |
+| PostgreSQL | Banco de dados principal |
+| better-auth | Autenticação com sessão por cookie |
+| Zod | Validação de schemas de request/response |
+| UUID v7 | IDs ordenáveis temporalmente |
+| Pino | Logs estruturados em JSON |
+
+---
+
+## Camada 3 — Broker MQTT (`iot/`)
+
+Broker MQTT baseado em **Aedes** (Node.js). Aceita conexões dos controladores físicos via TCP (porta 1883) e WebSocket (porta 9001), e faz a ponte com o backend via HTTP usando `undici`.
+
+### Responsabilidades
+
+- Aceitar conexões MQTT de controladores ESP8266/ESP32
+- Rotear mensagens de dispositivos para o backend
+- Publicar decisões de acesso de volta ao dispositivo
+- Gerenciar polling de comandos pendentes por controlador
+- Disparar fila de UNLOCK após acesso GRANTED
+
+### Tecnologias
+
+| Biblioteca | Uso |
+|---|---|
+| Aedes | Broker MQTT para Node.js |
+| ws | WebSocket server para clientes de browser |
+| undici | HTTP client nativo para chamar o backend |
+| Zod | Validação de payloads MQTT recebidos |
+| Pino | Logs estruturados |
+
+---
+
+## Camada 4 — Hardware / Firmware (`core/`)
+
+Firmware para **NodeMCU v3 (ESP8266MOD)** instalado em cada porta. Roda o framework Arduino via PlatformIO.
+
+### Modos de operação
+
+Cada controlador opera em um dos dois modos, alternável remotamente via MQTT:
+
+| Modo | Comportamento |
+|---|---|
+| **Fechadura** (padrão) | Processa tentativas de acesso, controla o relé |
+| **Terminal** (temporário, TTL ~2 min) | Captura template biométrico para enrollment; ignora acessos normais |
+
+### Componentes de hardware
+
+| Componente | Modelo | Status |
+|---|---|---|
+| Microcontrolador | NodeMCU v3 (ESP8266MOD) | ✅ Possuído |
+| Sensor biométrico | ZN-53X (protocolo R30x) | ✅ Possuído |
+| Leitor NFC | IC V1.3A — 2 pinos | ✅ Possuído ⚠️ |
+| Reed switch | Genérico | ❌ A adquirir |
+| Módulo relê | 5V 1 canal com optoacoplador | ❌ A adquirir |
+| Fechadura | Solenoide 12V (fail-secure) | ❌ A adquirir |
+| Fonte | 12V / 2A | ❌ A adquirir |
+| Step-down | LM2596 / módulo buck | ❌ A adquirir |
+
+---
+
+## Modelo de dados
+
+```
+user ──────────────────── account (better-auth)
+ │                        session (better-auth)
+ │
+ ├── user_profile ──────── profile
+ │                           │
+ ├── user_room_permission    ├── profile_room_permission ──── room
+ │                           │                                 │
+ └── user_room_type_perm.    └── profile_room_type_perm.   room_type
+                                                               │
+                                                           block (bloco)
+
+room ──── door_controller ──── door_command
+                │                   │
+                │         controller_credential_slot ──── access_credential
+                │
+                └── access_log ──── access_credential
+                                          │
+                                        user
+
+enrollment_request ──── door_controller
+enrollment_request ──── user
+```
+
+### Tabelas principais
+
+| Tabela | Descrição |
+|---|---|
+| `user` | Usuários do sistema |
+| `profile` | Perfis de acesso agrupando permissões |
+| `room` | Salas gerenciadas pelo sistema |
+| `block` | Blocos/prédios que agrupam salas |
+| `room_type` | Categorias de sala (laboratório, sala de aula, etc.) |
+| `user_room_permission` | Permissão direta: usuário → sala |
+| `user_room_type_permission` | Permissão: usuário → tipo de sala |
+| `profile_room_permission` | Permissão: perfil → sala |
+| `profile_room_type_permission` | Permissão: perfil → tipo de sala |
+| `user_profile` | Vínculo usuário ↔ perfil |
+| `door_controller` | Controlador físico vinculado a uma sala |
+| `door_command` | Fila de comandos para controladores (UNLOCK, LOCK, SYNC_STATE) |
+| `access_credential` | Credenciais físicas (FINGERPRINT / NFC_TAG) |
+| `access_log` | Histórico de tentativas de acesso |
+| `controller_credential_slot` | Mapeamento slotId ZN-53X ↔ credentialId por controlador |
+| `enrollment_request` | Enrollments biométricos em andamento (TTL ~2 min) |
+
+---
+
+## Comunicação entre serviços
+
+| De | Para | Protocolo | Porta |
+|---|---|---|---|
+| Frontend (browser) | Backend API | HTTP REST | 3333 |
+| Broker MQTT | Backend API | HTTP REST (undici) | 3333 |
+| ESP8266 / ESP32 | Broker MQTT | MQTT / TCP | 1883 |
+| Frontend (futuro) | Broker MQTT | MQTT / WebSocket | 9001 |
+| Backend | PostgreSQL | TCP | 5432 |
+
+---
+
+## Decisões de design
+
+### Por que MQTT e não WebSocket direto?
+
+MQTT é o protocolo padrão para IoT. Oferece QoS, tópicos hierárquicos, retain e will messages nativamente. Dispositivos embarcados têm bibliotecas maduras (`PubSubClient` para Arduino). WebSocket seria overhead desnecessário no hardware.
+
+### Por que o broker chama o backend via HTTP e não acessa o banco diretamente?
+
+Separação de responsabilidades: o broker é stateless em relação ao negócio. Toda lógica de negócio — verificação de permissão, registro de log — fica no backend, que é o único serviço a escrever no banco. Isso facilita escalar e testar cada serviço isoladamente.
+
+### Por que Drizzle ORM e não Prisma?
+
+Drizzle gera SQL explícito e oferece controle total sobre as queries. Os schemas são definidos em TypeScript puro, eliminando a camada de abstração do Prisma Schema Language. Para um projeto com foco em compreensão do sistema, ter o SQL visível é pedagogicamente melhor.
+
+### Por que better-auth e não JWT manual?
+
+better-auth fornece sessões seguras por cookie `HttpOnly` (sem risco de XSS como no `localStorage`), fluxo completo de forgot/reset password, integração nativa com Drizzle e tipagem TypeScript — tudo que o projeto precisa sem reinventar segurança de autenticação.
+
+### Por que UUID v7 nos IDs?
+
+UUID v7 é ordenável temporalmente (prefixo de timestamp Unix em milissegundos), o que melhora a performance de índices B-tree no PostgreSQL para inserções sequenciais — ao contrário do UUID v4 completamente aleatório que fragmenta páginas de índice.

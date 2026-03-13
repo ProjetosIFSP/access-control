@@ -8,123 +8,123 @@ import { usersQueryKeys } from "./index";
 
 declare const __API_BASE_URL__: string | undefined;
 const API_BASE_URL =
-  (typeof __API_BASE_URL__ !== "undefined" ? __API_BASE_URL__ : undefined) ??
-  (typeof import.meta !== "undefined"
-    ? (import.meta as { env?: { VITE_API_URL?: string } }).env?.VITE_API_URL
-    : undefined) ??
-  "http://localhost:3333";
+	(typeof __API_BASE_URL__ !== "undefined" ? __API_BASE_URL__ : undefined) ??
+	(typeof import.meta !== "undefined"
+		? (import.meta as { env?: { VITE_API_URL?: string } }).env?.VITE_API_URL
+		: undefined) ??
+	"http://localhost:3333";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
 export type FingerprintSummary = {
-  id: string;
-  finger: FingerKey;
-  isActive: boolean;
-  createdAt: string;
+	id: string;
+	finger: FingerKey;
+	isActive: boolean;
+	createdAt: string;
 };
 
 export type RegisterFingerprintPayload = {
-  userId: string;
-  finger: FingerKey;
-  /** Template bruto capturado pelo leitor (hex ou string do modo keyboard) */
-  template: string;
+	userId: string;
+	finger: FingerKey;
+	/** Template bruto capturado pelo leitor (hex ou string do modo keyboard) */
+	template: string;
 };
 
 export type DeleteFingerprintPayload = {
-  userId: string;
-  credentialId: string;
+	userId: string;
+	credentialId: string;
 };
 
 export type ToggleFingerprintPayload = {
-  userId: string;
-  credentialId: string;
-  isActive: boolean;
+	userId: string;
+	credentialId: string;
+	isActive: boolean;
 };
 
 // ── Query Keys ────────────────────────────────────────────────────────────────
 
 export const fingerprintQueryKeys = {
-  list: (userId: string) =>
-    [...usersQueryKeys.all, userId, "fingerprints"] as const,
+	list: (userId: string) =>
+		[...usersQueryKeys.all, userId, "fingerprints"] as const,
 };
 
 // ── API Functions ─────────────────────────────────────────────────────────────
 
 export async function fetchUserFingerprints(
-  userId: string,
+	userId: string,
 ): Promise<FingerprintSummary[]> {
-  const res = await fetch(`${API_BASE_URL}/users/${userId}/fingerprints`, {
-    credentials: "include",
-  });
-  if (!res.ok) throw new Error("Falha ao carregar as digitais do usuário");
-  return res.json();
+	const res = await fetch(`${API_BASE_URL}/users/${userId}/fingerprints`, {
+		credentials: "include",
+	});
+	if (!res.ok) throw new Error("Falha ao carregar as digitais do usuário");
+	return res.json();
 }
 
 export async function registerFingerprint(
-  payload: RegisterFingerprintPayload,
+	payload: RegisterFingerprintPayload,
 ): Promise<FingerprintSummary> {
-  const { userId, ...body } = payload;
-  const res = await fetch(`${API_BASE_URL}/users/${userId}/fingerprints`, {
-    method: "POST",
-    credentials: "include",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body),
-  });
+	const { userId, ...body } = payload;
+	const res = await fetch(`${API_BASE_URL}/users/${userId}/fingerprints`, {
+		method: "POST",
+		credentials: "include",
+		headers: { "Content-Type": "application/json" },
+		body: JSON.stringify(body),
+	});
 
-  if (!res.ok) {
-    const data = await res.json().catch(() => ({}));
-    throw new Error(data.message ?? "Falha ao cadastrar a digital");
-  }
+	if (!res.ok) {
+		const data = await res.json().catch(() => ({}));
+		throw new Error(data.message ?? "Falha ao cadastrar a digital");
+	}
 
-  return res.json();
+	return res.json();
 }
 
 export async function deleteFingerprint(
-  payload: DeleteFingerprintPayload,
+	payload: DeleteFingerprintPayload,
 ): Promise<void> {
-  const { userId, credentialId } = payload;
-  const res = await fetch(
-    `${API_BASE_URL}/users/${userId}/fingerprints/${credentialId}`,
-    {
-      method: "DELETE",
-      credentials: "include",
-    },
-  );
+	const { userId, credentialId } = payload;
+	const res = await fetch(
+		`${API_BASE_URL}/users/${userId}/fingerprints/${credentialId}`,
+		{
+			method: "DELETE",
+			credentials: "include",
+		},
+	);
 
-  if (!res.ok) {
-    const data = await res.json().catch(() => ({}));
-    throw new Error(data.message ?? "Falha ao remover a digital");
-  }
+	if (!res.ok) {
+		const data = await res.json().catch(() => ({}));
+		throw new Error(data.message ?? "Falha ao remover a digital");
+	}
 }
 
 export async function toggleFingerprint(
-  payload: ToggleFingerprintPayload,
+	payload: ToggleFingerprintPayload,
 ): Promise<FingerprintSummary> {
-  const { userId, credentialId, isActive } = payload;
-  const res = await fetch(
-    `${API_BASE_URL}/users/${userId}/fingerprints/${credentialId}`,
-    {
-      method: "PATCH",
-      credentials: "include",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ isActive }),
-    },
-  );
+	const { userId, credentialId, isActive } = payload;
+	const res = await fetch(
+		`${API_BASE_URL}/users/${userId}/fingerprints/${credentialId}`,
+		{
+			method: "PATCH",
+			credentials: "include",
+			headers: { "Content-Type": "application/json" },
+			body: JSON.stringify({ isActive }),
+		},
+	);
 
-  if (!res.ok) {
-    const data = await res.json().catch(() => ({}));
-    throw new Error(data.message ?? "Falha ao alterar o status da digital");
-  }
+	if (!res.ok) {
+		const data = await res.json().catch(() => ({}));
+		throw new Error(data.message ?? "Falha ao alterar o status da digital");
+	}
 
-  return res.json();
+	return res.json();
 }
 
 // ── Query Options ─────────────────────────────────────────────────────────────
 
 export const userFingerprintsQueryOptions = (userId: string | null) =>
-  queryOptions({
-    queryKey: fingerprintQueryKeys.list(userId ?? ""),
-    queryFn: () => fetchUserFingerprints(userId as string),
-    enabled: !!userId,
-    staleTime: 1000 * 60 * 2,
-  });
+	queryOptions({
+		queryKey: fingerprintQueryKeys.list(userId ?? ""),
+		queryFn: () => fetchUserFingerprints(userId as string),
+		enabled: !!userId,
+		staleTime: 1000 * 60 * 2,
+	});

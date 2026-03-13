@@ -1,0 +1,319 @@
+---
+title: Componentes de Hardware
+description: Lista completa dos componentes utilizados no controlador de acesso — microcontrolador, sensor biométrico, leitor NFC, relé, fechadura e acessórios.
+---
+
+Cada controlador de acesso instalado em uma porta é composto por um conjunto de componentes eletrônicos coordenados pelo **NodeMCU v3 (ESP8266MOD)**. Esta página lista todos os componentes, seu status de aquisição e sua função no sistema.
+
+---
+
+## Lista de componentes
+
+| Componente | Modelo | Status | Função |
+|---|---|---|---|
+| Microcontrolador | NodeMCU v3 (ESP8266MOD) | ✅ Possuído | Processamento central, Wi-Fi, MQTT |
+| Sensor biométrico | ZN-53X (protocolo R30x) | ✅ Possuído | Captura e matching de digitais |
+| Leitor NFC | IC V1.3A — 2 pinos (C1/P1) | ✅ Possuído ⚠️ | Leitura de UIDs de tags NFC |
+| Reed switch | Genérico | ❌ A adquirir | Detecção de porta aberta/fechada |
+| Módulo relê | 5V 1 canal com optoacoplador | ❌ A adquirir | Acionamento da fechadura via GPIO |
+| Fechadura | Solenoide 12V (fail-secure) | ❌ A adquirir | Atuador eletromecânico da porta |
+| Fonte de alimentação | 12V / 2A | ❌ A adquirir | Alimentar a fechadura + step-down |
+| Conversor step-down | LM2596 ou módulo buck | ❌ A adquirir | Reduz 12V → 5V para o NodeMCU |
+
+---
+
+## Microcontrolador — NodeMCU v3 (ESP8266MOD)
+
+O NodeMCU v3 é o cérebro do controlador. Ele gerencia a conectividade Wi-Fi, a comunicação MQTT com o broker e a coordenação de todos os periféricos.
+
+### Especificações relevantes
+
+| Atributo | Valor |
+|---|---|
+| SoC | ESP8266MOD |
+| Frequência | 80 MHz (configurável para 160 MHz) |
+| RAM | 96 KB (dados) + 64 KB (instruções) |
+| Flash | 4 MB |
+| Wi-Fi | 802.11 b/g/n 2,4 GHz |
+| GPIOs utilizáveis | ~11 (após reservar UART e boot pins) |
+| Tensão de operação | 3,3 V (pinos GPIO) |
+| Alimentação via USB/VIN | 5 V |
+
+### Pinagem planejada
+
+| GPIO | Pino NodeMCU | Função |
+|---|---|---|
+| GPIO1 (TX) | D10 | SoftwareSerial TX → ZN-53X RX |
+| GPIO3 (RX) | D9 | SoftwareSerial RX ← ZN-53X TX |
+| GPIO5 | D1 | Controle do relé (fechadura) |
+| GPIO4 | D2 | Reed switch (estado da porta) |
+| GPIO14 | D5 | D0 do leitor NFC (Wiegand bit 0) |
+| GPIO12 | D6 | D1 do leitor NFC (Wiegand bit 1) |
+| GPIO2 | D4 | LED de status (azul — modo terminal) |
+
+> ⚠️ Os pinos GPIO1 e GPIO3 são os pinos UART de boot do ESP8266. Usar `SoftwareSerial` em outros pinos é preferível para não interferir com o upload de firmware. Verifique a compatibilidade antes de alterar a pinagem.
+
+---
+
+## Sensor biométrico — ZN-53X
+
+O ZN-53X é um módulo de sensor biométrico óptico que utiliza o protocolo **R30x** (compatível com a maioria das bibliotecas Arduino de fingerprint). Ele realiza o **matching on-device** — os templates são armazenados diretamente na memória flash interna do sensor.
+
+### Especificações
+
+| Atributo | Valor |
+|---|---|
+| Protocolo | R30x (UART serial) |
+| Interface | UART (SoftwareSerial, 57600 baud) |
+| Tensão de alimentação | 3,3 V – 5 V (tolerante) |
+| Slots de template | 127 (slots 1–127) |
+| Tempo de matching | 200–800 ms |
+| Template size | 256 bytes (512 chars hex) |
+| Falsa aceitação (FAR) | < 0,001% |
+| Falsa rejeição (FRR) | < 0,1% |
+
+### Comandos utilizados (protocolo R30x)
+
+| Comando | Código | Descrição |
+|---|---|---|
+| `GenImg` | `0x01` | Captura imagem do dedo |
+| `Img2Tz` | `0x02` | Converte imagem em vetor de características |
+| `CreateModel` | `0x05` | Combina 2 capturas em um modelo |
+| `StoreModel` | `0x06` | Salva modelo em um slot da flash interna |
+| `DeleteModel` | `0x0C` | Remove modelo de um slot |
+| `Search` | `0x04` | Busca matching em todos os slots |
+| `GetModel` | `0x07` | Lê o template de um slot (para upload) |
+| `UploadTemplate` | `0x08` | Transfere template via UART para o MCU |
+
+### Fluxo de enrollment no sensor
+
+```
+1. GenImg()           → captura imagem (passagem 1)
+2. Img2Tz(buffer=1)   → extrai vetor de características
+3. GenImg()           → captura imagem (passagem 2)
+4. Img2Tz(buffer=2)   → extrai vetor de características
+5. CreateModel()      → combina buffer 1 + buffer 2
+6. GetModel()         → lê o modelo combinado
+7. UploadTemplate(0x08) → transfere 256 bytes via UART para o ESP8266
+```
+
+O template de 256 bytes é convertido para string hexadecimal de 512 caracteres antes de ser enviado via MQTT.
+
+### Fluxo de acesso (matching)
+
+O matching pode ser feito de duas formas:
+
+**On-device (local):**
+```
+1. GenImg()    → captura imagem do dedo apresentado
+2. Img2Tz(1)  → extrai vetor de características
+3. Search()   → busca nos slots 1–127 da flash interna
+4. Resultado: slotId encontrado (MATCH) ou NOT_FOUND
+```
+
+**Remoto (via backend):**
+```
+1. GenImg() + Img2Tz → extrai vetor
+2. GetModel()        → obtém template
+3. UploadTemplate    → envia para o ESP8266
+4. ESP8266 publica access-attempt com credentialValue
+5. Backend faz busca por valor na tabela access_credential
+```
+
+> ℹ️ A estratégia de matching atual usa a **busca remota** (valor do template como chave no banco). O matching local (Search on-device) é parte da implementação de offline-first (HW-008).
+
+---
+
+## Leitor NFC — IC V1.3A
+
+O leitor NFC possui conector de 2 pinos (marcados `C1` e `P1` na PCB), o que indica saída **Wiegand 26** (padrão da indústria para leitores de controle de acesso).
+
+### Especificações
+
+| Atributo | Valor |
+|---|---|
+| Protocolo de saída | Wiegand 26 (D0/D1) — a confirmar |
+| Frequência NFC | 13,56 MHz (ISO 14443A) |
+| Tensão de alimentação | 5 V (a confirmar na PCB) |
+| Sinal D0/D1 | 5V TTL — requer divisor de tensão para o ESP8266 |
+
+### Protocolo Wiegand 26
+
+O Wiegand 26 transmite 26 bits via dois sinais complementares (D0 e D1):
+- **D0 baixo:** bit `0`
+- **D1 baixo:** bit `1`
+- Ambos em nível alto: linha ociosa
+
+O decodificação é feita via **interrupção** nos GPIOs do ESP8266:
+
+```cpp
+volatile uint8_t wiegandData[3];
+volatile uint8_t wiegandBitCount = 0;
+
+void IRAM_ATTR onD0Fall() {
+  // bit 0
+  wiegandBitCount++;
+}
+
+void IRAM_ATTR onD1Fall() {
+  // bit 1
+  wiegandData[wiegandBitCount / 8] |= (1 << (7 - (wiegandBitCount % 8)));
+  wiegandBitCount++;
+}
+
+void setup() {
+  attachInterrupt(digitalPinToInterrupt(D5), onD0Fall, FALLING);
+  attachInterrupt(digitalPinToInterrupt(D6), onD1Fall, FALLING);
+}
+```
+
+### Adaptação de tensão (5V → 3,3V)
+
+Os sinais D0 e D1 do leitor operam em 5V TTL. Os GPIOs do ESP8266 suportam no máximo **3,3V**. É necessário um divisor resistivo:
+
+```
+D0 (5V) ──┬── 1kΩ ──┬── GPIO14 (ESP8266)
+           │         │
+          GND      2,2kΩ
+                    │
+                   GND
+
+D1 (5V) ──┬── 1kΩ ──┬── GPIO12 (ESP8266)
+           │         │
+          GND      2,2kΩ
+                    │
+                   GND
+```
+
+> ⚠️ **Atenção:** inspecione o chip principal da PCB do leitor e meça a tensão nos pinos D0/D1 antes de conectar ao ESP8266. Conectar 5V diretamente nos GPIOs danifica o chip permanentemente.
+
+---
+
+## Módulo relê — 5V 1 canal
+
+O módulo relê recebe o sinal de controle do ESP8266 (3,3V) e aciona a bobina da fechadura solenoide (12V).
+
+### Especificações
+
+| Atributo | Valor |
+|---|---|
+| Tensão de controle | 5V (com optoacoplador) |
+| Tensão de carga (NO/NC) | até 250V AC / 30V DC |
+| Corrente máxima | 10A |
+| Nível de acionamento | LOW (ativo em nível baixo) |
+
+> ℹ️ Módulos com optoacoplador isolam eletricamente o circuito de controle (3,3V ESP8266) do circuito de potência (12V fechadura), protegendo o microcontrolador.
+
+### Conexão
+
+```
+ESP8266 GPIO5 (D1) → IN do módulo relê
+VIN (5V) → VCC do módulo relê
+GND → GND do módulo relê
+
+Saída NA (normalmente aberta) → fio positivo da fechadura
+12V da fonte → outro terminal da fechadura
+```
+
+---
+
+## Fechadura solenoide — 12V (fail-secure)
+
+A fechadura solenoide é o atuador eletromecânico que efetivamente trava e destrava a porta.
+
+### Tipo fail-secure vs fail-safe
+
+| Tipo | Comportamento sem energia | Uso recomendado |
+|---|---|---|
+| **Fail-secure** | Permanece **travada** | Salas com alto requisito de segurança |
+| **Fail-safe** | Permanece **destravada** | Saídas de emergência |
+
+O projeto utiliza **fail-secure** — em caso de queda de energia, as salas permanecem trancadas.
+
+### Operação
+
+- **Relé aberto (sem sinal):** bobina sem corrente → mola mantém trava fechada (fail-secure)
+- **Relé fechado (GPIO HIGH):** corrente na bobina → solenoide retrai → porta pode ser aberta
+- **Tempo de abertura:** 3–5 segundos após acesso GRANTED (configurável no firmware)
+
+---
+
+## Fonte de alimentação e step-down
+
+### Dimensionamento
+
+| Componente | Tensão | Corrente típica |
+|---|---|---|
+| Fechadura solenoide | 12V | 500mA – 1A (pico na abertura) |
+| NodeMCU + periféricos | 5V | ~500mA |
+| **Total** | — | **~1,5A @ 12V** |
+
+Uma fonte de **12V / 2A** oferece margem confortável.
+
+### Step-down (LM2596)
+
+O módulo step-down converte 12V → 5V para alimentar o NodeMCU via pino VIN:
+
+```
+Fonte 12V ──┬── Relé (carga 12V da fechadura)
+             │
+             └── Step-down LM2596
+                     │
+                     └── 5V → NodeMCU VIN
+```
+
+> ⚠️ Não alimente o NodeMCU simultaneamente pelo USB e pelo VIN com tensões diferentes. Durante o desenvolvimento, use apenas USB. Em produção, use apenas o step-down via VIN.
+
+---
+
+## Diagrama de conexão geral
+
+```
+                    ┌─────────────────────┐
+                    │   NodeMCU v3        │
+                    │   (ESP8266MOD)      │
+              ┌─────┤ D1  (GPIO5)         │
+              │     │ D2  (GPIO4) ────────┼──── Reed Switch ──── GND
+              │     │ D4  (GPIO2) ────────┼──── LED Azul (modo terminal)
+              │     │ D5  (GPIO14) ───────┼──── D0 NFC (via divisor 1k+2.2k)
+              │     │ D6  (GPIO12) ───────┼──── D1 NFC (via divisor 1k+2.2k)
+              │     │ D9  (RX)    ────────┼──── TX ZN-53X
+              │     │ D10 (TX)    ────────┼──── RX ZN-53X
+              │     │ VIN ────────────────┼──── 5V (step-down saída)
+              │     │ GND ────────────────┼──── GND (comum)
+              │     └─────────────────────┘
+              │
+              ▼
+    ┌──────────────────┐
+    │  Módulo Relê 5V  │
+    │  (optoacoplador) │
+    └────────┬─────────┘
+             │ NO (normalmente aberto)
+             ▼
+    ┌──────────────────┐        ┌──────────────────┐
+    │  Fechadura       │◄───────┤  Fonte 12V / 2A  │
+    │  Solenoide 12V   │        │                  │
+    └──────────────────┘        └────────┬─────────┘
+                                         │ 12V
+                                         ▼
+                                ┌──────────────────┐
+                                │  Step-down       │
+                                │  LM2596          │
+                                │  12V → 5V        │
+                                └──────────────────┘
+```
+
+---
+
+## Status de implementação
+
+| Componente | Código | Status |
+|---|---|---|
+| Wi-Fi + MQTT + heartbeat | HW-001 | 🔧 Funcional em código de teste; não modularizado em `core/` |
+| Integração ZN-53X | HW-002 | ⬜ Formato do template aguarda definição; matching on-device pendente |
+| Integração RFID/NFC RC522 | HW-003 | ⬜ Hardware possuído; sem implementação |
+| Controle do relé | HW-004 | ⬜ Hardware ainda não adquirido |
+| Detecção de estado da porta | HW-005 | 🔧 SCT-013 testado; reed switch simulado como botão |
+| Reconexão e fallback offline | HW-006 | ⬜ Não implementado |
+| Modo terminal de enrollment | HW-007 | ⬜ Toda fechadura alterna entre modo fechadura e modo terminal |
+| Offline-first (N últimas credenciais) | HW-008 | ⬜ Política definida; aguarda HW-002 funcional |

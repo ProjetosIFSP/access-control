@@ -1,0 +1,159 @@
+---
+title: Sistema de Permissões
+description: Entenda como funciona o controle de acesso em 4 níveis — permissões diretas por usuário, por tipo de sala, por perfil e por tipo via perfil.
+---
+
+O sistema de permissões é um dos núcleos do projeto. Ele determina se um usuário pode ou não acessar uma determinada sala, levando em conta quatro níveis de concessão que são verificados em conjunto pela função `verifyAccess`.
+
+## Os 4 níveis de permissão
+
+```
+verifyAccess(userId, roomId)
+        │
+        ├── PERM-001: user_room_permission
+        │     Permissão direta: usuário → sala específica
+        │
+        ├── PERM-002: user_room_type_permission
+        │     Permissão: usuário → tipo de sala (ex: "Laboratório")
+        │
+        ├── PERM-003: profile_room_permission (via user_profile)
+        │     Permissão: perfil do usuário → sala específica
+        │
+        └── PERM-004: profile_room_type_permission (via user_profile)
+              Permissão: perfil do usuário → tipo de sala
+```
+
+O acesso é **GRANTED** se **qualquer** um dos quatro níveis conceder permissão. A verificação é feita em paralelo — todos os níveis são consultados e o resultado é a união (OR lógico).
+
+---
+
+## PERM-001 — Permissão direta usuário → sala
+
+A forma mais simples de permissão. O administrador vincula diretamente um usuário a uma sala específica.
+
+**Tabela:** `user_room_permission`
+
+| Coluna | Tipo | Descrição |
+|---|---|---|
+| `userId` | UUID v7 | Referência ao usuário |
+| `roomId` | UUID v7 | Referência à sala |
+
+**Caso de uso:** Conceder acesso de um professor a seu próprio laboratório, sem precisar de um perfil.
+
+---
+
+## PERM-002 — Permissão usuário → tipo de sala
+
+Permite que um usuário acesse **todas as salas de um determinado tipo**, sem precisar listar sala por sala.
+
+**Tabela:** `user_room_type_permission`
+
+| Coluna | Tipo | Descrição |
+|---|---|---|
+| `userId` | UUID v7 | Referência ao usuário |
+| `roomTypeId` | UUID v7 | Referência ao tipo de sala |
+
+**Caso de uso:** Conceder a um técnico de TI acesso a todos os "Laboratórios de Informática" do campus.
+
+---
+
+## PERM-003 — Permissão perfil → sala
+
+Permissões são associadas a um **perfil de acesso**, e o usuário herda essas permissões ao ser vinculado ao perfil.
+
+**Tabelas envolvidas:**
+- `user_profile` — vínculo usuário ↔ perfil
+- `profile_room_permission` — vínculo perfil ↔ sala
+
+**Caso de uso:** Criar o perfil "Docente" com acesso à "Sala dos Professores" e vincular todos os docentes a esse perfil. Novos docentes herdam o acesso automaticamente.
+
+---
+
+## PERM-004 — Permissão perfil → tipo de sala
+
+Combina o conceito de perfil (PERM-003) com tipo de sala (PERM-002). O perfil recebe acesso a um tipo inteiro de ambiente.
+
+**Tabelas envolvidas:**
+- `user_profile` — vínculo usuário ↔ perfil
+- `profile_room_type_permission` — vínculo perfil ↔ tipo de sala
+
+**Caso de uso:** O perfil "Coordenador" tem acesso a todas as salas do tipo "Sala Administrativa". Qualquer coordenador vinculado ao perfil acessa automaticamente todas essas salas.
+
+---
+
+## Hierarquia e sobreposição
+
+Os níveis não são exclusivos — um usuário pode ter permissões em múltiplos níveis simultaneamente. A lógica é sempre OR:
+
+```
+Usuário A:
+  ├── PERM-001: Sala 101 (acesso direto)
+  ├── PERM-002: tipo "Laboratório" (todas as salas desse tipo)
+  └── via Perfil "Docente":
+        ├── PERM-003: Sala dos Professores
+        └── PERM-004: tipo "Sala Administrativa"
+
+Resultado: Usuário A acessa qualquer sala que satisfaça
+           ao menos UMA das condições acima.
+```
+
+---
+
+## Perfis de acesso
+
+Perfis são agrupamentos de permissões reutilizáveis. Um usuário pode pertencer a múltiplos perfis.
+
+### Criando um perfil
+
+1. Acesse **Usuários → Perfis** no painel de administração
+2. Clique em **Novo Perfil**
+3. Defina o nome e as permissões:
+   - Salas específicas (PERM-003)
+   - Tipos de sala (PERM-004)
+4. Salve o perfil
+
+### Vinculando usuários a perfis
+
+No formulário de edição de um usuário, a seção **Perfis** permite adicionar ou remover vínculos. As permissões herdadas do perfil aparecem como badges somente-leitura na interface, sinalizando que vêm do perfil e não são permissões diretas do usuário.
+
+---
+
+## Verificação no fluxo IoT
+
+Quando um dispositivo publica uma tentativa de acesso via MQTT, o backend executa:
+
+```
+processAccessAttempt(controllerId, credentialValue, credentialType)
+        │
+        ├── 1. Busca o controlador → obtém roomId
+        ├── 2. Identifica o usuário pela credencial
+        └── 3. Chama verifyAccess(userId, roomId)
+                    │
+                    └── Consulta os 4 níveis em paralelo
+                            │
+                            ├── true  → GRANTED → registra log + UNLOCK
+                            └── false → DENIED  → registra log + feedback
+```
+
+> ⚠️ **Gap atual (PERM-005):** a função `processAccessAttempt` ainda verifica apenas PERM-001 diretamente. A integração completa com `verifyAccess` (cobrindo os 4 níveis) está pendente de implementação.
+
+---
+
+## Deduplicação visual na interface
+
+O formulário de usuário exibe as permissões com deduplicação inteligente:
+
+- Salas já cobertas por um tipo de sala (via PERM-002 ou PERM-004) aparecem como badges somente-leitura com tooltip explicativo
+- Isso evita redundância: não faz sentido conceder PERM-001 para uma sala que o usuário já acessa via PERM-002
+
+---
+
+## Referência das tabelas
+
+| Tabela | PERM | Colunas principais |
+|---|---|---|
+| `user_room_permission` | PERM-001 | `userId`, `roomId` |
+| `user_room_type_permission` | PERM-002 | `userId`, `roomTypeId` |
+| `profile_room_permission` | PERM-003 | `profileId`, `roomId` |
+| `profile_room_type_permission` | PERM-004 | `profileId`, `roomTypeId` |
+| `user_profile` | — | `userId`, `profileId` (vínculo) |

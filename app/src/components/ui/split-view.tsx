@@ -60,7 +60,6 @@ export function SplitView({
 							? "w-[calc(200%+1rem)] md:w-full -translate-x-[calc(50%+0.5rem)] md:translate-x-0"
 							: "w-[calc(200%+1rem)] md:w-full translate-x-0",
 					)}
-					role="split-view"
 				>
 					{children}
 				</div>
@@ -86,7 +85,6 @@ export function SplitViewMain({ children, className }: SplitViewSlotProps) {
 				isOpen ? "md:w-[calc(50%-0.5rem)]" : "md:w-full",
 				className,
 			)}
-			role="split-view-main"
 		>
 			{children}
 		</div>
@@ -105,7 +103,6 @@ export function SplitViewPanel({ children, className }: SplitViewSlotProps) {
 				isOpen ? "md:w-[calc(50%-0.5rem)]" : "md:w-0 md:opacity-0",
 				className,
 			)}
-			role="split-view-panel"
 		>
 			{isOpen && children}
 		</div>

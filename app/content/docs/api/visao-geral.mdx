@@ -1,0 +1,121 @@
+---
+title: Visão Geral da API
+description: Introdução à API REST do sistema — autenticação, formato de resposta, erros e convenções gerais.
+---
+
+A API REST é servida pelo **Fastify** e expõe todos os recursos do sistema de controle de acesso. A documentação interativa completa (Swagger UI) está disponível em `/docs` no servidor.
+
+## URL base
+
+| Ambiente | URL |
+|---|---|
+| Desenvolvimento | `http://localhost:3333` |
+| Produção | `https://seu-dominio.com` |
+
+A documentação Swagger fica em `{URL_BASE}/docs`.
+
+---
+
+## Autenticação
+
+A API utiliza **sessões por cookie** gerenciadas pelo better-auth. O cookie `auth_session` é definido automaticamente no login e enviado pelo browser em cada requisição subsequente.
+
+Para chamadas programáticas (ex: scripts, ferramentas de teste), inclua o cookie manualmente:
+
+```http
+GET /api/users
+Cookie: auth_session=seu-token-de-sessao
+```
+
+Rotas marcadas com **Auth: ✅** exigem sessão válida. Rotas marcadas com **Auth: Opcional** retornam dados diferentes dependendo se há sessão.
+
+---
+
+## Formato de resposta
+
+Todas as respostas seguem o content-type `application/json`. Não há envelope padrão — cada rota define seu próprio schema de resposta documentado no Swagger.
+
+### Resposta de sucesso típica
+
+```json
+{
+  "id": "01951234-abcd-7000-8000-000000000001",
+  "name": "Laboratório 101",
+  "typeName": "Laboratório",
+  "state": "fechada"
+}
+```
+
+### Resposta de erro
+
+```json
+{
+  "message": "Descrição legível do erro"
+}
+```
+
+---
+
+## Códigos de status HTTP
+
+| Status | Significado |
+|---|---|
+| `200 OK` | Sucesso — recurso retornado ou operação concluída |
+| `201 Created` | Recurso criado com sucesso |
+| `204 No Content` | Operação concluída sem corpo de resposta (ex: DELETE) |
+| `400 Bad Request` | Payload inválido — schema Zod rejeitou a entrada |
+| `401 Unauthorized` | Sessão ausente ou inválida |
+| `403 Forbidden` | Sessão válida, mas sem permissão de administrador |
+| `404 Not Found` | Recurso não encontrado |
+| `409 Conflict` | Conflito de dados (ex: e-mail duplicado, digital já cadastrada) |
+| `500 Internal Server Error` | Erro inesperado no servidor |
+
+---
+
+## IDs
+
+Todos os recursos usam **UUID v7** como identificador. UUID v7 é ordenável temporalmente — o prefixo contém um timestamp Unix em milissegundos, o que melhora a performance de índices no PostgreSQL.
+
+Formato: `01951234-abcd-7000-8000-000000000001`
+
+---
+
+## Paginação
+
+Atualmente, a maioria dos endpoints retorna todos os registros em uma única resposta (sem paginação). A implementação de paginação cursor-based está planejada para as tabelas de usuários, salas e logs (`UI-017`).
+
+---
+
+## Módulos da API
+
+| Módulo | Prefixo | Descrição |
+|---|---|---|
+| [Autenticação](/docs/api/autenticacao) | `/auth/` | Login, logout, sessão, reset de senha |
+| [Usuários](/docs/api/usuarios) | `/users` | CRUD de usuários e gestão de credenciais |
+| [Salas](/docs/api/salas) | `/rooms`, `/blocks`, `/room-types` | Salas, blocos e tipos |
+| [Perfis](/docs/api/perfis) | `/profiles` | Perfis de acesso e permissões |
+| [IoT](/docs/api/iot) | `/iot` | Integração com broker MQTT e controladores |
+
+---
+
+## Validação de schemas
+
+O Fastify usa `fastify-type-provider-zod` para validação automática de todos os parâmetros de rota, query string, body e response. Erros de validação retornam `400 Bad Request` com detalhes do campo inválido:
+
+```json
+{
+  "statusCode": 400,
+  "error": "Bad Request",
+  "message": "body/email: Invalid email"
+}
+```
+
+---
+
+## Convenções
+
+- **Nomenclatura de rotas:** `kebab-case` (ex: `/room-types`, `/access-logs`)
+- **Campos de data:** formato ISO 8601 com timezone (`2025-07-01T12:00:00.000Z`)
+- **Campos nulos:** retornados explicitamente como `null` — nunca omitidos
+- **Enums:** strings em `UPPER_SNAKE_CASE` (ex: `"GRANTED"`, `"DENIED"`, `"NFC_TAG"`)
+- **Campos de ID:** sempre nomeados `id` no recurso próprio e `{entidade}Id` nas relações (ex: `roomId`, `userId`)

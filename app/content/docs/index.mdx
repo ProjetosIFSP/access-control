@@ -1,0 +1,95 @@
+---
+title: Controle de Acesso IoT — IFSP-PEP
+description: Sistema de controle de acesso e gerenciamento de salas baseado em IoT com autenticação biométrica e RFID para o IFSP Campus Presidente Epitácio.
+---
+
+import { Card, Cards } from "fumadocs-ui/components/card";
+
+# Controle de Acesso IoT — IFSP-PEP
+
+Sistema modular de controle de acesso e gerenciamento de salas desenvolvido como Trabalho de Conclusão de Curso no **IFSP Campus Presidente Epitácio**. Combina autenticação biométrica (ZN-53X), leitura NFC/RFID e comunicação MQTT para oferecer controle de portas em tempo real via portal web.
+
+## Visão geral
+
+A solução é composta por quatro camadas que se comunicam via HTTP REST e MQTT:
+
+| Camada | Tecnologia | Função |
+|---|---|---|
+| **Portal Web** | React 19 · TanStack Router · Tailwind CSS | Interface de administração e monitoramento |
+| **Backend API** | Fastify · Drizzle ORM · PostgreSQL | Lógica de negócio, autenticação e persistência |
+| **Broker MQTT** | Node.js · Aedes | Ponte entre controladores físicos e o backend |
+| **Firmware** | ESP8266 / ESP32 · C++ (Arduino) | Controlador instalado em cada porta |
+
+## Explore a documentação
+
+<Cards>
+  <Card
+    title="Guia de Início Rápido"
+    description="Configure o ambiente de desenvolvimento e rode o projeto localmente em minutos."
+    href="/docs/guia/inicio-rapido"
+  />
+  <Card
+    title="Arquitetura do Sistema"
+    description="Entenda como as quatro camadas se integram e as decisões de design tomadas."
+    href="/docs/guia/arquitetura"
+  />
+  <Card
+    title="API REST"
+    description="Referência completa de todos os endpoints do backend Fastify."
+    href="/docs/api/visao-geral"
+  />
+  <Card
+    title="Protocolo MQTT"
+    description="Tópicos, payloads e fluxos de comunicação entre o broker e os controladores."
+    href="/docs/iot/protocolo-mqtt"
+  />
+  <Card
+    title="Hardware & Firmware"
+    description="Componentes utilizados, pinagem e lógica embarcada no ESP8266/ESP32."
+    href="/docs/hardware/componentes"
+  />
+  <Card
+    title="Permissões & Acesso"
+    description="Sistema de permissões em 4 níveis: usuário, perfil, sala e tipo de sala."
+    href="/docs/guia/permissoes"
+  />
+</Cards>
+
+## Fluxo principal de acesso
+
+```
+Usuário apresenta credencial (digital/NFC)
+        │
+        ▼
+ESP8266 → MQTT → Broker (Aedes)
+        │
+        ▼
+POST /iot/access → Backend (Fastify)
+        │
+        ├── Busca controlador → obtém roomId
+        ├── Identifica usuário pela credencial
+        └── Verifica permissão (4 níveis)
+                │
+                ├── GRANTED → registra log + enfileira UNLOCK
+                └── DENIED  → registra log + feedback negativo
+        │
+        ▼
+Broker publica door/{id}/access-result
+        │
+        ▼
+Fechadura aciona relé (GRANTED) ou sinaliza negação (DENIED)
+```
+
+## Status das funcionalidades
+
+| Módulo | Status |
+|---|---|
+| Autenticação (login, logout, sessão, reset de senha) | ✅ Concluído |
+| CRUD de usuários, salas, blocos e perfis | ✅ Concluído |
+| Sistema de permissões em 4 níveis | ✅ Concluído |
+| Broker MQTT com todos os tópicos de porta | ✅ Concluído |
+| Gestão de credenciais biométricas (digitais) | 🔧 Parcial |
+| Firmware ESP8266/ESP32 modularizado | 🔧 Parcial |
+| Histórico de acessos (frontend + endpoint) | ⬜ Pendente |
+| Gestão de credenciais NFC/RFID | ⬜ Pendente |
+| Monitoramento em tempo real | ⬜ Pendente |

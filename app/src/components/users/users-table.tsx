@@ -1,34 +1,34 @@
 import {
-  createColumnHelper,
-  flexRender,
-  getCoreRowModel,
-  getSortedRowModel,
-  type SortingState,
-  useReactTable,
+	createColumnHelper,
+	flexRender,
+	getCoreRowModel,
+	getSortedRowModel,
+	type SortingState,
+	useReactTable,
 } from "@tanstack/react-table";
 import {
-  ArrowUpDown,
-  Fingerprint,
-  KeyRound,
-  Pencil,
-  Trash2,
+	ArrowUpDown,
+	Fingerprint,
+	KeyRound,
+	Pencil,
+	Trash2,
 } from "lucide-react";
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipTrigger,
-} from "@/components/ui/tooltip";
 import { useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
+	Table,
+	TableBody,
+	TableCell,
+	TableHead,
+	TableHeader,
+	TableRow,
 } from "@/components/ui/table";
+import {
+	Tooltip,
+	TooltipContent,
+	TooltipTrigger,
+} from "@/components/ui/tooltip";
 import type { UserSummary } from "@/services/users/types";
 
 // ── Column Definitions ───────────────────────────────────────────────────────
@@ -36,194 +36,194 @@ import type { UserSummary } from "@/services/users/types";
 const columnHelper = createColumnHelper<UserSummary>();
 
 const columns = [
-  columnHelper.accessor("name", {
-    header: ({ column }) => (
-      <Button
-        variant="ghost"
-        size="sm"
-        className="-ml-3"
-        onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
-      >
-        Usuário
-        <ArrowUpDown className="ml-1 size-3" />
-      </Button>
-    ),
-    cell: () => null, // rendered manually below
-  }),
-  columnHelper.display({
-    id: "actions",
-    header: "",
-    cell: () => null, // rendered manually below
-  }),
+	columnHelper.accessor("name", {
+		header: ({ column }) => (
+			<Button
+				variant="ghost"
+				size="sm"
+				className="-ml-3"
+				onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
+			>
+				Usuário
+				<ArrowUpDown className="ml-1 size-3" />
+			</Button>
+		),
+		cell: () => null, // rendered manually below
+	}),
+	columnHelper.display({
+		id: "actions",
+		header: "",
+		cell: () => null, // rendered manually below
+	}),
 ];
 
 // ── Props ─────────────────────────────────────────────────────────────────────
 
 interface UsersTableProps {
-  users: UserSummary[];
-  onEdit: (user: UserSummary) => void;
-  onDelete: (user: UserSummary) => void;
-  onManageFingerprints?: (user: UserSummary) => void;
+	users: UserSummary[];
+	onEdit: (user: UserSummary) => void;
+	onDelete: (user: UserSummary) => void;
+	onManageFingerprints?: (user: UserSummary) => void;
 }
 
 // ── Component ─────────────────────────────────────────────────────────────────
 
 export function UsersTable({
-  users,
-  onEdit,
-  onDelete,
-  onManageFingerprints,
+	users,
+	onEdit,
+	onDelete,
+	onManageFingerprints,
 }: UsersTableProps) {
-  const [sorting, setSorting] = useState<SortingState>([]);
+	const [sorting, setSorting] = useState<SortingState>([]);
 
-  const table = useReactTable({
-    data: users,
-    columns,
-    state: { sorting },
-    onSortingChange: setSorting,
-    getCoreRowModel: getCoreRowModel(),
-    getSortedRowModel: getSortedRowModel(),
-  });
+	const table = useReactTable({
+		data: users,
+		columns,
+		state: { sorting },
+		onSortingChange: setSorting,
+		getCoreRowModel: getCoreRowModel(),
+		getSortedRowModel: getSortedRowModel(),
+	});
 
-  return (
-    <div className="rounded-lg border bg-white dark:bg-zinc-950 overflow-hidden">
-      <Table>
-        <TableHeader>
-          {table.getHeaderGroups().map((headerGroup) => (
-            <TableRow key={headerGroup.id}>
-              {headerGroup.headers.map((header) => (
-                <TableHead key={header.id}>
-                  {header.isPlaceholder
-                    ? null
-                    : flexRender(
-                        header.column.columnDef.header,
-                        header.getContext(),
-                      )}
-                </TableHead>
-              ))}
-            </TableRow>
-          ))}
-        </TableHeader>
-        <TableBody>
-          {table.getRowModel().rows.map((row) => {
-            const user = row.original;
-            return (
-              <TableRow key={row.id}>
-                {/* ── User cell ─────────────────────────────────── */}
-                <TableCell className="w-full py-3">
-                  <div className="flex flex-col gap-1">
-                    {/* Top row: name + badges */}
-                    <div className="flex flex-wrap items-center gap-1.5">
-                      <span className="font-medium text-zinc-900 dark:text-zinc-100 leading-tight">
-                        {user.name}
-                      </span>
-                      {user.isAdmin && (
-                        <Badge className="gap-1 py-0 px-1.5 text-[10px] bg-primary/10 text-primary cursor-default hover:bg-primary/10 dark:bg-primary/20 dark:text-primary">
-                          Admin
-                        </Badge>
-                      )}
-                      {user.profiles.map((profile) => (
-                        <Badge
-                          key={profile.id}
-                          className="py-0 px-1.5 text-[10px] bg-zinc-100 text-zinc-600 hover:bg-zinc-100 dark:bg-zinc-800 dark:text-zinc-300"
-                        >
-                          {profile.name}
-                        </Badge>
-                      ))}
-                    </div>
+	return (
+		<div className="rounded-lg border bg-white dark:bg-zinc-950 overflow-hidden">
+			<Table>
+				<TableHeader>
+					{table.getHeaderGroups().map((headerGroup) => (
+						<TableRow key={headerGroup.id}>
+							{headerGroup.headers.map((header) => (
+								<TableHead key={header.id}>
+									{header.isPlaceholder
+										? null
+										: flexRender(
+												header.column.columnDef.header,
+												header.getContext(),
+											)}
+								</TableHead>
+							))}
+						</TableRow>
+					))}
+				</TableHeader>
+				<TableBody>
+					{table.getRowModel().rows.map((row) => {
+						const user = row.original;
+						return (
+							<TableRow key={row.id}>
+								{/* ── User cell ─────────────────────────────────── */}
+								<TableCell className="w-full py-3">
+									<div className="flex flex-col gap-1">
+										{/* Top row: name + badges */}
+										<div className="flex flex-wrap items-center gap-1.5">
+											<span className="font-medium text-zinc-900 dark:text-zinc-100 leading-tight">
+												{user.name}
+											</span>
+											{user.isAdmin && (
+												<Badge className="gap-1 py-0 px-1.5 text-[10px] bg-primary/10 text-primary cursor-default hover:bg-primary/10 dark:bg-primary/20 dark:text-primary">
+													Admin
+												</Badge>
+											)}
+											{user.profiles.map((profile) => (
+												<Badge
+													key={profile.id}
+													className="py-0 px-1.5 text-[10px] bg-zinc-100 text-zinc-600 hover:bg-zinc-100 dark:bg-zinc-800 dark:text-zinc-300"
+												>
+													{profile.name}
+												</Badge>
+											))}
+										</div>
 
-                    {/* Bottom row: email */}
-                    <span className="text-xs text-zinc-400 dark:text-zinc-500 leading-tight">
-                      {user.email}
-                    </span>
-                  </div>
-                </TableCell>
+										{/* Bottom row: email */}
+										<span className="text-xs text-zinc-400 dark:text-zinc-500 leading-tight">
+											{user.email}
+										</span>
+									</div>
+								</TableCell>
 
-                {/* ── Actions cell ───────────────────────────────── */}
-                <TableCell className="py-3 pr-4 pl-2">
-                  <div className="flex items-center justify-end gap-1">
-                    {/* Credential indicators */}
-                    {(user.hasCredentials || user.fingerprintCount > 0) && (
-                      <div className="flex items-center gap-1 mr-1">
-                        {user.hasCredentials && (
-                          <Tooltip>
-                            <TooltipTrigger asChild>
-                              <KeyRound className="size-3.5 text-emerald-500 dark:text-emerald-400 cursor-default" />
-                            </TooltipTrigger>
-                            <TooltipContent side="left">
-                              Possui credencial física
-                            </TooltipContent>
-                          </Tooltip>
-                        )}
-                        {user.fingerprintCount > 0 && (
-                          <Tooltip>
-                            <TooltipTrigger asChild>
-                              <span className="inline-flex items-center gap-0.5 text-[10px] font-medium text-violet-600 dark:text-violet-400 cursor-default">
-                                <Fingerprint className="size-3.5" />
-                                {user.fingerprintCount}
-                              </span>
-                            </TooltipTrigger>
-                            <TooltipContent side="left">
-                              {user.fingerprintCount}{" "}
-                              {user.fingerprintCount === 1
-                                ? "digital cadastrada"
-                                : "digitais cadastradas"}
-                            </TooltipContent>
-                          </Tooltip>
-                        )}
-                      </div>
-                    )}
+								{/* ── Actions cell ───────────────────────────────── */}
+								<TableCell className="py-3 pr-4 pl-2">
+									<div className="flex items-center justify-end gap-1">
+										{/* Credential indicators */}
+										{(user.hasCredentials || user.fingerprintCount > 0) && (
+											<div className="flex items-center gap-1 mr-1">
+												{user.hasCredentials && (
+													<Tooltip>
+														<TooltipTrigger asChild>
+															<KeyRound className="size-3.5 text-emerald-500 dark:text-emerald-400 cursor-default" />
+														</TooltipTrigger>
+														<TooltipContent side="left">
+															Possui credencial física
+														</TooltipContent>
+													</Tooltip>
+												)}
+												{user.fingerprintCount > 0 && (
+													<Tooltip>
+														<TooltipTrigger asChild>
+															<span className="inline-flex items-center gap-0.5 text-[10px] font-medium text-violet-600 dark:text-violet-400 cursor-default">
+																<Fingerprint className="size-3.5" />
+																{user.fingerprintCount}
+															</span>
+														</TooltipTrigger>
+														<TooltipContent side="left">
+															{user.fingerprintCount}{" "}
+															{user.fingerprintCount === 1
+																? "digital cadastrada"
+																: "digitais cadastradas"}
+														</TooltipContent>
+													</Tooltip>
+												)}
+											</div>
+										)}
 
-                    {/* Action buttons */}
-                    {onManageFingerprints && (
-                      <Tooltip>
-                        <TooltipTrigger asChild>
-                          <Button
-                            variant="ghost"
-                            size="icon-xs"
-                            onClick={() => onManageFingerprints(user)}
-                          >
-                            <KeyRound className="size-4" />
-                            <span className="sr-only">Gerenciar Digitais</span>
-                          </Button>
-                        </TooltipTrigger>
-                        <TooltipContent>Gerenciar Digitais</TooltipContent>
-                      </Tooltip>
-                    )}
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <Button
-                          variant="ghost"
-                          size="icon-xs"
-                          onClick={() => onEdit(user)}
-                        >
-                          <Pencil className="size-4" />
-                          <span className="sr-only">Editar</span>
-                        </Button>
-                      </TooltipTrigger>
-                      <TooltipContent>Editar</TooltipContent>
-                    </Tooltip>
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <Button
-                          variant="ghost"
-                          size="icon-xs"
-                          className="text-destructive hover:text-destructive hover:bg-destructive/10"
-                          onClick={() => onDelete(user)}
-                        >
-                          <Trash2 className="size-4" />
-                          <span className="sr-only">Excluir</span>
-                        </Button>
-                      </TooltipTrigger>
-                      <TooltipContent>Excluir</TooltipContent>
-                    </Tooltip>
-                  </div>
-                </TableCell>
-              </TableRow>
-            );
-          })}
-        </TableBody>
-      </Table>
-    </div>
-  );
+										{/* Action buttons */}
+										{onManageFingerprints && (
+											<Tooltip>
+												<TooltipTrigger asChild>
+													<Button
+														variant="ghost"
+														size="icon-xs"
+														onClick={() => onManageFingerprints(user)}
+													>
+														<KeyRound className="size-4" />
+														<span className="sr-only">Gerenciar Digitais</span>
+													</Button>
+												</TooltipTrigger>
+												<TooltipContent>Gerenciar Digitais</TooltipContent>
+											</Tooltip>
+										)}
+										<Tooltip>
+											<TooltipTrigger asChild>
+												<Button
+													variant="ghost"
+													size="icon-xs"
+													onClick={() => onEdit(user)}
+												>
+													<Pencil className="size-4" />
+													<span className="sr-only">Editar</span>
+												</Button>
+											</TooltipTrigger>
+											<TooltipContent>Editar</TooltipContent>
+										</Tooltip>
+										<Tooltip>
+											<TooltipTrigger asChild>
+												<Button
+													variant="ghost"
+													size="icon-xs"
+													className="text-destructive hover:text-destructive hover:bg-destructive/10"
+													onClick={() => onDelete(user)}
+												>
+													<Trash2 className="size-4" />
+													<span className="sr-only">Excluir</span>
+												</Button>
+											</TooltipTrigger>
+											<TooltipContent>Excluir</TooltipContent>
+										</Tooltip>
+									</div>
+								</TableCell>
+							</TableRow>
+						);
+					})}
+				</TableBody>
+			</Table>
+		</div>
+	);
 }

@@ -1,0 +1,166 @@
+---
+title: Início Rápido
+description: Configure o ambiente de desenvolvimento e execute o projeto localmente em poucos minutos.
+---
+
+Este guia cobre tudo que você precisa para rodar o sistema completo localmente: backend, broker MQTT, frontend e banco de dados.
+
+## Pré-requisitos
+
+Antes de começar, certifique-se de ter instalado:
+
+| Ferramenta | Versão mínima | Uso |
+|---|---|---|
+| **Node.js** | 20+ | Backend, broker e frontend |
+| **Docker** + **Docker Compose** | 24+ | Banco de dados PostgreSQL |
+| **pnpm** | 9+ | Gerenciador de pacotes |
+| **Git** | qualquer | Controle de versão |
+
+## 1. Clone o repositório
+
+```bash
+git clone https://github.com/seu-usuario/tcc.git
+cd tcc
+```
+
+## 2. Suba o banco de dados
+
+O PostgreSQL roda em Docker. Execute na raiz do monorepo:
+
+```bash
+docker compose -f docker-compose.local.yml up -d postgres
+```
+
+Aguarde o container inicializar (~5 segundos) e verifique com:
+
+```bash
+docker compose -f docker-compose.local.yml ps
+```
+
+## 3. Configure as variáveis de ambiente
+
+Cada módulo tem seu próprio arquivo `.env`. Copie os exemplos:
+
+```bash
+# Backend
+cp server/.env.example server/.env
+
+# Broker MQTT
+cp iot/.env.example iot/.env
+
+# Frontend (se necessário)
+cp app/.env.example app/.env
+```
+
+Edite `server/.env` com as configurações do banco:
+
+```ini
+DATABASE_URL=postgresql://postgres:postgres@localhost:5432/access_control
+BACKEND_URL=http://localhost:3333
+PORT=3333
+BETTER_AUTH_SECRET=sua-chave-secreta-aqui
+```
+
+## 4. Instale as dependências
+
+```bash
+# Na raiz do monorepo
+npm install
+
+# Ou entre em cada módulo separadamente
+cd server && npm install
+cd ../iot && npm install
+cd ../app && npm install
+```
+
+## 5. Execute as migrations
+
+Com o banco rodando, aplique as migrations do Drizzle ORM:
+
+```bash
+cd server
+npm run db:migrate
+```
+
+Opcionalmente, popule o banco com dados iniciais:
+
+```bash
+npm run db:seed
+```
+
+O seed cria um usuário administrador padrão:
+- **Email:** `admin@ifsp.edu.br`
+- **Senha:** `Admin@123`
+
+## 6. Inicie os serviços
+
+Abra três terminais e inicie cada serviço:
+
+**Terminal 1 — Backend API:**
+```bash
+cd server
+npm run dev
+```
+API disponível em: `http://localhost:3333`
+Swagger UI em: `http://localhost:3333/docs`
+
+**Terminal 2 — Broker MQTT:**
+```bash
+cd iot
+npm run dev
+```
+MQTT TCP disponível em: `mqtt://localhost:1883`
+MQTT WebSocket em: `ws://localhost:9001`
+
+**Terminal 3 — Frontend:**
+```bash
+cd app
+npm run dev
+```
+Portal disponível em: `http://localhost:3000`
+
+## 7. Acesse o sistema
+
+Abra `http://localhost:3000` no navegador e faça login com as credenciais do seed:
+
+- **Email:** `admin@ifsp.edu.br`
+- **Senha:** `Admin@123`
+
+Você terá acesso completo ao painel de administração.
+
+## Estrutura do monorepo
+
+```
+tcc/
+├── app/          # Frontend React 19 + TanStack
+├── server/       # Backend Fastify + Drizzle ORM
+├── iot/          # Broker MQTT (Aedes)
+├── core/         # Firmware ESP8266/ESP32
+├── docs/         # Documentação técnica e configurações
+├── .github/      # CI/CD via GitHub Actions
+├── docker-compose.yml          # Base compartilhada
+├── docker-compose.local.yml    # Override para desenvolvimento
+└── docker-compose.prod.yml     # Override para produção
+```
+
+## Comandos úteis
+
+| Comando | Diretório | Descrição |
+|---|---|---|
+| `npm run dev` | `server/` | Inicia o backend com hot-reload |
+| `npm run dev` | `iot/` | Inicia o broker MQTT com hot-reload |
+| `npm run dev` | `app/` | Inicia o frontend com HMR |
+| `npm run db:migrate` | `server/` | Aplica migrations pendentes |
+| `npm run db:seed` | `server/` | Popula o banco com dados iniciais |
+| `npm run db:studio` | `server/` | Abre o Drizzle Studio (GUI do banco) |
+| `npm run build` | qualquer | Gera build de produção |
+| `npm run check` | qualquer | Linting + formatação com Biome |
+
+## Próximos passos
+
+Agora que o ambiente está configurado, explore:
+
+- [Arquitetura do Sistema](/docs/guia/arquitetura) — entenda como as camadas se comunicam
+- [Sistema de Permissões](/docs/guia/permissoes) — saiba como funciona o controle de acesso em 4 níveis
+- [API REST](/docs/api/visao-geral) — referência completa dos endpoints
+- [Protocolo MQTT](/docs/iot/protocolo-mqtt) — tópicos e payloads dos controladores físicos

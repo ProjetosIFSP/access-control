@@ -1,41 +1,42 @@
 /** biome-ignore-all lint/suspicious/noArrayIndexKey: intencional em SVG paths estáticos */
-import { Check } from "lucide-react";
-import { cn } from "@/lib/utils";
+
 import dayjs from "dayjs";
+import { Check } from "lucide-react";
 import { useRef } from "react";
-import {
-  type FingerKey,
-  FINGER_LABELS,
-  FINGERS_LEFT,
-  FINGERS_RIGHT,
-  type FingerHotZone,
-  type FingerprintStatus,
-  LEFT_HAND_HALLOWEEN_ZONES,
-  LEFT_HAND_ZONES,
-  RIGHT_HAND_HALLOWEEN_ZONES,
-  RIGHT_HAND_ZONES,
-  type RegisteredFingerprint,
-  isFingerRegistered,
-} from "@/lib/biometrics";
 import { FingerprintIcon } from "@/components/icons/fingerprint-icon";
+import {
+	FINGER_LABELS,
+	FINGERS_LEFT,
+	FINGERS_RIGHT,
+	type FingerHotZone,
+	type FingerKey,
+	type FingerprintStatus,
+	isFingerRegistered,
+	LEFT_HAND_HALLOWEEN_ZONES,
+	LEFT_HAND_ZONES,
+	type RegisteredFingerprint,
+	RIGHT_HAND_HALLOWEEN_ZONES,
+	RIGHT_HAND_ZONES,
+} from "@/lib/biometrics";
+import { cn } from "@/lib/utils";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
 export type { FingerKey };
 
 export interface HandProps {
-  side?: "left" | "right";
-  className?: string;
-  registeredFingers?: RegisteredFingerprint[];
-  selectedFinger?: FingerKey | null;
-  onFingerClick?: (finger: FingerKey) => void;
-  interactive?: boolean;
-  /** Status atual do leitor — controla animação de pulsação */
-  readerStatus?: FingerprintStatus;
-  /** Se a captura está ativa — exibe overlay de progresso */
-  captureActive?: boolean;
-  /** Segundos restantes para captura (0–30) — controla o overlay */
-  countdown?: number;
+	side?: "left" | "right";
+	className?: string;
+	registeredFingers?: RegisteredFingerprint[];
+	selectedFinger?: FingerKey | null;
+	onFingerClick?: (finger: FingerKey) => void;
+	interactive?: boolean;
+	/** Status atual do leitor — controla animação de pulsação */
+	readerStatus?: FingerprintStatus;
+	/** Se a captura está ativa — exibe overlay de progresso */
+	captureActive?: boolean;
+	/** Segundos restantes para captura (0–30) — controla o overlay */
+	countdown?: number;
 }
 
 // ── Constantes de captura ─────────────────────────────────────────────────────
@@ -58,132 +59,132 @@ const CAPTURE_TOTAL_SECONDS = 30;
  *  - Sem transition na ativação inicial — já começa em 100%.
  */
 interface HandStrokeOverlayProps {
-  /** Path d= do contorno da mão */
-  handPath: string;
-  /** Stroke width usado no path da mão */
-  strokeWidth: number;
-  /** viewBox width */
-  vbWidth: number;
-  /** viewBox height */
-  vbHeight: number;
-  /** ID único para os defs (evita colisão entre mão esquerda/direita) */
-  uid: string;
-  /** Segundos restantes (0–CAPTURE_TOTAL_SECONDS) */
-  countdown: number;
-  /** Se o overlay está ativo */
-  active: boolean;
+	/** Path d= do contorno da mão */
+	handPath: string;
+	/** Stroke width usado no path da mão */
+	strokeWidth: number;
+	/** viewBox width */
+	vbWidth: number;
+	/** viewBox height */
+	vbHeight: number;
+	/** ID único para os defs (evita colisão entre mão esquerda/direita) */
+	uid: string;
+	/** Segundos restantes (0–CAPTURE_TOTAL_SECONDS) */
+	countdown: number;
+	/** Se o overlay está ativo */
+	active: boolean;
 }
 
 function HandStrokeOverlay({
-  handPath,
-  strokeWidth,
-  vbWidth,
-  vbHeight,
-  uid,
-  countdown,
-  active,
+	handPath,
+	strokeWidth,
+	vbWidth,
+	vbHeight,
+	uid,
+	countdown,
+	active,
 }: HandStrokeOverlayProps) {
-  // ── Fase 1: preenchimento (entrada) ─────────────────────────────────────────
-  // Ao ativar, o overlay preenche de baixo para cima em 300ms (scaleY 0→1).
-  // Após 300ms, `filling` vira false e o esvaziamento normal (1s/tick) assume.
-  //
-  // ── Fase 2: esvaziamento (countdown) ────────────────────────────────────────
-  // scaleY segue `progress` (1→0) com transition de 1s linear por tick.
-  // transformOrigin no fundo mantém a base fixa e o topo descendo.
+	// ── Fase 1: preenchimento (entrada) ─────────────────────────────────────────
+	// Ao ativar, o overlay preenche de baixo para cima em 300ms (scaleY 0→1).
+	// Após 300ms, `filling` vira false e o esvaziamento normal (1s/tick) assume.
+	//
+	// ── Fase 2: esvaziamento (countdown) ────────────────────────────────────────
+	// scaleY segue `progress` (1→0) com transition de 1s linear por tick.
+	// transformOrigin no fundo mantém a base fixa e o topo descendo.
 
-  const prevActiveRef = useRef(false);
-  const fillingRef = useRef(false);
-  const fillingTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+	const prevActiveRef = useRef(false);
+	const fillingRef = useRef(false);
+	const fillingTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Detecta borda de subida: inativo → ativo
-  const justActivated = active && !prevActiveRef.current;
-  if (justActivated) {
-    fillingRef.current = true;
-    if (fillingTimerRef.current) clearTimeout(fillingTimerRef.current);
-    fillingTimerRef.current = setTimeout(() => {
-      fillingRef.current = false;
-    }, 300);
-  }
-  if (!active) {
-    fillingRef.current = false;
-    if (fillingTimerRef.current) {
-      clearTimeout(fillingTimerRef.current);
-      fillingTimerRef.current = null;
-    }
-  }
-  prevActiveRef.current = active;
+	// Detecta borda de subida: inativo → ativo
+	const justActivated = active && !prevActiveRef.current;
+	if (justActivated) {
+		fillingRef.current = true;
+		if (fillingTimerRef.current) clearTimeout(fillingTimerRef.current);
+		fillingTimerRef.current = setTimeout(() => {
+			fillingRef.current = false;
+		}, 300);
+	}
+	if (!active) {
+		fillingRef.current = false;
+		if (fillingTimerRef.current) {
+			clearTimeout(fillingTimerRef.current);
+			fillingTimerRef.current = null;
+		}
+	}
+	prevActiveRef.current = active;
 
-  const filling = fillingRef.current;
+	const filling = fillingRef.current;
 
-  // Durante o preenchimento (fase 1) sempre mostramos scaleY(1) — cheio.
-  // Durante o esvaziamento (fase 2) seguimos o countdown.
-  const progress = active
-    ? Math.min(1, Math.max(0, countdown / CAPTURE_TOTAL_SECONDS))
-    : 0;
-  const scaleY = filling ? 1 : progress;
+	// Durante o preenchimento (fase 1) sempre mostramos scaleY(1) — cheio.
+	// Durante o esvaziamento (fase 2) seguimos o countdown.
+	const progress = active
+		? Math.min(1, Math.max(0, countdown / CAPTURE_TOTAL_SECONDS))
+		: 0;
+	const scaleY = filling ? 1 : progress;
 
-  if (!active && progress === 0) return null;
+	if (!active && progress === 0) return null;
 
-  // Transition por fase:
-  //   justActivated → 300ms ease-out  (preenchimento de baixo para cima)
-  //   filling ativo → nenhuma         (já chegou em 1, fica parado)
-  //   esvaziando    → 1s linear       (sincroniza com ticks do countdown)
-  //   inativo       → nenhuma
-  const transition = justActivated
-    ? "transform 300ms ease-out"
-    : filling
-      ? "none"
-      : active
-        ? "transform 1s linear"
-        : "none";
+	// Transition por fase:
+	//   justActivated → 300ms ease-out  (preenchimento de baixo para cima)
+	//   filling ativo → nenhuma         (já chegou em 1, fica parado)
+	//   esvaziando    → 1s linear       (sincroniza com ticks do countdown)
+	//   inativo       → nenhuma
+	const transition = justActivated
+		? "transform 300ms ease-out"
+		: filling
+			? "none"
+			: active
+				? "transform 1s linear"
+				: "none";
 
-  return (
-    <g>
-      <defs>
-        {/* Máscara em formato do stroke da mão:
+	return (
+		<g>
+			<defs>
+				{/* Máscara em formato do stroke da mão:
             stroke="white" → visível através da máscara (primary aparece).
             Contexto preto padrão da máscara → transparente (fundo some). */}
-        <mask id={`hand-stroke-mask-${uid}`}>
-          <path
-            d={handPath}
-            fill="none"
-            stroke="white"
-            strokeWidth={strokeWidth}
-          />
-        </mask>
+				<mask id={`hand-stroke-mask-${uid}`}>
+					<path
+						d={handPath}
+						fill="none"
+						stroke="white"
+						strokeWidth={strokeWidth}
+					/>
+				</mask>
 
-        {/* ClipPath de progresso animado via CSS transform.
+				{/* ClipPath de progresso animado via CSS transform.
             transformOrigin na base: scaleY encolhe pelo topo (base fixa).
             Fase 1 — preenchimento: scaleY 0→1 em 300ms ease-out.
             Fase 2 — esvaziamento: scaleY 1→0 em 1s/tick linear. */}
-        <clipPath id={`hand-progress-clip-${uid}`}>
-          <rect
-            x={0}
-            y={0}
-            width={vbWidth}
-            height={vbHeight}
-            style={{
-              transformOrigin: `0 ${vbHeight}px`,
-              transform: `scaleY(${scaleY})`,
-              transition,
-            }}
-          />
-        </clipPath>
-      </defs>
+				<clipPath id={`hand-progress-clip-${uid}`}>
+					<rect
+						x={0}
+						y={0}
+						width={vbWidth}
+						height={vbHeight}
+						style={{
+							transformOrigin: `0 ${vbHeight}px`,
+							transform: `scaleY(${scaleY})`,
+							transition,
+						}}
+					/>
+				</clipPath>
+			</defs>
 
-      {/* Rect primary mascarado pelo stroke e recortado pelo progresso */}
-      <rect
-        x={0}
-        y={0}
-        width={vbWidth}
-        height={vbHeight}
-        fill="var(--primary)"
-        mask={`url(#hand-stroke-mask-${uid})`}
-        clipPath={`url(#hand-progress-clip-${uid})`}
-        style={{ pointerEvents: "none" }}
-      />
-    </g>
-  );
+			{/* Rect primary mascarado pelo stroke e recortado pelo progresso */}
+			<rect
+				x={0}
+				y={0}
+				width={vbWidth}
+				height={vbHeight}
+				fill="var(--primary)"
+				mask={`url(#hand-stroke-mask-${uid})`}
+				clipPath={`url(#hand-progress-clip-${uid})`}
+				style={{ pointerEvents: "none" }}
+			/>
+		</g>
+	);
 }
 
 // ── Easter egg ────────────────────────────────────────────────────────────────
@@ -196,415 +197,415 @@ const isHalloween = today.date() === 31 && today.month() === 9;
 // Uses the reusable FingerprintIcon component with GSAP pulsation.
 
 interface FingerButtonProps {
-  finger: FingerKey;
-  zone: FingerHotZone;
-  registered: boolean;
-  selected: boolean;
-  onFingerClick?: (finger: FingerKey) => void;
-  viewBoxSize: number;
-  /** Status do leitor para controlar animação — pulsação só ativa em waiting/reading */
-  readerStatus?: FingerprintStatus;
+	finger: FingerKey;
+	zone: FingerHotZone;
+	registered: boolean;
+	selected: boolean;
+	onFingerClick?: (finger: FingerKey) => void;
+	viewBoxSize: number;
+	/** Status do leitor para controlar animação — pulsação só ativa em waiting/reading */
+	readerStatus?: FingerprintStatus;
 }
 
 function FingerButton({
-  finger,
-  zone,
-  registered,
-  selected,
-  onFingerClick,
-  readerStatus,
+	finger,
+	zone,
+	registered,
+	selected,
+	onFingerClick,
+	readerStatus,
 }: FingerButtonProps) {
-  const label = FINGER_LABELS[finger];
-  const diameter = zone.r * 2;
-  const iconSize = diameter;
+	const label = FINGER_LABELS[finger];
+	const diameter = zone.r * 2;
+	const iconSize = diameter;
 
-  // Pulsação ativa apenas quando este dedo está selecionado E o leitor está
-  // aguardando/lendo. Se o tempo esgotou (error) ou a leitura terminou, para.
-  const isReading =
-    selected && (readerStatus === "waiting" || readerStatus === "reading");
+	// Pulsação ativa apenas quando este dedo está selecionado E o leitor está
+	// aguardando/lendo. Se o tempo esgotou (error) ou a leitura terminou, para.
+	const isReading =
+		selected && (readerStatus === "waiting" || readerStatus === "reading");
 
-  // Derived colours — sem background/border no botão, apenas no ícone
-  const baseFill = selected
-    ? "color-mix(in oklch, var(--primary) 70%, transparent)"
-    : registered
-      ? "hsl(142 71% 45% / 0.75)"
-      : "color-mix(in oklch, var(--foreground) 45%, transparent)";
+	// Derived colours — sem background/border no botão, apenas no ícone
+	const baseFill = selected
+		? "color-mix(in oklch, var(--primary) 70%, transparent)"
+		: registered
+			? "hsl(142 71% 45% / 0.75)"
+			: "color-mix(in oklch, var(--foreground) 45%, transparent)";
 
-  const overlayStroke = selected ? "var(--primary)" : "hsl(142 71% 45%)";
+	const overlayStroke = selected ? "var(--primary)" : "hsl(142 71% 45%)";
 
-  return (
-    <g
-      transform={
-        zone.rotation
-          ? `rotate(${zone.rotation}, ${zone.cx}, ${zone.cy})`
-          : undefined
-      }
-    >
-      {/* foreignObject hosts the interactive DOM button */}
-      <foreignObject
-        x={zone.cx - zone.r}
-        y={zone.cy - zone.r}
-        width={diameter}
-        height={diameter}
-        style={{ overflow: "visible" }}
-      >
-        <button
-          type="button"
-          aria-label={`${label}${registered ? " — já cadastrado" : " — cadastrar"}`}
-          title={label}
-          onClick={() => onFingerClick?.(finger)}
-          style={{
-            width: iconSize,
-            height: iconSize,
-            borderRadius: "50%",
-            background: "none",
-            border: "none",
-            boxShadow: "none",
-            cursor: onFingerClick ? "pointer" : "default",
-            padding: 0,
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            position: "relative",
-            flexShrink: 0,
-            outline: "none",
-          }}
-        >
-          {/* Fingerprint SVG icon — pulsação apenas em modo leitura ativo */}
-          <FingerprintIcon
-            size={iconSize}
-            fillColor={baseFill}
-            strokeColor={overlayStroke}
-            strokeWidth={2.5}
-            drawn={selected || registered}
-            pulsating={isReading}
-          />
+	return (
+		<g
+			transform={
+				zone.rotation
+					? `rotate(${zone.rotation}, ${zone.cx}, ${zone.cy})`
+					: undefined
+			}
+		>
+			{/* foreignObject hosts the interactive DOM button */}
+			<foreignObject
+				x={zone.cx - zone.r}
+				y={zone.cy - zone.r}
+				width={diameter}
+				height={diameter}
+				style={{ overflow: "visible" }}
+			>
+				<button
+					type="button"
+					aria-label={`${label}${registered ? " — já cadastrado" : " — cadastrar"}`}
+					title={label}
+					onClick={() => onFingerClick?.(finger)}
+					style={{
+						width: iconSize,
+						height: iconSize,
+						borderRadius: "50%",
+						background: "none",
+						border: "none",
+						boxShadow: "none",
+						cursor: onFingerClick ? "pointer" : "default",
+						padding: 0,
+						display: "flex",
+						alignItems: "center",
+						justifyContent: "center",
+						position: "relative",
+						flexShrink: 0,
+						outline: "none",
+					}}
+				>
+					{/* Fingerprint SVG icon — pulsação apenas em modo leitura ativo */}
+					<FingerprintIcon
+						size={iconSize}
+						fillColor={baseFill}
+						strokeColor={overlayStroke}
+						strokeWidth={2.5}
+						drawn={selected || registered}
+						pulsating={isReading}
+					/>
 
-          {/* Registered badge — check icon in the bottom-right corner */}
-          {registered && (
-            <span
-              style={{
-                position: "absolute",
-                bottom: -3,
-                right: -3,
-                width: Math.max(iconSize * 0.34, 14),
-                height: Math.max(iconSize * 0.34, 14),
-                borderRadius: "50%",
-                background: "hsl(142 71% 45%)",
-                border: "2px solid var(--background)",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                flexShrink: 0,
-                zIndex: 10,
-                boxShadow: "0 1px 4px rgba(0,0,0,0.25)",
-              }}
-              aria-hidden="true"
-            >
-              <Check
-                style={{
-                  width: Math.max(iconSize * 0.19, 8),
-                  height: Math.max(iconSize * 0.19, 8),
-                  color: "white",
-                  strokeWidth: 3,
-                }}
-              />
-            </span>
-          )}
-        </button>
-      </foreignObject>
-    </g>
-  );
+					{/* Registered badge — check icon in the bottom-right corner */}
+					{registered && (
+						<span
+							style={{
+								position: "absolute",
+								bottom: -3,
+								right: -3,
+								width: Math.max(iconSize * 0.34, 14),
+								height: Math.max(iconSize * 0.34, 14),
+								borderRadius: "50%",
+								background: "hsl(142 71% 45%)",
+								border: "2px solid var(--background)",
+								display: "flex",
+								alignItems: "center",
+								justifyContent: "center",
+								flexShrink: 0,
+								zIndex: 10,
+								boxShadow: "0 1px 4px rgba(0,0,0,0.25)",
+							}}
+							aria-hidden="true"
+						>
+							<Check
+								style={{
+									width: Math.max(iconSize * 0.19, 8),
+									height: Math.max(iconSize * 0.19, 8),
+									color: "white",
+									strokeWidth: 3,
+								}}
+							/>
+						</span>
+					)}
+				</button>
+			</foreignObject>
+		</g>
+	);
 }
 
 // ── HotZoneOverlay ────────────────────────────────────────────────────────────
 
 interface HotZoneOverlayProps {
-  zones: Record<string, FingerHotZone>;
-  fingers: FingerKey[];
-  registeredFingers: RegisteredFingerprint[];
-  selectedFinger?: FingerKey | null;
-  onFingerClick?: (finger: FingerKey) => void;
-  viewBoxSize: number;
-  readerStatus?: FingerprintStatus;
+	zones: Record<string, FingerHotZone>;
+	fingers: FingerKey[];
+	registeredFingers: RegisteredFingerprint[];
+	selectedFinger?: FingerKey | null;
+	onFingerClick?: (finger: FingerKey) => void;
+	viewBoxSize: number;
+	readerStatus?: FingerprintStatus;
 }
 
 function HotZoneOverlay({
-  zones,
-  fingers,
-  registeredFingers,
-  selectedFinger,
-  onFingerClick,
-  viewBoxSize,
-  readerStatus,
+	zones,
+	fingers,
+	registeredFingers,
+	selectedFinger,
+	onFingerClick,
+	viewBoxSize,
+	readerStatus,
 }: HotZoneOverlayProps) {
-  return (
-    <>
-      {fingers.map((finger) => {
-        const zone = zones[finger] as FingerHotZone | undefined;
-        if (!zone) return null;
-        const registered = isFingerRegistered(finger, registeredFingers);
-        const selected = selectedFinger === finger;
+	return (
+		<>
+			{fingers.map((finger) => {
+				const zone = zones[finger] as FingerHotZone | undefined;
+				if (!zone) return null;
+				const registered = isFingerRegistered(finger, registeredFingers);
+				const selected = selectedFinger === finger;
 
-        return (
-          <FingerButton
-            key={finger}
-            finger={finger}
-            zone={zone}
-            registered={registered}
-            selected={selected}
-            onFingerClick={onFingerClick}
-            viewBoxSize={viewBoxSize}
-            readerStatus={readerStatus}
-          />
-        );
-      })}
-    </>
-  );
+				return (
+					<FingerButton
+						key={finger}
+						finger={finger}
+						zone={zone}
+						registered={registered}
+						selected={selected}
+						onFingerClick={onFingerClick}
+						viewBoxSize={viewBoxSize}
+						readerStatus={readerStatus}
+					/>
+				);
+			})}
+		</>
+	);
 }
 
 // ── Internal hand props ───────────────────────────────────────────────────────
 
 interface InternalHandProps {
-  className?: string;
-  registeredFingers: RegisteredFingerprint[];
-  selectedFinger?: FingerKey | null;
-  onFingerClick?: (finger: FingerKey) => void;
-  interactive: boolean;
-  readerStatus?: FingerprintStatus;
-  captureActive?: boolean;
-  countdown?: number;
+	className?: string;
+	registeredFingers: RegisteredFingerprint[];
+	selectedFinger?: FingerKey | null;
+	onFingerClick?: (finger: FingerKey) => void;
+	interactive: boolean;
+	readerStatus?: FingerprintStatus;
+	captureActive?: boolean;
+	countdown?: number;
 }
 
 // ── Right Hand ────────────────────────────────────────────────────────────────
 
 function RightHand({
-  className,
-  registeredFingers,
-  selectedFinger,
-  onFingerClick,
-  interactive,
-  readerStatus,
-  captureActive = false,
-  countdown = 0,
+	className,
+	registeredFingers,
+	selectedFinger,
+	onFingerClick,
+	interactive,
+	readerStatus,
+	captureActive = false,
+	countdown = 0,
 }: InternalHandProps) {
-  if (isHalloween) {
-    return (
-      <svg
-        width="146"
-        height="146"
-        viewBox="0 0 146 146"
-        xmlns="http://www.w3.org/2000/svg"
-        className={cn("size-full", className)}
-        aria-label="Mão direita"
-      >
-        <title>Mão Direita</title>
-        <mask
-          id="path-1-outside-1_43_8"
-          maskUnits="userSpaceOnUse"
-          x="10.9398"
-          y="3.14575"
-          width="125"
-          height="139"
-          fill="black"
-        >
-          <rect fill="white" x="10.9398" y="3.14575" width="125" height="139" />
-          <path d="M78.2754 9.93197C78.5035 14.6085 78.1613 15.2074 77.9047 19.1425C75.2527 18.4097 72.4582 18.4924 69.9773 19.0855C69.6351 14.9222 69.8633 11.757 70.4906 9.7894C73 5.60615 76.5644 4.24596 78.2754 9.93197ZM107.219 16.8898C107.247 20.2546 107.048 21.5663 106.791 23.4769C103.911 22.4304 101.23 22.1053 98.5215 22.5074C98.607 19.8839 98.9207 17.8593 99.434 16.4621C101.972 12.4528 105.565 11.1524 107.219 16.8898ZM41.2906 17.4031C42.4027 21.0246 42.4882 22.1652 42.859 24.532C40.0929 24.4835 37.0703 25.4074 34.9316 26.5851C33.9906 23.4484 33.5914 20.9105 33.7054 19.1425C34.6179 14.4118 38.2679 12.7179 41.2906 17.4031ZM78.4179 24.9597C77.2773 29.7133 75.823 35.0457 78.1613 40.9484C75.2527 39.8078 72.2301 39.6937 69.464 40.5207C70.8043 35.3308 70.8328 30.1125 69.7777 24.589C72.6293 23.6737 75.8801 23.6451 78.4179 24.9597ZM106.221 29.0289C102.457 32.6789 106.363 45.0547 104.795 46.1668C101.915 44.6554 98.8066 44.1992 95.784 44.8551C97.8086 39.4941 98.3219 33.9621 97.609 28.0394C100.403 27.2638 103.825 27.5147 106.221 29.0289ZM132.94 32.3367C132.455 35.3879 132.084 36.6996 131.6 38.2965C129.119 36.8707 126.267 36.2719 123.475 36.3859C123.969 33.848 124.613 31.9375 125.326 30.6543C128.052 26.2572 132.475 27.5803 132.94 32.3367ZM44.6554 29.9699C44.8551 34.7605 44.855 40.1785 48.4195 45.1402C48.3054 45.1402 48.1914 45.1117 48.0773 45.1117C45.2258 45.0547 42.4027 45.8816 40.15 47.2789C40.0929 41.975 38.7242 36.9277 36.2433 31.909C39.0093 30.4262 41.7183 29.257 44.6554 29.9699ZM130.459 43.8855C128.52 48.0488 126.182 52.6113 126.78 58.2574C124.288 56.8601 121.508 56.3754 118.81 56.632C120.997 52.041 122.004 47.1363 122.09 41.7469C124.827 41.5187 128.44 42.2886 130.459 43.8855ZM78.2754 47.1363C76.8211 54.9496 74.7965 63.0195 77.1062 71.8879C73.6273 70.5191 69.6351 71.5172 66.8691 73.4847C68.8937 64.8445 69.1219 56.2613 67.9242 46.9082C71.4031 44.684 75.5094 44.4558 78.2754 47.1363ZM104.396 52.5543C100.575 62.5062 100.403 70.9469 99.8617 79.3305C96.5824 76.5359 93.5312 75.5949 89.6816 76.7355C92.7328 68.5515 94.073 60.1679 94.1586 50.8433C97.723 49.0754 102 49.4176 104.396 52.5543ZM50.7007 50.9859C48.9043 60.4531 55.9476 70.4051 56.0047 76.9922C52.8109 76.5929 49.5601 78.1043 47.4785 80.1574C46.8797 80.0719 46.3379 79.9008 45.8531 79.7011C46.1097 70.6047 44.3133 62.2211 40.6918 53.4383C43.5148 50.7293 47.1933 49.275 50.7007 50.9859ZM125.839 64.1316C122.104 71.0609 118.625 80.1004 118.437 84.834C116.23 82.7523 113.35 81.8113 110.555 81.9539C110.441 81.9539 110.355 81.9824 110.27 81.9824C114.091 75.8801 116.372 69.407 117.618 62.0785C120.484 61.3086 123.997 61.7933 125.839 64.1316ZM20.8164 68.9508C21.2441 70.7187 21.4437 71.8879 21.6148 72.8859C18.4496 73.1996 15.7976 74.3402 13.5734 76.2222C13.0886 73.7129 12.9461 71.7168 13.1457 70.2625C13.9726 65.0726 17.9078 63.6469 20.8164 68.9508ZM78.4465 79.473C77.8191 86.3453 76.9636 93.189 76.9351 100.175C74.3687 99.8332 71.8023 99.7761 69.407 99.9187C69.35 93.3601 68.8367 86.6304 67.8957 79.5586C71.8308 75.4808 75.4238 75.1672 78.4465 79.473ZM23.839 78.2183C25.4644 83.6648 26.8902 89.4535 30.2551 94.6719C27.4035 96.2687 25.3218 98.2648 24.0672 100.917C21.9855 94.5863 18.8488 88.7121 14.657 82.8949C16.7386 79.5871 20.132 77.3058 23.839 78.2183ZM97.9226 85.5754C96.2687 92.5902 94.3867 99.5195 93.3031 106.762C91.0789 104.995 88.4554 103.512 86.2312 102.599C86.9441 96.6109 87.3719 90.4515 87.4859 83.9215C92.0769 80.1859 95.6699 80.6707 97.9226 85.5754ZM59.284 83.9785C60.282 89.7386 61.0804 95.5558 62.3922 101.287C59.8258 102.171 57.516 103.398 55.4629 104.88C53.7804 98.8922 51.6703 92.9324 49.1324 86.773C51.9269 81.7258 55.3203 80.5281 59.284 83.9785ZM116.686 92.248C112.95 99.3484 108.901 106.335 106.05 114.12C103.939 112.295 101.915 110.926 99.5765 109.842C102.457 103.084 104.852 95.9836 106.905 88.3129C111.753 85.9746 115.545 87.0011 116.686 92.248ZM33.4773 98.9207C39.8363 106.991 46.623 110.355 53.9515 113.064C51.1855 115.346 49.0183 118.311 47.3929 121.305C41.8609 115.46 35.4449 111.097 27.7172 107.475C27.8883 103.626 30.0554 99.9472 33.4773 98.9207ZM71.4316 105.023C76.7355 105.052 82.5527 106.477 86.6875 108.559C84.2066 109.329 82.0394 110.783 80.2144 112.608C79.3875 112.58 78.532 112.637 77.7051 112.779C69.3215 108.873 61.1945 107.418 54.2082 112.865C60.0539 107.646 64.4168 105.023 71.4316 105.023ZM99.0347 115.317C102.228 117.142 104.88 119.908 106.021 122.674C106.278 127.636 104.595 131.685 102.171 135.877C100.86 137.531 96.9531 138.643 92.6187 136.191C94.1015 132.255 95.5558 127.009 94.5008 123.729C92.4476 119.395 89.9097 116.401 86.2312 114.348C90.309 112.009 95.3562 113.264 99.0347 115.317ZM72.173 115.802C71.2605 116.714 70.4336 117.741 69.7207 118.825C67.8386 121.648 66.5554 124.955 65.8426 128.035C65.3578 131.314 65.7 134.337 66.3558 137.217C66.641 139.869 55.3773 141.323 49.5886 137.645C49.3605 134.223 48.9898 130.288 50.3301 126.952C52.6398 121.591 56.8031 115.83 62.0785 114.576C65.3863 113.806 69.35 114.661 72.173 115.802ZM79.6441 117.741C81.5547 117.855 83.5508 118.653 84.8625 119.509C90.1664 123.587 90.5086 126.723 88.5695 132.427C86.3738 140.097 72.0304 139.612 71.1465 135.078C70.1199 130.031 71.4031 125.611 73.998 121.648C75.5949 119.68 77.1918 117.741 79.6441 117.741Z" />
-        </mask>
-        <path
-          d="M78.2754 9.93197C78.5035 14.6085 78.1613 15.2074 77.9047 19.1425C75.2527 18.4097 72.4582 18.4924 69.9773 19.0855C69.6351 14.9222 69.8633 11.757 70.4906 9.7894C73 5.60615 76.5644 4.24596 78.2754 9.93197ZM107.219 16.8898C107.247 20.2546 107.048 21.5663 106.791 23.4769C103.911 22.4304 101.23 22.1053 98.5215 22.5074C98.607 19.8839 98.9207 17.8593 99.434 16.4621C101.972 12.4528 105.565 11.1524 107.219 16.8898ZM41.2906 17.4031C42.4027 21.0246 42.4882 22.1652 42.859 24.532C40.0929 24.4835 37.0703 25.4074 34.9316 26.5851C33.9906 23.4484 33.5914 20.9105 33.7054 19.1425C34.6179 14.4118 38.2679 12.7179 41.2906 17.4031ZM78.4179 24.9597C77.2773 29.7133 75.823 35.0457 78.1613 40.9484C75.2527 39.8078 72.2301 39.6937 69.464 40.5207C70.8043 35.3308 70.8328 30.1125 69.7777 24.589C72.6293 23.6737 75.8801 23.6451 78.4179 24.9597ZM106.221 29.0289C102.457 32.6789 106.363 45.0547 104.795 46.1668C101.915 44.6554 98.8066 44.1992 95.784 44.8551C97.8086 39.4941 98.3219 33.9621 97.609 28.0394C100.403 27.2638 103.825 27.5147 106.221 29.0289ZM132.94 32.3367C132.455 35.3879 132.084 36.6996 131.6 38.2965C129.119 36.8707 126.267 36.2719 123.475 36.3859C123.969 33.848 124.613 31.9375 125.326 30.6543C128.052 26.2572 132.475 27.5803 132.94 32.3367ZM44.6554 29.9699C44.8551 34.7605 44.855 40.1785 48.4195 45.1402C48.3054 45.1402 48.1914 45.1117 48.0773 45.1117C45.2258 45.0547 42.4027 45.8816 40.15 47.2789C40.0929 41.975 38.7242 36.9277 36.2433 31.909C39.0093 30.4262 41.7183 29.257 44.6554 29.9699ZM130.459 43.8855C128.52 48.0488 126.182 52.6113 126.78 58.2574C124.288 56.8601 121.508 56.3754 118.81 56.632C120.997 52.041 122.004 47.1363 122.09 41.7469C124.827 41.5187 128.44 42.2886 130.459 43.8855ZM78.2754 47.1363C76.8211 54.9496 74.7965 63.0195 77.1062 71.8879C73.6273 70.5191 69.6351 71.5172 66.8691 73.4847C68.8937 64.8445 69.1219 56.2613 67.9242 46.9082C71.4031 44.684 75.5094 44.4558 78.2754 47.1363ZM104.396 52.5543C100.575 62.5062 100.403 70.9469 99.8617 79.3305C96.5824 76.5359 93.5312 75.5949 89.6816 76.7355C92.7328 68.5515 94.073 60.1679 94.1586 50.8433C97.723 49.0754 102 49.4176 104.396 52.5543ZM50.7007 50.9859C48.9043 60.4531 55.9476 70.4051 56.0047 76.9922C52.8109 76.5929 49.5601 78.1043 47.4785 80.1574C46.8797 80.0719 46.3379 79.9008 45.8531 79.7011C46.1097 70.6047 44.3133 62.2211 40.6918 53.4383C43.5148 50.7293 47.1933 49.275 50.7007 50.9859ZM125.839 64.1316C122.104 71.0609 118.625 80.1004 118.437 84.834C116.23 82.7523 113.35 81.8113 110.555 81.9539C110.441 81.9539 110.355 81.9824 110.27 81.9824C114.091 75.8801 116.372 69.407 117.618 62.0785C120.484 61.3086 123.997 61.7933 125.839 64.1316ZM20.8164 68.9508C21.2441 70.7187 21.4437 71.8879 21.6148 72.8859C18.4496 73.1996 15.7976 74.3402 13.5734 76.2222C13.0886 73.7129 12.9461 71.7168 13.1457 70.2625C13.9726 65.0726 17.9078 63.6469 20.8164 68.9508ZM78.4465 79.473C77.8191 86.3453 76.9636 93.189 76.9351 100.175C74.3687 99.8332 71.8023 99.7761 69.407 99.9187C69.35 93.3601 68.8367 86.6304 67.8957 79.5586C71.8308 75.4808 75.4238 75.1672 78.4465 79.473ZM23.839 78.2183C25.4644 83.6648 26.8902 89.4535 30.2551 94.6719C27.4035 96.2687 25.3218 98.2648 24.0672 100.917C21.9855 94.5863 18.8488 88.7121 14.657 82.8949C16.7386 79.5871 20.132 77.3058 23.839 78.2183ZM97.9226 85.5754C96.2687 92.5902 94.3867 99.5195 93.3031 106.762C91.0789 104.995 88.4554 103.512 86.2312 102.599C86.9441 96.6109 87.3719 90.4515 87.4859 83.9215C92.0769 80.1859 95.6699 80.6707 97.9226 85.5754ZM59.284 83.9785C60.282 89.7386 61.0804 95.5558 62.3922 101.287C59.8258 102.171 57.516 103.398 55.4629 104.88C53.7804 98.8922 51.6703 92.9324 49.1324 86.773C51.9269 81.7258 55.3203 80.5281 59.284 83.9785ZM116.686 92.248C112.95 99.3484 108.901 106.335 106.05 114.12C103.939 112.295 101.915 110.926 99.5765 109.842C102.457 103.084 104.852 95.9836 106.905 88.3129C111.753 85.9746 115.545 87.0011 116.686 92.248ZM33.4773 98.9207C39.8363 106.991 46.623 110.355 53.9515 113.064C51.1855 115.346 49.0183 118.311 47.3929 121.305C41.8609 115.46 35.4449 111.097 27.7172 107.475C27.8883 103.626 30.0554 99.9472 33.4773 98.9207ZM71.4316 105.023C76.7355 105.052 82.5527 106.477 86.6875 108.559C84.2066 109.329 82.0394 110.783 80.2144 112.608C79.3875 112.58 78.532 112.637 77.7051 112.779C69.3215 108.873 61.1945 107.418 54.2082 112.865C60.0539 107.646 64.4168 105.023 71.4316 105.023ZM99.0347 115.317C102.228 117.142 104.88 119.908 106.021 122.674C106.278 127.636 104.595 131.685 102.171 135.877C100.86 137.531 96.9531 138.643 92.6187 136.191C94.1015 132.255 95.5558 127.009 94.5008 123.729C92.4476 119.395 89.9097 116.401 86.2312 114.348C90.309 112.009 95.3562 113.264 99.0347 115.317ZM72.173 115.802C71.2605 116.714 70.4336 117.741 69.7207 118.825C67.8386 121.648 66.5554 124.955 65.8426 128.035C65.3578 131.314 65.7 134.337 66.3558 137.217C66.641 139.869 55.3773 141.323 49.5886 137.645C49.3605 134.223 48.9898 130.288 50.3301 126.952C52.6398 121.591 56.8031 115.83 62.0785 114.576C65.3863 113.806 69.35 114.661 72.173 115.802ZM79.6441 117.741C81.5547 117.855 83.5508 118.653 84.8625 119.509C90.1664 123.587 90.5086 126.723 88.5695 132.427C86.3738 140.097 72.0304 139.612 71.1465 135.078C70.1199 130.031 71.4031 125.611 73.998 121.648C75.5949 119.68 77.1918 117.741 79.6441 117.741Z"
-          stroke="var(--foreground)"
-          strokeWidth="4"
-          mask="url(#path-1-outside-1_43_8)"
-        />
-        {interactive && (
-          <HotZoneOverlay
-            zones={RIGHT_HAND_HALLOWEEN_ZONES}
-            fingers={FINGERS_RIGHT}
-            registeredFingers={registeredFingers}
-            selectedFinger={selectedFinger}
-            onFingerClick={onFingerClick}
-            viewBoxSize={146}
-            readerStatus={readerStatus}
-          />
-        )}
-      </svg>
-    );
-  }
+	if (isHalloween) {
+		return (
+			<svg
+				width="146"
+				height="146"
+				viewBox="0 0 146 146"
+				xmlns="http://www.w3.org/2000/svg"
+				className={cn("size-full", className)}
+				aria-label="Mão direita"
+			>
+				<title>Mão Direita</title>
+				<mask
+					id="path-1-outside-1_43_8"
+					maskUnits="userSpaceOnUse"
+					x="10.9398"
+					y="3.14575"
+					width="125"
+					height="139"
+					fill="black"
+				>
+					<rect fill="white" x="10.9398" y="3.14575" width="125" height="139" />
+					<path d="M78.2754 9.93197C78.5035 14.6085 78.1613 15.2074 77.9047 19.1425C75.2527 18.4097 72.4582 18.4924 69.9773 19.0855C69.6351 14.9222 69.8633 11.757 70.4906 9.7894C73 5.60615 76.5644 4.24596 78.2754 9.93197ZM107.219 16.8898C107.247 20.2546 107.048 21.5663 106.791 23.4769C103.911 22.4304 101.23 22.1053 98.5215 22.5074C98.607 19.8839 98.9207 17.8593 99.434 16.4621C101.972 12.4528 105.565 11.1524 107.219 16.8898ZM41.2906 17.4031C42.4027 21.0246 42.4882 22.1652 42.859 24.532C40.0929 24.4835 37.0703 25.4074 34.9316 26.5851C33.9906 23.4484 33.5914 20.9105 33.7054 19.1425C34.6179 14.4118 38.2679 12.7179 41.2906 17.4031ZM78.4179 24.9597C77.2773 29.7133 75.823 35.0457 78.1613 40.9484C75.2527 39.8078 72.2301 39.6937 69.464 40.5207C70.8043 35.3308 70.8328 30.1125 69.7777 24.589C72.6293 23.6737 75.8801 23.6451 78.4179 24.9597ZM106.221 29.0289C102.457 32.6789 106.363 45.0547 104.795 46.1668C101.915 44.6554 98.8066 44.1992 95.784 44.8551C97.8086 39.4941 98.3219 33.9621 97.609 28.0394C100.403 27.2638 103.825 27.5147 106.221 29.0289ZM132.94 32.3367C132.455 35.3879 132.084 36.6996 131.6 38.2965C129.119 36.8707 126.267 36.2719 123.475 36.3859C123.969 33.848 124.613 31.9375 125.326 30.6543C128.052 26.2572 132.475 27.5803 132.94 32.3367ZM44.6554 29.9699C44.8551 34.7605 44.855 40.1785 48.4195 45.1402C48.3054 45.1402 48.1914 45.1117 48.0773 45.1117C45.2258 45.0547 42.4027 45.8816 40.15 47.2789C40.0929 41.975 38.7242 36.9277 36.2433 31.909C39.0093 30.4262 41.7183 29.257 44.6554 29.9699ZM130.459 43.8855C128.52 48.0488 126.182 52.6113 126.78 58.2574C124.288 56.8601 121.508 56.3754 118.81 56.632C120.997 52.041 122.004 47.1363 122.09 41.7469C124.827 41.5187 128.44 42.2886 130.459 43.8855ZM78.2754 47.1363C76.8211 54.9496 74.7965 63.0195 77.1062 71.8879C73.6273 70.5191 69.6351 71.5172 66.8691 73.4847C68.8937 64.8445 69.1219 56.2613 67.9242 46.9082C71.4031 44.684 75.5094 44.4558 78.2754 47.1363ZM104.396 52.5543C100.575 62.5062 100.403 70.9469 99.8617 79.3305C96.5824 76.5359 93.5312 75.5949 89.6816 76.7355C92.7328 68.5515 94.073 60.1679 94.1586 50.8433C97.723 49.0754 102 49.4176 104.396 52.5543ZM50.7007 50.9859C48.9043 60.4531 55.9476 70.4051 56.0047 76.9922C52.8109 76.5929 49.5601 78.1043 47.4785 80.1574C46.8797 80.0719 46.3379 79.9008 45.8531 79.7011C46.1097 70.6047 44.3133 62.2211 40.6918 53.4383C43.5148 50.7293 47.1933 49.275 50.7007 50.9859ZM125.839 64.1316C122.104 71.0609 118.625 80.1004 118.437 84.834C116.23 82.7523 113.35 81.8113 110.555 81.9539C110.441 81.9539 110.355 81.9824 110.27 81.9824C114.091 75.8801 116.372 69.407 117.618 62.0785C120.484 61.3086 123.997 61.7933 125.839 64.1316ZM20.8164 68.9508C21.2441 70.7187 21.4437 71.8879 21.6148 72.8859C18.4496 73.1996 15.7976 74.3402 13.5734 76.2222C13.0886 73.7129 12.9461 71.7168 13.1457 70.2625C13.9726 65.0726 17.9078 63.6469 20.8164 68.9508ZM78.4465 79.473C77.8191 86.3453 76.9636 93.189 76.9351 100.175C74.3687 99.8332 71.8023 99.7761 69.407 99.9187C69.35 93.3601 68.8367 86.6304 67.8957 79.5586C71.8308 75.4808 75.4238 75.1672 78.4465 79.473ZM23.839 78.2183C25.4644 83.6648 26.8902 89.4535 30.2551 94.6719C27.4035 96.2687 25.3218 98.2648 24.0672 100.917C21.9855 94.5863 18.8488 88.7121 14.657 82.8949C16.7386 79.5871 20.132 77.3058 23.839 78.2183ZM97.9226 85.5754C96.2687 92.5902 94.3867 99.5195 93.3031 106.762C91.0789 104.995 88.4554 103.512 86.2312 102.599C86.9441 96.6109 87.3719 90.4515 87.4859 83.9215C92.0769 80.1859 95.6699 80.6707 97.9226 85.5754ZM59.284 83.9785C60.282 89.7386 61.0804 95.5558 62.3922 101.287C59.8258 102.171 57.516 103.398 55.4629 104.88C53.7804 98.8922 51.6703 92.9324 49.1324 86.773C51.9269 81.7258 55.3203 80.5281 59.284 83.9785ZM116.686 92.248C112.95 99.3484 108.901 106.335 106.05 114.12C103.939 112.295 101.915 110.926 99.5765 109.842C102.457 103.084 104.852 95.9836 106.905 88.3129C111.753 85.9746 115.545 87.0011 116.686 92.248ZM33.4773 98.9207C39.8363 106.991 46.623 110.355 53.9515 113.064C51.1855 115.346 49.0183 118.311 47.3929 121.305C41.8609 115.46 35.4449 111.097 27.7172 107.475C27.8883 103.626 30.0554 99.9472 33.4773 98.9207ZM71.4316 105.023C76.7355 105.052 82.5527 106.477 86.6875 108.559C84.2066 109.329 82.0394 110.783 80.2144 112.608C79.3875 112.58 78.532 112.637 77.7051 112.779C69.3215 108.873 61.1945 107.418 54.2082 112.865C60.0539 107.646 64.4168 105.023 71.4316 105.023ZM99.0347 115.317C102.228 117.142 104.88 119.908 106.021 122.674C106.278 127.636 104.595 131.685 102.171 135.877C100.86 137.531 96.9531 138.643 92.6187 136.191C94.1015 132.255 95.5558 127.009 94.5008 123.729C92.4476 119.395 89.9097 116.401 86.2312 114.348C90.309 112.009 95.3562 113.264 99.0347 115.317ZM72.173 115.802C71.2605 116.714 70.4336 117.741 69.7207 118.825C67.8386 121.648 66.5554 124.955 65.8426 128.035C65.3578 131.314 65.7 134.337 66.3558 137.217C66.641 139.869 55.3773 141.323 49.5886 137.645C49.3605 134.223 48.9898 130.288 50.3301 126.952C52.6398 121.591 56.8031 115.83 62.0785 114.576C65.3863 113.806 69.35 114.661 72.173 115.802ZM79.6441 117.741C81.5547 117.855 83.5508 118.653 84.8625 119.509C90.1664 123.587 90.5086 126.723 88.5695 132.427C86.3738 140.097 72.0304 139.612 71.1465 135.078C70.1199 130.031 71.4031 125.611 73.998 121.648C75.5949 119.68 77.1918 117.741 79.6441 117.741Z" />
+				</mask>
+				<path
+					d="M78.2754 9.93197C78.5035 14.6085 78.1613 15.2074 77.9047 19.1425C75.2527 18.4097 72.4582 18.4924 69.9773 19.0855C69.6351 14.9222 69.8633 11.757 70.4906 9.7894C73 5.60615 76.5644 4.24596 78.2754 9.93197ZM107.219 16.8898C107.247 20.2546 107.048 21.5663 106.791 23.4769C103.911 22.4304 101.23 22.1053 98.5215 22.5074C98.607 19.8839 98.9207 17.8593 99.434 16.4621C101.972 12.4528 105.565 11.1524 107.219 16.8898ZM41.2906 17.4031C42.4027 21.0246 42.4882 22.1652 42.859 24.532C40.0929 24.4835 37.0703 25.4074 34.9316 26.5851C33.9906 23.4484 33.5914 20.9105 33.7054 19.1425C34.6179 14.4118 38.2679 12.7179 41.2906 17.4031ZM78.4179 24.9597C77.2773 29.7133 75.823 35.0457 78.1613 40.9484C75.2527 39.8078 72.2301 39.6937 69.464 40.5207C70.8043 35.3308 70.8328 30.1125 69.7777 24.589C72.6293 23.6737 75.8801 23.6451 78.4179 24.9597ZM106.221 29.0289C102.457 32.6789 106.363 45.0547 104.795 46.1668C101.915 44.6554 98.8066 44.1992 95.784 44.8551C97.8086 39.4941 98.3219 33.9621 97.609 28.0394C100.403 27.2638 103.825 27.5147 106.221 29.0289ZM132.94 32.3367C132.455 35.3879 132.084 36.6996 131.6 38.2965C129.119 36.8707 126.267 36.2719 123.475 36.3859C123.969 33.848 124.613 31.9375 125.326 30.6543C128.052 26.2572 132.475 27.5803 132.94 32.3367ZM44.6554 29.9699C44.8551 34.7605 44.855 40.1785 48.4195 45.1402C48.3054 45.1402 48.1914 45.1117 48.0773 45.1117C45.2258 45.0547 42.4027 45.8816 40.15 47.2789C40.0929 41.975 38.7242 36.9277 36.2433 31.909C39.0093 30.4262 41.7183 29.257 44.6554 29.9699ZM130.459 43.8855C128.52 48.0488 126.182 52.6113 126.78 58.2574C124.288 56.8601 121.508 56.3754 118.81 56.632C120.997 52.041 122.004 47.1363 122.09 41.7469C124.827 41.5187 128.44 42.2886 130.459 43.8855ZM78.2754 47.1363C76.8211 54.9496 74.7965 63.0195 77.1062 71.8879C73.6273 70.5191 69.6351 71.5172 66.8691 73.4847C68.8937 64.8445 69.1219 56.2613 67.9242 46.9082C71.4031 44.684 75.5094 44.4558 78.2754 47.1363ZM104.396 52.5543C100.575 62.5062 100.403 70.9469 99.8617 79.3305C96.5824 76.5359 93.5312 75.5949 89.6816 76.7355C92.7328 68.5515 94.073 60.1679 94.1586 50.8433C97.723 49.0754 102 49.4176 104.396 52.5543ZM50.7007 50.9859C48.9043 60.4531 55.9476 70.4051 56.0047 76.9922C52.8109 76.5929 49.5601 78.1043 47.4785 80.1574C46.8797 80.0719 46.3379 79.9008 45.8531 79.7011C46.1097 70.6047 44.3133 62.2211 40.6918 53.4383C43.5148 50.7293 47.1933 49.275 50.7007 50.9859ZM125.839 64.1316C122.104 71.0609 118.625 80.1004 118.437 84.834C116.23 82.7523 113.35 81.8113 110.555 81.9539C110.441 81.9539 110.355 81.9824 110.27 81.9824C114.091 75.8801 116.372 69.407 117.618 62.0785C120.484 61.3086 123.997 61.7933 125.839 64.1316ZM20.8164 68.9508C21.2441 70.7187 21.4437 71.8879 21.6148 72.8859C18.4496 73.1996 15.7976 74.3402 13.5734 76.2222C13.0886 73.7129 12.9461 71.7168 13.1457 70.2625C13.9726 65.0726 17.9078 63.6469 20.8164 68.9508ZM78.4465 79.473C77.8191 86.3453 76.9636 93.189 76.9351 100.175C74.3687 99.8332 71.8023 99.7761 69.407 99.9187C69.35 93.3601 68.8367 86.6304 67.8957 79.5586C71.8308 75.4808 75.4238 75.1672 78.4465 79.473ZM23.839 78.2183C25.4644 83.6648 26.8902 89.4535 30.2551 94.6719C27.4035 96.2687 25.3218 98.2648 24.0672 100.917C21.9855 94.5863 18.8488 88.7121 14.657 82.8949C16.7386 79.5871 20.132 77.3058 23.839 78.2183ZM97.9226 85.5754C96.2687 92.5902 94.3867 99.5195 93.3031 106.762C91.0789 104.995 88.4554 103.512 86.2312 102.599C86.9441 96.6109 87.3719 90.4515 87.4859 83.9215C92.0769 80.1859 95.6699 80.6707 97.9226 85.5754ZM59.284 83.9785C60.282 89.7386 61.0804 95.5558 62.3922 101.287C59.8258 102.171 57.516 103.398 55.4629 104.88C53.7804 98.8922 51.6703 92.9324 49.1324 86.773C51.9269 81.7258 55.3203 80.5281 59.284 83.9785ZM116.686 92.248C112.95 99.3484 108.901 106.335 106.05 114.12C103.939 112.295 101.915 110.926 99.5765 109.842C102.457 103.084 104.852 95.9836 106.905 88.3129C111.753 85.9746 115.545 87.0011 116.686 92.248ZM33.4773 98.9207C39.8363 106.991 46.623 110.355 53.9515 113.064C51.1855 115.346 49.0183 118.311 47.3929 121.305C41.8609 115.46 35.4449 111.097 27.7172 107.475C27.8883 103.626 30.0554 99.9472 33.4773 98.9207ZM71.4316 105.023C76.7355 105.052 82.5527 106.477 86.6875 108.559C84.2066 109.329 82.0394 110.783 80.2144 112.608C79.3875 112.58 78.532 112.637 77.7051 112.779C69.3215 108.873 61.1945 107.418 54.2082 112.865C60.0539 107.646 64.4168 105.023 71.4316 105.023ZM99.0347 115.317C102.228 117.142 104.88 119.908 106.021 122.674C106.278 127.636 104.595 131.685 102.171 135.877C100.86 137.531 96.9531 138.643 92.6187 136.191C94.1015 132.255 95.5558 127.009 94.5008 123.729C92.4476 119.395 89.9097 116.401 86.2312 114.348C90.309 112.009 95.3562 113.264 99.0347 115.317ZM72.173 115.802C71.2605 116.714 70.4336 117.741 69.7207 118.825C67.8386 121.648 66.5554 124.955 65.8426 128.035C65.3578 131.314 65.7 134.337 66.3558 137.217C66.641 139.869 55.3773 141.323 49.5886 137.645C49.3605 134.223 48.9898 130.288 50.3301 126.952C52.6398 121.591 56.8031 115.83 62.0785 114.576C65.3863 113.806 69.35 114.661 72.173 115.802ZM79.6441 117.741C81.5547 117.855 83.5508 118.653 84.8625 119.509C90.1664 123.587 90.5086 126.723 88.5695 132.427C86.3738 140.097 72.0304 139.612 71.1465 135.078C70.1199 130.031 71.4031 125.611 73.998 121.648C75.5949 119.68 77.1918 117.741 79.6441 117.741Z"
+					stroke="var(--foreground)"
+					strokeWidth="4"
+					mask="url(#path-1-outside-1_43_8)"
+				/>
+				{interactive && (
+					<HotZoneOverlay
+						zones={RIGHT_HAND_HALLOWEEN_ZONES}
+						fingers={FINGERS_RIGHT}
+						registeredFingers={registeredFingers}
+						selectedFinger={selectedFinger}
+						onFingerClick={onFingerClick}
+						viewBoxSize={146}
+						readerStatus={readerStatus}
+					/>
+				)}
+			</svg>
+		);
+	}
 
-  // Normal right hand — outline SVG
-  const RIGHT_HAND_PATH =
-    "M218.94 11.498C228.902 11.4981 237.425 13.3869 243.552 17.1777C249.677 20.9675 253.405 26.7102 253.378 33.8506L295.571 207.431C296.554 209.701 298.524 210.667 300.707 210.55C302.908 210.432 304.997 209.206 306.035 207.189L318.057 38.3525L318.062 38.2666L318.072 38.1807C318.939 30.6191 327.976 19.5067 343.836 21.8076C351.913 22.979 358.106 27.8542 362.021 33.0225C363.99 35.6202 365.467 38.3975 366.358 41.0166C367.151 43.345 367.617 45.9574 367.165 48.3145L363.266 215.035C364.512 221.259 367.35 223.832 369.818 224.597C372.349 225.38 375.916 224.721 379.605 221.558L438.482 116.26C441.032 110.303 446.827 107.137 452.416 105.869C457.951 104.613 464.176 104.977 469.069 106.949L469.538 107.146L469.851 107.28L470.135 107.466C478.49 112.909 484.501 120.659 484.501 131.745V132.144L484.422 132.534L484.421 132.539L484.324 133.021L484.113 133.465L480.5 131.75L484.113 133.466L484.112 133.468C484.111 133.47 484.11 133.474 484.107 133.479C484.103 133.488 484.096 133.503 484.087 133.522C484.068 133.561 484.041 133.62 484.004 133.697C483.93 133.853 483.82 134.087 483.676 134.393C483.388 135.004 482.963 135.909 482.419 137.075C481.33 139.409 479.76 142.794 477.844 146.988C474.01 155.378 468.79 167.002 463.239 179.941C452.1 205.91 439.764 236.878 434.545 257.681C427.742 284.795 428.229 308.563 427.944 332.792C427.66 356.96 426.593 381.418 416.248 408.93L416.146 409.204L416.003 409.461C398.797 440.514 388.902 460.172 366.686 471.242C355.64 476.746 341.781 480.04 322.901 481.98C305.198 483.8 282.834 484.449 253.877 484.496L247.997 484.498C224.148 484.476 178.631 475.447 139.527 466.577C119.877 462.12 101.69 457.665 88.418 454.324C81.7811 452.654 76.3713 451.261 72.6191 450.286C70.743 449.799 69.2807 449.416 68.2871 449.154C67.7907 449.024 67.4112 448.923 67.1553 448.855C67.0273 448.822 66.9295 448.796 66.8643 448.778C66.8362 448.771 66.8141 448.765 66.7979 448.761L65.9785 448.558C61.8226 447.566 56.8208 446.921 51.3535 446.232C45.6404 445.513 39.4673 444.752 33.8486 443.466C28.2762 442.19 22.7786 440.303 18.6191 437.055C14.2541 433.646 11.5 428.831 11.5 422.372C11.5 410.409 18.509 400.438 27.8721 393.624C37.242 386.805 49.436 382.761 60.9932 382.734H61.1729L61.3525 382.75L145.346 390.125C154.862 389.479 164.372 386.373 171.518 380.563C178.61 374.797 183.582 366.218 183.897 354.044C183.555 314.721 179.659 285.177 160.143 253.929L81.9941 131.998L81.8623 131.793L81.7568 131.573C79.1377 126.126 77.5012 118.78 78.4453 111.624C79.4078 104.33 83.1002 97.0998 91.1758 92.6836C99.3861 88.1932 108.022 89.4116 115.003 92.8193C121.801 96.1377 127.497 101.726 130.562 107.172L217.48 225.399C221.521 229.035 226.669 230.802 230.142 230.257C231.745 230.005 232.91 229.296 233.711 228.066C234.558 226.767 235.273 224.451 235.008 220.523L196.529 44.1094L196.519 44.0586L196.509 44.0078C195.146 36.88 196.24 28.9474 199.878 22.665C203.594 16.2465 210.044 11.498 218.94 11.498Z";
+	// Normal right hand — outline SVG
+	const RIGHT_HAND_PATH =
+		"M218.94 11.498C228.902 11.4981 237.425 13.3869 243.552 17.1777C249.677 20.9675 253.405 26.7102 253.378 33.8506L295.571 207.431C296.554 209.701 298.524 210.667 300.707 210.55C302.908 210.432 304.997 209.206 306.035 207.189L318.057 38.3525L318.062 38.2666L318.072 38.1807C318.939 30.6191 327.976 19.5067 343.836 21.8076C351.913 22.979 358.106 27.8542 362.021 33.0225C363.99 35.6202 365.467 38.3975 366.358 41.0166C367.151 43.345 367.617 45.9574 367.165 48.3145L363.266 215.035C364.512 221.259 367.35 223.832 369.818 224.597C372.349 225.38 375.916 224.721 379.605 221.558L438.482 116.26C441.032 110.303 446.827 107.137 452.416 105.869C457.951 104.613 464.176 104.977 469.069 106.949L469.538 107.146L469.851 107.28L470.135 107.466C478.49 112.909 484.501 120.659 484.501 131.745V132.144L484.422 132.534L484.421 132.539L484.324 133.021L484.113 133.465L480.5 131.75L484.113 133.466L484.112 133.468C484.111 133.47 484.11 133.474 484.107 133.479C484.103 133.488 484.096 133.503 484.087 133.522C484.068 133.561 484.041 133.62 484.004 133.697C483.93 133.853 483.82 134.087 483.676 134.393C483.388 135.004 482.963 135.909 482.419 137.075C481.33 139.409 479.76 142.794 477.844 146.988C474.01 155.378 468.79 167.002 463.239 179.941C452.1 205.91 439.764 236.878 434.545 257.681C427.742 284.795 428.229 308.563 427.944 332.792C427.66 356.96 426.593 381.418 416.248 408.93L416.146 409.204L416.003 409.461C398.797 440.514 388.902 460.172 366.686 471.242C355.64 476.746 341.781 480.04 322.901 481.98C305.198 483.8 282.834 484.449 253.877 484.496L247.997 484.498C224.148 484.476 178.631 475.447 139.527 466.577C119.877 462.12 101.69 457.665 88.418 454.324C81.7811 452.654 76.3713 451.261 72.6191 450.286C70.743 449.799 69.2807 449.416 68.2871 449.154C67.7907 449.024 67.4112 448.923 67.1553 448.855C67.0273 448.822 66.9295 448.796 66.8643 448.778C66.8362 448.771 66.8141 448.765 66.7979 448.761L65.9785 448.558C61.8226 447.566 56.8208 446.921 51.3535 446.232C45.6404 445.513 39.4673 444.752 33.8486 443.466C28.2762 442.19 22.7786 440.303 18.6191 437.055C14.2541 433.646 11.5 428.831 11.5 422.372C11.5 410.409 18.509 400.438 27.8721 393.624C37.242 386.805 49.436 382.761 60.9932 382.734H61.1729L61.3525 382.75L145.346 390.125C154.862 389.479 164.372 386.373 171.518 380.563C178.61 374.797 183.582 366.218 183.897 354.044C183.555 314.721 179.659 285.177 160.143 253.929L81.9941 131.998L81.8623 131.793L81.7568 131.573C79.1377 126.126 77.5012 118.78 78.4453 111.624C79.4078 104.33 83.1002 97.0998 91.1758 92.6836C99.3861 88.1932 108.022 89.4116 115.003 92.8193C121.801 96.1377 127.497 101.726 130.562 107.172L217.48 225.399C221.521 229.035 226.669 230.802 230.142 230.257C231.745 230.005 232.91 229.296 233.711 228.066C234.558 226.767 235.273 224.451 235.008 220.523L196.529 44.1094L196.519 44.0586L196.509 44.0078C195.146 36.88 196.24 28.9474 199.878 22.665C203.594 16.2465 210.044 11.498 218.94 11.498Z";
 
-  return (
-    <svg
-      width="496"
-      height="496"
-      viewBox="0 0 496 496"
-      fill="none"
-      xmlns="http://www.w3.org/2000/svg"
-      className={cn("size-full", className)}
-      aria-label="Mão direita"
-    >
-      <title>Mão direita</title>
-      <path
-        d={RIGHT_HAND_PATH}
-        stroke="currentColor"
-        strokeWidth="8"
-        fill="none"
-      />
-      <HandStrokeOverlay
-        handPath={RIGHT_HAND_PATH}
-        strokeWidth={8}
-        vbWidth={496}
-        vbHeight={496}
-        uid="right"
-        active={captureActive}
-        countdown={countdown}
-      />
-      {interactive && (
-        <HotZoneOverlay
-          zones={RIGHT_HAND_ZONES}
-          fingers={FINGERS_RIGHT}
-          registeredFingers={registeredFingers}
-          selectedFinger={selectedFinger}
-          onFingerClick={onFingerClick}
-          viewBoxSize={496}
-          readerStatus={readerStatus}
-        />
-      )}
-    </svg>
-  );
+	return (
+		<svg
+			width="496"
+			height="496"
+			viewBox="0 0 496 496"
+			fill="none"
+			xmlns="http://www.w3.org/2000/svg"
+			className={cn("size-full", className)}
+			aria-label="Mão direita"
+		>
+			<title>Mão direita</title>
+			<path
+				d={RIGHT_HAND_PATH}
+				stroke="currentColor"
+				strokeWidth="8"
+				fill="none"
+			/>
+			<HandStrokeOverlay
+				handPath={RIGHT_HAND_PATH}
+				strokeWidth={8}
+				vbWidth={496}
+				vbHeight={496}
+				uid="right"
+				active={captureActive}
+				countdown={countdown}
+			/>
+			{interactive && (
+				<HotZoneOverlay
+					zones={RIGHT_HAND_ZONES}
+					fingers={FINGERS_RIGHT}
+					registeredFingers={registeredFingers}
+					selectedFinger={selectedFinger}
+					onFingerClick={onFingerClick}
+					viewBoxSize={496}
+					readerStatus={readerStatus}
+				/>
+			)}
+		</svg>
+	);
 }
 
 // ── Left Hand ─────────────────────────────────────────────────────────────────
 
 function LeftHand({
-  className,
-  registeredFingers,
-  selectedFinger,
-  onFingerClick,
-  interactive,
-  readerStatus,
-  captureActive = false,
-  countdown = 0,
+	className,
+	registeredFingers,
+	selectedFinger,
+	onFingerClick,
+	interactive,
+	readerStatus,
+	captureActive = false,
+	countdown = 0,
 }: InternalHandProps) {
-  if (isHalloween) {
-    return (
-      <svg
-        width="146"
-        height="146"
-        viewBox="0 0 146 146"
-        xmlns="http://www.w3.org/2000/svg"
-        className={cn("size-full", className)}
-        aria-label="Mão esquerda"
-      >
-        <title>Mão Esquerda</title>
-        <mask
-          id="path-1-outside-1_43_4"
-          maskUnits="userSpaceOnUse"
-          x="10.0602"
-          y="3.14575"
-          width="125"
-          height="139"
-          fill="black"
-        >
-          <rect fill="white" x="10.0602" y="3.14575" width="125" height="139" />
-          <path d="M67.7246 9.93197C67.4965 14.6085 67.8387 15.2074 68.0953 19.1425C70.7473 18.4097 73.5418 18.4924 76.0227 19.0855C76.3649 14.9222 76.1367 11.757 75.5094 9.7894C73 5.60615 69.4356 4.24596 67.7246 9.93197ZM38.7813 16.8898C38.7528 20.2546 38.9524 21.5663 39.209 23.4769C42.0891 22.4304 44.7696 22.1053 47.4785 22.5074C47.393 19.8839 47.0793 17.8593 46.566 16.4621C44.0281 12.4528 40.4352 11.1524 38.7813 16.8898ZM104.709 17.4031C103.597 21.0246 103.512 22.1652 103.141 24.532C105.907 24.4835 108.93 25.4074 111.068 26.5851C112.009 23.4484 112.409 20.9105 112.295 19.1425C111.382 14.4118 107.732 12.7179 104.709 17.4031ZM67.5821 24.9597C68.7227 29.7133 70.177 35.0457 67.8387 40.9484C70.7473 39.8078 73.7699 39.6937 76.536 40.5207C75.1957 35.3308 75.1672 30.1125 76.2223 24.589C73.3707 23.6737 70.1199 23.6451 67.5821 24.9597ZM39.7793 29.0289C43.5434 32.6789 39.6367 45.0547 41.2051 46.1668C44.0852 44.6554 47.1934 44.1992 50.216 44.8551C48.1914 39.4941 47.6781 33.9621 48.391 28.0394C45.5965 27.2638 42.1746 27.5147 39.7793 29.0289ZM13.0602 32.3367C13.5449 35.3879 13.9156 36.6996 14.4004 38.2965C16.8813 36.8707 19.7328 36.2719 22.5245 36.3859C22.0312 33.848 21.3867 31.9375 20.6739 30.6543C17.9478 26.2572 13.525 27.5803 13.0602 32.3367ZM101.345 29.9699C101.145 34.7605 101.145 40.1785 97.5805 45.1402C97.6946 45.1402 97.8086 45.1117 97.9227 45.1117C100.774 45.0547 103.597 45.8816 105.85 47.2789C105.907 41.975 107.276 36.9277 109.757 31.909C106.991 30.4262 104.282 29.257 101.345 29.9699ZM15.541 43.8855C17.4801 48.0488 19.8184 52.6113 19.2196 58.2574C21.7118 56.8601 24.4921 56.3754 27.1897 56.632C25.0025 52.041 23.9959 47.1363 23.9104 41.7469C21.1729 41.5187 17.5599 42.2886 15.541 43.8855ZM67.7246 47.1363C69.1789 54.9496 71.2035 63.0195 68.8938 71.8879C72.3727 70.5191 76.3649 71.5172 79.1309 73.4847C77.1063 64.8445 76.8781 56.2613 78.0758 46.9082C74.5969 44.684 70.4906 44.4558 67.7246 47.1363ZM41.6043 52.5543C45.4254 62.5062 45.5965 70.9469 46.1383 79.3305C49.4176 76.5359 52.4688 75.5949 56.3184 76.7355C53.2672 68.5515 51.927 60.1679 51.8414 50.8433C48.277 49.0754 43.9996 49.4176 41.6043 52.5543ZM95.2993 50.9859C97.0957 60.4531 90.0524 70.4051 89.9953 76.9922C93.1891 76.5929 96.4399 78.1043 98.5215 80.1574C99.1203 80.0719 99.6621 79.9008 100.147 79.7011C99.8903 70.6047 101.687 62.2211 105.308 53.4383C102.485 50.7293 98.8067 49.275 95.2993 50.9859ZM20.1606 64.1316C23.8961 71.0609 27.375 80.1004 27.5632 84.834C29.7703 82.7523 32.6504 81.8113 35.4449 81.9539C35.559 81.9539 35.6446 81.9824 35.7301 81.9824C31.909 75.8801 29.6278 69.407 28.3816 62.0785C25.5158 61.3086 22.0027 61.7933 20.1606 64.1316ZM125.184 68.9508C124.756 70.7187 124.556 71.8879 124.385 72.8859C127.55 73.1996 130.202 74.3402 132.427 76.2222C132.911 73.7129 133.054 71.7168 132.854 70.2625C132.027 65.0726 128.092 63.6469 125.184 68.9508ZM67.5535 79.473C68.1809 86.3453 69.0364 93.189 69.0649 100.175C71.6313 99.8332 74.1977 99.7761 76.593 99.9187C76.65 93.3601 77.1633 86.6304 78.1043 79.5586C74.1692 75.4808 70.5762 75.1672 67.5535 79.473ZM122.161 78.2183C120.536 83.6648 119.11 89.4535 115.745 94.6719C118.597 96.2687 120.678 98.2648 121.933 100.917C124.014 94.5863 127.151 88.7121 131.343 82.8949C129.261 79.5871 125.868 77.3058 122.161 78.2183ZM48.0774 85.5754C49.7313 92.5902 51.6133 99.5195 52.6969 106.762C54.9211 104.995 57.5446 103.512 59.7688 102.599C59.0559 96.6109 58.6281 90.4515 58.5141 83.9215C53.9231 80.1859 50.3301 80.6707 48.0774 85.5754ZM86.716 83.9785C85.718 89.7386 84.9196 95.5558 83.6078 101.287C86.1742 102.171 88.484 103.398 90.5371 104.88C92.2196 98.8922 94.3297 92.9324 96.8676 86.773C94.0731 81.7258 90.6797 80.5281 86.716 83.9785ZM29.3141 92.248C33.0496 99.3484 37.0989 106.335 39.9504 114.12C42.0606 112.295 44.0852 110.926 46.4235 109.842C43.5434 103.084 41.1481 95.9836 39.0949 88.3129C34.2473 85.9746 30.4547 87.0011 29.3141 92.248ZM112.523 98.9207C106.164 106.991 99.377 110.355 92.0485 113.064C94.8145 115.346 96.9817 118.311 98.6071 121.305C104.139 115.46 110.555 111.097 118.283 107.475C118.112 103.626 115.945 99.9472 112.523 98.9207ZM74.5684 105.023C69.2645 105.052 63.4473 106.477 59.3125 108.559C61.7934 109.329 63.9606 110.783 65.7856 112.608C66.6125 112.58 67.468 112.637 68.2949 112.779C76.6785 108.873 84.8055 107.418 91.7918 112.865C85.9461 107.646 81.5832 105.023 74.5684 105.023ZM46.9653 115.317C43.7715 117.142 41.1196 119.908 39.9789 122.674C39.7223 127.636 41.4047 131.685 43.8285 135.877C45.1403 137.531 49.0469 138.643 53.3813 136.191C51.8985 132.255 50.4442 127.009 51.4992 123.729C53.5524 119.395 56.0903 116.401 59.7688 114.348C55.691 112.009 50.6438 113.264 46.9653 115.317ZM73.827 115.802C74.7395 116.714 75.5664 117.741 76.2793 118.825C78.1614 121.648 79.4446 124.955 80.1574 128.035C80.6422 131.314 80.3 134.337 79.6442 137.217C79.359 139.869 90.6227 141.323 96.4114 137.645C96.6395 134.223 97.0102 130.288 95.6699 126.952C93.3602 121.591 89.1969 115.83 83.9215 114.576C80.6137 113.806 76.65 114.661 73.827 115.802ZM66.3559 117.741C64.4453 117.855 62.4492 118.653 61.1375 119.509C55.8336 123.587 55.4914 126.723 57.4305 132.427C59.6262 140.097 73.9696 139.612 74.8535 135.078C75.8801 130.031 74.5969 125.611 72.002 121.648C70.4051 119.68 68.8082 117.741 66.3559 117.741Z" />
-        </mask>
-        <path
-          d="M67.7246 9.93197C67.4965 14.6085 67.8387 15.2074 68.0953 19.1425C70.7473 18.4097 73.5418 18.4924 76.0227 19.0855C76.3649 14.9222 76.1367 11.757 75.5094 9.7894C73 5.60615 69.4356 4.24596 67.7246 9.93197ZM38.7813 16.8898C38.7528 20.2546 38.9524 21.5663 39.209 23.4769C42.0891 22.4304 44.7696 22.1053 47.4785 22.5074C47.393 19.8839 47.0793 17.8593 46.566 16.4621C44.0281 12.4528 40.4352 11.1524 38.7813 16.8898ZM104.709 17.4031C103.597 21.0246 103.512 22.1652 103.141 24.532C105.907 24.4835 108.93 25.4074 111.068 26.5851C112.009 23.4484 112.409 20.9105 112.295 19.1425C111.382 14.4118 107.732 12.7179 104.709 17.4031ZM67.5821 24.9597C68.7227 29.7133 70.177 35.0457 67.8387 40.9484C70.7473 39.8078 73.7699 39.6937 76.536 40.5207C75.1957 35.3308 75.1672 30.1125 76.2223 24.589C73.3707 23.6737 70.1199 23.6451 67.5821 24.9597ZM39.7793 29.0289C43.5434 32.6789 39.6367 45.0547 41.2051 46.1668C44.0852 44.6554 47.1934 44.1992 50.216 44.8551C48.1914 39.4941 47.6781 33.9621 48.391 28.0394C45.5965 27.2638 42.1746 27.5147 39.7793 29.0289ZM13.0602 32.3367C13.5449 35.3879 13.9156 36.6996 14.4004 38.2965C16.8813 36.8707 19.7328 36.2719 22.5245 36.3859C22.0312 33.848 21.3867 31.9375 20.6739 30.6543C17.9478 26.2572 13.525 27.5803 13.0602 32.3367ZM101.345 29.9699C101.145 34.7605 101.145 40.1785 97.5805 45.1402C97.6946 45.1402 97.8086 45.1117 97.9227 45.1117C100.774 45.0547 103.597 45.8816 105.85 47.2789C105.907 41.975 107.276 36.9277 109.757 31.909C106.991 30.4262 104.282 29.257 101.345 29.9699ZM15.541 43.8855C17.4801 48.0488 19.8184 52.6113 19.2196 58.2574C21.7118 56.8601 24.4921 56.3754 27.1897 56.632C25.0025 52.041 23.9959 47.1363 23.9104 41.7469C21.1729 41.5187 17.5599 42.2886 15.541 43.8855ZM67.7246 47.1363C69.1789 54.9496 71.2035 63.0195 68.8938 71.8879C72.3727 70.5191 76.3649 71.5172 79.1309 73.4847C77.1063 64.8445 76.8781 56.2613 78.0758 46.9082C74.5969 44.684 70.4906 44.4558 67.7246 47.1363ZM41.6043 52.5543C45.4254 62.5062 45.5965 70.9469 46.1383 79.3305C49.4176 76.5359 52.4688 75.5949 56.3184 76.7355C53.2672 68.5515 51.927 60.1679 51.8414 50.8433C48.277 49.0754 43.9996 49.4176 41.6043 52.5543ZM95.2993 50.9859C97.0957 60.4531 90.0524 70.4051 89.9953 76.9922C93.1891 76.5929 96.4399 78.1043 98.5215 80.1574C99.1203 80.0719 99.6621 79.9008 100.147 79.7011C99.8903 70.6047 101.687 62.2211 105.308 53.4383C102.485 50.7293 98.8067 49.275 95.2993 50.9859ZM20.1606 64.1316C23.8961 71.0609 27.375 80.1004 27.5632 84.834C29.7703 82.7523 32.6504 81.8113 35.4449 81.9539C35.559 81.9539 35.6446 81.9824 35.7301 81.9824C31.909 75.8801 29.6278 69.407 28.3816 62.0785C25.5158 61.3086 22.0027 61.7933 20.1606 64.1316ZM125.184 68.9508C124.756 70.7187 124.556 71.8879 124.385 72.8859C127.55 73.1996 130.202 74.3402 132.427 76.2222C132.911 73.7129 133.054 71.7168 132.854 70.2625C132.027 65.0726 128.092 63.6469 125.184 68.9508ZM67.5535 79.473C68.1809 86.3453 69.0364 93.189 69.0649 100.175C71.6313 99.8332 74.1977 99.7761 76.593 99.9187C76.65 93.3601 77.1633 86.6304 78.1043 79.5586C74.1692 75.4808 70.5762 75.1672 67.5535 79.473ZM122.161 78.2183C120.536 83.6648 119.11 89.4535 115.745 94.6719C118.597 96.2687 120.678 98.2648 121.933 100.917C124.014 94.5863 127.151 88.7121 131.343 82.8949C129.261 79.5871 125.868 77.3058 122.161 78.2183ZM48.0774 85.5754C49.7313 92.5902 51.6133 99.5195 52.6969 106.762C54.9211 104.995 57.5446 103.512 59.7688 102.599C59.0559 96.6109 58.6281 90.4515 58.5141 83.9215C53.9231 80.1859 50.3301 80.6707 48.0774 85.5754ZM86.716 83.9785C85.718 89.7386 84.9196 95.5558 83.6078 101.287C86.1742 102.171 88.484 103.398 90.5371 104.88C92.2196 98.8922 94.3297 92.9324 96.8676 86.773C94.0731 81.7258 90.6797 80.5281 86.716 83.9785ZM29.3141 92.248C33.0496 99.3484 37.0989 106.335 39.9504 114.12C42.0606 112.295 44.0852 110.926 46.4235 109.842C43.5434 103.084 41.1481 95.9836 39.0949 88.3129C34.2473 85.9746 30.4547 87.0011 29.3141 92.248ZM112.523 98.9207C106.164 106.991 99.377 110.355 92.0485 113.064C94.8145 115.346 96.9817 118.311 98.6071 121.305C104.139 115.46 110.555 111.097 118.283 107.475C118.112 103.626 115.945 99.9472 112.523 98.9207ZM74.5684 105.023C69.2645 105.052 63.4473 106.477 59.3125 108.559C61.7934 109.329 63.9606 110.783 65.7856 112.608C66.6125 112.58 67.468 112.637 68.2949 112.779C76.6785 108.873 84.8055 107.418 91.7918 112.865C85.9461 107.646 81.5832 105.023 74.5684 105.023ZM46.9653 115.317C43.7715 117.142 41.1196 119.908 39.9789 122.674C39.7223 127.636 41.4047 131.685 43.8285 135.877C45.1403 137.531 49.0469 138.643 53.3813 136.191C51.8985 132.255 50.4442 127.009 51.4992 123.729C53.5524 119.395 56.0903 116.401 59.7688 114.348C55.691 112.009 50.6438 113.264 46.9653 115.317ZM73.827 115.802C74.7395 116.714 75.5664 117.741 76.2793 118.825C78.1614 121.648 79.4446 124.955 80.1574 128.035C80.6422 131.314 80.3 134.337 79.6442 137.217C79.359 139.869 90.6227 141.323 96.4114 137.645C96.6395 134.223 97.0102 130.288 95.6699 126.952C93.3602 121.591 89.1969 115.83 83.9215 114.576C80.6137 113.806 76.65 114.661 73.827 115.802ZM66.3559 117.741C64.4453 117.855 62.4492 118.653 61.1375 119.509C55.8336 123.587 55.4914 126.723 57.4305 132.427C59.6262 140.097 73.9696 139.612 74.8535 135.078C75.8801 130.031 74.5969 125.611 72.002 121.648C70.4051 119.68 68.8082 117.741 66.3559 117.741Z"
-          stroke="var(--foreground)"
-          strokeWidth="4"
-          mask="url(#path-1-outside-1_43_4)"
-        />
-        {interactive && (
-          <HotZoneOverlay
-            zones={LEFT_HAND_HALLOWEEN_ZONES}
-            fingers={FINGERS_LEFT}
-            registeredFingers={registeredFingers}
-            selectedFinger={selectedFinger}
-            onFingerClick={onFingerClick}
-            viewBoxSize={146}
-            readerStatus={readerStatus}
-          />
-        )}
-      </svg>
-    );
-  }
+	if (isHalloween) {
+		return (
+			<svg
+				width="146"
+				height="146"
+				viewBox="0 0 146 146"
+				xmlns="http://www.w3.org/2000/svg"
+				className={cn("size-full", className)}
+				aria-label="Mão esquerda"
+			>
+				<title>Mão Esquerda</title>
+				<mask
+					id="path-1-outside-1_43_4"
+					maskUnits="userSpaceOnUse"
+					x="10.0602"
+					y="3.14575"
+					width="125"
+					height="139"
+					fill="black"
+				>
+					<rect fill="white" x="10.0602" y="3.14575" width="125" height="139" />
+					<path d="M67.7246 9.93197C67.4965 14.6085 67.8387 15.2074 68.0953 19.1425C70.7473 18.4097 73.5418 18.4924 76.0227 19.0855C76.3649 14.9222 76.1367 11.757 75.5094 9.7894C73 5.60615 69.4356 4.24596 67.7246 9.93197ZM38.7813 16.8898C38.7528 20.2546 38.9524 21.5663 39.209 23.4769C42.0891 22.4304 44.7696 22.1053 47.4785 22.5074C47.393 19.8839 47.0793 17.8593 46.566 16.4621C44.0281 12.4528 40.4352 11.1524 38.7813 16.8898ZM104.709 17.4031C103.597 21.0246 103.512 22.1652 103.141 24.532C105.907 24.4835 108.93 25.4074 111.068 26.5851C112.009 23.4484 112.409 20.9105 112.295 19.1425C111.382 14.4118 107.732 12.7179 104.709 17.4031ZM67.5821 24.9597C68.7227 29.7133 70.177 35.0457 67.8387 40.9484C70.7473 39.8078 73.7699 39.6937 76.536 40.5207C75.1957 35.3308 75.1672 30.1125 76.2223 24.589C73.3707 23.6737 70.1199 23.6451 67.5821 24.9597ZM39.7793 29.0289C43.5434 32.6789 39.6367 45.0547 41.2051 46.1668C44.0852 44.6554 47.1934 44.1992 50.216 44.8551C48.1914 39.4941 47.6781 33.9621 48.391 28.0394C45.5965 27.2638 42.1746 27.5147 39.7793 29.0289ZM13.0602 32.3367C13.5449 35.3879 13.9156 36.6996 14.4004 38.2965C16.8813 36.8707 19.7328 36.2719 22.5245 36.3859C22.0312 33.848 21.3867 31.9375 20.6739 30.6543C17.9478 26.2572 13.525 27.5803 13.0602 32.3367ZM101.345 29.9699C101.145 34.7605 101.145 40.1785 97.5805 45.1402C97.6946 45.1402 97.8086 45.1117 97.9227 45.1117C100.774 45.0547 103.597 45.8816 105.85 47.2789C105.907 41.975 107.276 36.9277 109.757 31.909C106.991 30.4262 104.282 29.257 101.345 29.9699ZM15.541 43.8855C17.4801 48.0488 19.8184 52.6113 19.2196 58.2574C21.7118 56.8601 24.4921 56.3754 27.1897 56.632C25.0025 52.041 23.9959 47.1363 23.9104 41.7469C21.1729 41.5187 17.5599 42.2886 15.541 43.8855ZM67.7246 47.1363C69.1789 54.9496 71.2035 63.0195 68.8938 71.8879C72.3727 70.5191 76.3649 71.5172 79.1309 73.4847C77.1063 64.8445 76.8781 56.2613 78.0758 46.9082C74.5969 44.684 70.4906 44.4558 67.7246 47.1363ZM41.6043 52.5543C45.4254 62.5062 45.5965 70.9469 46.1383 79.3305C49.4176 76.5359 52.4688 75.5949 56.3184 76.7355C53.2672 68.5515 51.927 60.1679 51.8414 50.8433C48.277 49.0754 43.9996 49.4176 41.6043 52.5543ZM95.2993 50.9859C97.0957 60.4531 90.0524 70.4051 89.9953 76.9922C93.1891 76.5929 96.4399 78.1043 98.5215 80.1574C99.1203 80.0719 99.6621 79.9008 100.147 79.7011C99.8903 70.6047 101.687 62.2211 105.308 53.4383C102.485 50.7293 98.8067 49.275 95.2993 50.9859ZM20.1606 64.1316C23.8961 71.0609 27.375 80.1004 27.5632 84.834C29.7703 82.7523 32.6504 81.8113 35.4449 81.9539C35.559 81.9539 35.6446 81.9824 35.7301 81.9824C31.909 75.8801 29.6278 69.407 28.3816 62.0785C25.5158 61.3086 22.0027 61.7933 20.1606 64.1316ZM125.184 68.9508C124.756 70.7187 124.556 71.8879 124.385 72.8859C127.55 73.1996 130.202 74.3402 132.427 76.2222C132.911 73.7129 133.054 71.7168 132.854 70.2625C132.027 65.0726 128.092 63.6469 125.184 68.9508ZM67.5535 79.473C68.1809 86.3453 69.0364 93.189 69.0649 100.175C71.6313 99.8332 74.1977 99.7761 76.593 99.9187C76.65 93.3601 77.1633 86.6304 78.1043 79.5586C74.1692 75.4808 70.5762 75.1672 67.5535 79.473ZM122.161 78.2183C120.536 83.6648 119.11 89.4535 115.745 94.6719C118.597 96.2687 120.678 98.2648 121.933 100.917C124.014 94.5863 127.151 88.7121 131.343 82.8949C129.261 79.5871 125.868 77.3058 122.161 78.2183ZM48.0774 85.5754C49.7313 92.5902 51.6133 99.5195 52.6969 106.762C54.9211 104.995 57.5446 103.512 59.7688 102.599C59.0559 96.6109 58.6281 90.4515 58.5141 83.9215C53.9231 80.1859 50.3301 80.6707 48.0774 85.5754ZM86.716 83.9785C85.718 89.7386 84.9196 95.5558 83.6078 101.287C86.1742 102.171 88.484 103.398 90.5371 104.88C92.2196 98.8922 94.3297 92.9324 96.8676 86.773C94.0731 81.7258 90.6797 80.5281 86.716 83.9785ZM29.3141 92.248C33.0496 99.3484 37.0989 106.335 39.9504 114.12C42.0606 112.295 44.0852 110.926 46.4235 109.842C43.5434 103.084 41.1481 95.9836 39.0949 88.3129C34.2473 85.9746 30.4547 87.0011 29.3141 92.248ZM112.523 98.9207C106.164 106.991 99.377 110.355 92.0485 113.064C94.8145 115.346 96.9817 118.311 98.6071 121.305C104.139 115.46 110.555 111.097 118.283 107.475C118.112 103.626 115.945 99.9472 112.523 98.9207ZM74.5684 105.023C69.2645 105.052 63.4473 106.477 59.3125 108.559C61.7934 109.329 63.9606 110.783 65.7856 112.608C66.6125 112.58 67.468 112.637 68.2949 112.779C76.6785 108.873 84.8055 107.418 91.7918 112.865C85.9461 107.646 81.5832 105.023 74.5684 105.023ZM46.9653 115.317C43.7715 117.142 41.1196 119.908 39.9789 122.674C39.7223 127.636 41.4047 131.685 43.8285 135.877C45.1403 137.531 49.0469 138.643 53.3813 136.191C51.8985 132.255 50.4442 127.009 51.4992 123.729C53.5524 119.395 56.0903 116.401 59.7688 114.348C55.691 112.009 50.6438 113.264 46.9653 115.317ZM73.827 115.802C74.7395 116.714 75.5664 117.741 76.2793 118.825C78.1614 121.648 79.4446 124.955 80.1574 128.035C80.6422 131.314 80.3 134.337 79.6442 137.217C79.359 139.869 90.6227 141.323 96.4114 137.645C96.6395 134.223 97.0102 130.288 95.6699 126.952C93.3602 121.591 89.1969 115.83 83.9215 114.576C80.6137 113.806 76.65 114.661 73.827 115.802ZM66.3559 117.741C64.4453 117.855 62.4492 118.653 61.1375 119.509C55.8336 123.587 55.4914 126.723 57.4305 132.427C59.6262 140.097 73.9696 139.612 74.8535 135.078C75.8801 130.031 74.5969 125.611 72.002 121.648C70.4051 119.68 68.8082 117.741 66.3559 117.741Z" />
+				</mask>
+				<path
+					d="M67.7246 9.93197C67.4965 14.6085 67.8387 15.2074 68.0953 19.1425C70.7473 18.4097 73.5418 18.4924 76.0227 19.0855C76.3649 14.9222 76.1367 11.757 75.5094 9.7894C73 5.60615 69.4356 4.24596 67.7246 9.93197ZM38.7813 16.8898C38.7528 20.2546 38.9524 21.5663 39.209 23.4769C42.0891 22.4304 44.7696 22.1053 47.4785 22.5074C47.393 19.8839 47.0793 17.8593 46.566 16.4621C44.0281 12.4528 40.4352 11.1524 38.7813 16.8898ZM104.709 17.4031C103.597 21.0246 103.512 22.1652 103.141 24.532C105.907 24.4835 108.93 25.4074 111.068 26.5851C112.009 23.4484 112.409 20.9105 112.295 19.1425C111.382 14.4118 107.732 12.7179 104.709 17.4031ZM67.5821 24.9597C68.7227 29.7133 70.177 35.0457 67.8387 40.9484C70.7473 39.8078 73.7699 39.6937 76.536 40.5207C75.1957 35.3308 75.1672 30.1125 76.2223 24.589C73.3707 23.6737 70.1199 23.6451 67.5821 24.9597ZM39.7793 29.0289C43.5434 32.6789 39.6367 45.0547 41.2051 46.1668C44.0852 44.6554 47.1934 44.1992 50.216 44.8551C48.1914 39.4941 47.6781 33.9621 48.391 28.0394C45.5965 27.2638 42.1746 27.5147 39.7793 29.0289ZM13.0602 32.3367C13.5449 35.3879 13.9156 36.6996 14.4004 38.2965C16.8813 36.8707 19.7328 36.2719 22.5245 36.3859C22.0312 33.848 21.3867 31.9375 20.6739 30.6543C17.9478 26.2572 13.525 27.5803 13.0602 32.3367ZM101.345 29.9699C101.145 34.7605 101.145 40.1785 97.5805 45.1402C97.6946 45.1402 97.8086 45.1117 97.9227 45.1117C100.774 45.0547 103.597 45.8816 105.85 47.2789C105.907 41.975 107.276 36.9277 109.757 31.909C106.991 30.4262 104.282 29.257 101.345 29.9699ZM15.541 43.8855C17.4801 48.0488 19.8184 52.6113 19.2196 58.2574C21.7118 56.8601 24.4921 56.3754 27.1897 56.632C25.0025 52.041 23.9959 47.1363 23.9104 41.7469C21.1729 41.5187 17.5599 42.2886 15.541 43.8855ZM67.7246 47.1363C69.1789 54.9496 71.2035 63.0195 68.8938 71.8879C72.3727 70.5191 76.3649 71.5172 79.1309 73.4847C77.1063 64.8445 76.8781 56.2613 78.0758 46.9082C74.5969 44.684 70.4906 44.4558 67.7246 47.1363ZM41.6043 52.5543C45.4254 62.5062 45.5965 70.9469 46.1383 79.3305C49.4176 76.5359 52.4688 75.5949 56.3184 76.7355C53.2672 68.5515 51.927 60.1679 51.8414 50.8433C48.277 49.0754 43.9996 49.4176 41.6043 52.5543ZM95.2993 50.9859C97.0957 60.4531 90.0524 70.4051 89.9953 76.9922C93.1891 76.5929 96.4399 78.1043 98.5215 80.1574C99.1203 80.0719 99.6621 79.9008 100.147 79.7011C99.8903 70.6047 101.687 62.2211 105.308 53.4383C102.485 50.7293 98.8067 49.275 95.2993 50.9859ZM20.1606 64.1316C23.8961 71.0609 27.375 80.1004 27.5632 84.834C29.7703 82.7523 32.6504 81.8113 35.4449 81.9539C35.559 81.9539 35.6446 81.9824 35.7301 81.9824C31.909 75.8801 29.6278 69.407 28.3816 62.0785C25.5158 61.3086 22.0027 61.7933 20.1606 64.1316ZM125.184 68.9508C124.756 70.7187 124.556 71.8879 124.385 72.8859C127.55 73.1996 130.202 74.3402 132.427 76.2222C132.911 73.7129 133.054 71.7168 132.854 70.2625C132.027 65.0726 128.092 63.6469 125.184 68.9508ZM67.5535 79.473C68.1809 86.3453 69.0364 93.189 69.0649 100.175C71.6313 99.8332 74.1977 99.7761 76.593 99.9187C76.65 93.3601 77.1633 86.6304 78.1043 79.5586C74.1692 75.4808 70.5762 75.1672 67.5535 79.473ZM122.161 78.2183C120.536 83.6648 119.11 89.4535 115.745 94.6719C118.597 96.2687 120.678 98.2648 121.933 100.917C124.014 94.5863 127.151 88.7121 131.343 82.8949C129.261 79.5871 125.868 77.3058 122.161 78.2183ZM48.0774 85.5754C49.7313 92.5902 51.6133 99.5195 52.6969 106.762C54.9211 104.995 57.5446 103.512 59.7688 102.599C59.0559 96.6109 58.6281 90.4515 58.5141 83.9215C53.9231 80.1859 50.3301 80.6707 48.0774 85.5754ZM86.716 83.9785C85.718 89.7386 84.9196 95.5558 83.6078 101.287C86.1742 102.171 88.484 103.398 90.5371 104.88C92.2196 98.8922 94.3297 92.9324 96.8676 86.773C94.0731 81.7258 90.6797 80.5281 86.716 83.9785ZM29.3141 92.248C33.0496 99.3484 37.0989 106.335 39.9504 114.12C42.0606 112.295 44.0852 110.926 46.4235 109.842C43.5434 103.084 41.1481 95.9836 39.0949 88.3129C34.2473 85.9746 30.4547 87.0011 29.3141 92.248ZM112.523 98.9207C106.164 106.991 99.377 110.355 92.0485 113.064C94.8145 115.346 96.9817 118.311 98.6071 121.305C104.139 115.46 110.555 111.097 118.283 107.475C118.112 103.626 115.945 99.9472 112.523 98.9207ZM74.5684 105.023C69.2645 105.052 63.4473 106.477 59.3125 108.559C61.7934 109.329 63.9606 110.783 65.7856 112.608C66.6125 112.58 67.468 112.637 68.2949 112.779C76.6785 108.873 84.8055 107.418 91.7918 112.865C85.9461 107.646 81.5832 105.023 74.5684 105.023ZM46.9653 115.317C43.7715 117.142 41.1196 119.908 39.9789 122.674C39.7223 127.636 41.4047 131.685 43.8285 135.877C45.1403 137.531 49.0469 138.643 53.3813 136.191C51.8985 132.255 50.4442 127.009 51.4992 123.729C53.5524 119.395 56.0903 116.401 59.7688 114.348C55.691 112.009 50.6438 113.264 46.9653 115.317ZM73.827 115.802C74.7395 116.714 75.5664 117.741 76.2793 118.825C78.1614 121.648 79.4446 124.955 80.1574 128.035C80.6422 131.314 80.3 134.337 79.6442 137.217C79.359 139.869 90.6227 141.323 96.4114 137.645C96.6395 134.223 97.0102 130.288 95.6699 126.952C93.3602 121.591 89.1969 115.83 83.9215 114.576C80.6137 113.806 76.65 114.661 73.827 115.802ZM66.3559 117.741C64.4453 117.855 62.4492 118.653 61.1375 119.509C55.8336 123.587 55.4914 126.723 57.4305 132.427C59.6262 140.097 73.9696 139.612 74.8535 135.078C75.8801 130.031 74.5969 125.611 72.002 121.648C70.4051 119.68 68.8082 117.741 66.3559 117.741Z"
+					stroke="var(--foreground)"
+					strokeWidth="4"
+					mask="url(#path-1-outside-1_43_4)"
+				/>
+				{interactive && (
+					<HotZoneOverlay
+						zones={LEFT_HAND_HALLOWEEN_ZONES}
+						fingers={FINGERS_LEFT}
+						registeredFingers={registeredFingers}
+						selectedFinger={selectedFinger}
+						onFingerClick={onFingerClick}
+						viewBoxSize={146}
+						readerStatus={readerStatus}
+					/>
+				)}
+			</svg>
+		);
+	}
 
-  // Normal left hand — outline SVG
-  const LEFT_HAND_PATH =
-    "M277.06 11.498C267.098 11.4981 258.575 13.3869 252.448 17.1777C246.323 20.9675 242.595 26.7102 242.622 33.8506L200.429 207.431C199.446 209.701 197.476 210.667 195.293 210.55C193.092 210.432 191.003 209.206 189.965 207.189L177.943 38.3525L177.938 38.2666L177.928 38.1807C177.061 30.6191 168.024 19.5067 152.164 21.8076C144.087 22.979 137.894 27.8542 133.979 33.0225C132.01 35.6202 130.533 38.3975 129.642 41.0166C128.849 43.345 128.383 45.9574 128.835 48.3145L132.734 215.035C131.488 221.259 128.65 223.832 126.182 224.597C123.651 225.38 120.084 224.721 116.395 221.558L57.5176 116.26C54.9679 110.303 49.1728 107.137 43.584 105.869C38.0485 104.613 31.8239 104.977 26.9307 106.949L26.4619 107.146L26.1494 107.28L25.8652 107.466C17.5097 112.909 11.499 120.659 11.499 131.745V132.144L11.5781 132.534L11.5791 132.539L11.6758 133.021L11.8867 133.465L15.5 131.75L11.8867 133.466L11.8877 133.468C11.8888 133.47 11.8903 133.474 11.8926 133.479C11.8971 133.488 11.9039 133.503 11.9131 133.522C11.9315 133.561 11.9594 133.62 11.9961 133.697C12.0698 133.853 12.1802 134.087 12.3242 134.393C12.6122 135.004 13.0367 135.909 13.5811 137.075C14.6702 139.409 16.2398 142.794 18.1562 146.988C21.9897 155.378 27.2103 167.002 32.7607 179.941C43.8999 205.91 56.2358 236.878 61.4551 257.681C68.2576 284.795 67.7707 308.563 68.0557 332.792C68.3399 356.96 69.407 381.418 79.752 408.93L79.8545 409.204L79.9971 409.461C97.2028 440.514 107.098 460.172 129.314 471.242C140.36 476.746 154.219 480.04 173.099 481.98C190.802 483.8 213.166 484.449 242.123 484.496L248.003 484.498C271.852 484.476 317.369 475.447 356.473 466.577C376.123 462.12 394.31 457.665 407.582 454.324C414.219 452.654 419.629 451.261 423.381 450.286C425.257 449.799 426.719 449.416 427.713 449.154C428.209 449.024 428.589 448.923 428.845 448.855C428.973 448.822 429.07 448.796 429.136 448.778C429.164 448.771 429.186 448.765 429.202 448.761L430.021 448.558C434.177 447.566 439.179 446.921 444.646 446.232C450.36 445.513 456.533 444.752 462.151 443.466C467.724 442.19 473.221 440.303 477.381 437.055C481.746 433.646 484.5 428.831 484.5 422.372C484.5 410.409 477.491 400.438 468.128 393.624C458.758 386.805 446.564 382.761 435.007 382.734H434.827L434.647 382.75L350.654 390.125C341.138 389.479 331.628 386.373 324.482 380.563C317.39 374.797 312.418 366.218 312.103 354.044C312.445 314.721 316.341 285.177 335.857 253.929L414.006 131.998L414.138 131.793L414.243 131.573C416.862 126.126 418.499 118.78 417.555 111.624C416.592 104.33 412.9 97.0998 404.824 92.6836C396.614 88.1932 387.978 89.4116 380.997 92.8193C374.199 96.1377 368.503 101.726 365.438 107.172L278.52 225.399C274.479 229.035 269.331 230.802 265.858 230.257C264.255 230.005 263.09 229.296 262.289 228.066C261.442 226.767 260.727 224.451 260.992 220.523L299.471 44.1094L299.481 44.0586L299.491 44.0078C300.854 36.88 299.76 28.9474 296.122 22.665C292.406 16.2465 285.956 11.498 277.06 11.498Z";
+	// Normal left hand — outline SVG
+	const LEFT_HAND_PATH =
+		"M277.06 11.498C267.098 11.4981 258.575 13.3869 252.448 17.1777C246.323 20.9675 242.595 26.7102 242.622 33.8506L200.429 207.431C199.446 209.701 197.476 210.667 195.293 210.55C193.092 210.432 191.003 209.206 189.965 207.189L177.943 38.3525L177.938 38.2666L177.928 38.1807C177.061 30.6191 168.024 19.5067 152.164 21.8076C144.087 22.979 137.894 27.8542 133.979 33.0225C132.01 35.6202 130.533 38.3975 129.642 41.0166C128.849 43.345 128.383 45.9574 128.835 48.3145L132.734 215.035C131.488 221.259 128.65 223.832 126.182 224.597C123.651 225.38 120.084 224.721 116.395 221.558L57.5176 116.26C54.9679 110.303 49.1728 107.137 43.584 105.869C38.0485 104.613 31.8239 104.977 26.9307 106.949L26.4619 107.146L26.1494 107.28L25.8652 107.466C17.5097 112.909 11.499 120.659 11.499 131.745V132.144L11.5781 132.534L11.5791 132.539L11.6758 133.021L11.8867 133.465L15.5 131.75L11.8867 133.466L11.8877 133.468C11.8888 133.47 11.8903 133.474 11.8926 133.479C11.8971 133.488 11.9039 133.503 11.9131 133.522C11.9315 133.561 11.9594 133.62 11.9961 133.697C12.0698 133.853 12.1802 134.087 12.3242 134.393C12.6122 135.004 13.0367 135.909 13.5811 137.075C14.6702 139.409 16.2398 142.794 18.1562 146.988C21.9897 155.378 27.2103 167.002 32.7607 179.941C43.8999 205.91 56.2358 236.878 61.4551 257.681C68.2576 284.795 67.7707 308.563 68.0557 332.792C68.3399 356.96 69.407 381.418 79.752 408.93L79.8545 409.204L79.9971 409.461C97.2028 440.514 107.098 460.172 129.314 471.242C140.36 476.746 154.219 480.04 173.099 481.98C190.802 483.8 213.166 484.449 242.123 484.496L248.003 484.498C271.852 484.476 317.369 475.447 356.473 466.577C376.123 462.12 394.31 457.665 407.582 454.324C414.219 452.654 419.629 451.261 423.381 450.286C425.257 449.799 426.719 449.416 427.713 449.154C428.209 449.024 428.589 448.923 428.845 448.855C428.973 448.822 429.07 448.796 429.136 448.778C429.164 448.771 429.186 448.765 429.202 448.761L430.021 448.558C434.177 447.566 439.179 446.921 444.646 446.232C450.36 445.513 456.533 444.752 462.151 443.466C467.724 442.19 473.221 440.303 477.381 437.055C481.746 433.646 484.5 428.831 484.5 422.372C484.5 410.409 477.491 400.438 468.128 393.624C458.758 386.805 446.564 382.761 435.007 382.734H434.827L434.647 382.75L350.654 390.125C341.138 389.479 331.628 386.373 324.482 380.563C317.39 374.797 312.418 366.218 312.103 354.044C312.445 314.721 316.341 285.177 335.857 253.929L414.006 131.998L414.138 131.793L414.243 131.573C416.862 126.126 418.499 118.78 417.555 111.624C416.592 104.33 412.9 97.0998 404.824 92.6836C396.614 88.1932 387.978 89.4116 380.997 92.8193C374.199 96.1377 368.503 101.726 365.438 107.172L278.52 225.399C274.479 229.035 269.331 230.802 265.858 230.257C264.255 230.005 263.09 229.296 262.289 228.066C261.442 226.767 260.727 224.451 260.992 220.523L299.471 44.1094L299.481 44.0586L299.491 44.0078C300.854 36.88 299.76 28.9474 296.122 22.665C292.406 16.2465 285.956 11.498 277.06 11.498Z";
 
-  return (
-    <svg
-      width="496"
-      height="496"
-      viewBox="0 0 496 496"
-      fill="none"
-      xmlns="http://www.w3.org/2000/svg"
-      className={cn("size-full", className)}
-      aria-label="Mão esquerda"
-    >
-      <title>Mão esquerda</title>
-      <path
-        d={LEFT_HAND_PATH}
-        stroke="currentColor"
-        strokeWidth="8"
-        fill="none"
-      />
-      <HandStrokeOverlay
-        handPath={LEFT_HAND_PATH}
-        strokeWidth={8}
-        vbWidth={496}
-        vbHeight={496}
-        uid="left"
-        active={captureActive}
-        countdown={countdown}
-      />
-      {interactive && (
-        <HotZoneOverlay
-          zones={LEFT_HAND_ZONES}
-          fingers={FINGERS_LEFT}
-          registeredFingers={registeredFingers}
-          selectedFinger={selectedFinger}
-          onFingerClick={onFingerClick}
-          viewBoxSize={496}
-          readerStatus={readerStatus}
-        />
-      )}
-    </svg>
-  );
+	return (
+		<svg
+			width="496"
+			height="496"
+			viewBox="0 0 496 496"
+			fill="none"
+			xmlns="http://www.w3.org/2000/svg"
+			className={cn("size-full", className)}
+			aria-label="Mão esquerda"
+		>
+			<title>Mão esquerda</title>
+			<path
+				d={LEFT_HAND_PATH}
+				stroke="currentColor"
+				strokeWidth="8"
+				fill="none"
+			/>
+			<HandStrokeOverlay
+				handPath={LEFT_HAND_PATH}
+				strokeWidth={8}
+				vbWidth={496}
+				vbHeight={496}
+				uid="left"
+				active={captureActive}
+				countdown={countdown}
+			/>
+			{interactive && (
+				<HotZoneOverlay
+					zones={LEFT_HAND_ZONES}
+					fingers={FINGERS_LEFT}
+					registeredFingers={registeredFingers}
+					selectedFinger={selectedFinger}
+					onFingerClick={onFingerClick}
+					viewBoxSize={496}
+					readerStatus={readerStatus}
+				/>
+			)}
+		</svg>
+	);
 }
 
 // ── Public Hand component ─────────────────────────────────────────────────────
 
 export function Hand({
-  className,
-  side = "right",
-  registeredFingers = [],
-  selectedFinger = null,
-  onFingerClick,
-  interactive = false,
-  readerStatus,
-  captureActive = false,
-  countdown = 0,
+	className,
+	side = "right",
+	registeredFingers = [],
+	selectedFinger = null,
+	onFingerClick,
+	interactive = false,
+	readerStatus,
+	captureActive = false,
+	countdown = 0,
 }: HandProps) {
-  const sharedProps: InternalHandProps = {
-    className,
-    registeredFingers,
-    selectedFinger,
-    onFingerClick,
-    interactive,
-    readerStatus,
-    captureActive,
-    countdown,
-  };
+	const sharedProps: InternalHandProps = {
+		className,
+		registeredFingers,
+		selectedFinger,
+		onFingerClick,
+		interactive,
+		readerStatus,
+		captureActive,
+		countdown,
+	};
 
-  if (side === "left") {
-    return <LeftHand {...sharedProps} />;
-  }
+	if (side === "left") {
+		return <LeftHand {...sharedProps} />;
+	}
 
-  return <RightHand {...sharedProps} />;
+	return <RightHand {...sharedProps} />;
 }

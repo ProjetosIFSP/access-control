@@ -1,0 +1,480 @@
+---
+title: Sensor Biométrico ZN-53X
+description: Protocolo R30x, comandos, integração SoftwareSerial com ESP8266, fluxo de enrollment e matching, e tratamento de erros.
+---
+
+O **ZN-53X** é o módulo de sensor biométrico óptico utilizado no projeto. Ele é compatível com o protocolo **R30x** (também conhecido como protocolo R307/R308/FPM10A), amplamente suportado por bibliotecas Arduino. O sensor realiza o matching **on-device** — os templates são armazenados diretamente na flash interna do módulo.
+
+---
+
+## Especificações técnicas
+
+| Atributo | Valor |
+|---|---|
+| Protocolo de comunicação | R30x (UART serial) |
+| Baud rate padrão | 57600 bps |
+| Interface elétrica | UART TTL 3,3V / 5V |
+| Tensão de alimentação | 3,3 V – 5 V |
+| Corrente de operação | ~120 mA |
+| Capacidade de armazenamento | 127 templates (slots 1–127) |
+| Tamanho do template | 256 bytes (512 chars hex) |
+| Resolução do sensor óptico | 500 DPI |
+| Tempo de captura de imagem | ~100 ms |
+| Tempo de matching (1:N) | ~300 ms (127 templates) |
+| Taxa de falsa aceitação (FAR) | < 0,001% |
+| Taxa de falsa rejeição (FRR) | < 0,1% |
+
+---
+
+## Pinagem e conexão com o NodeMCU v3
+
+O ZN-53X se comunica via **UART serial**. Como o ESP8266 possui apenas uma UART de hardware (usada pelo monitor serial), a comunicação com o sensor utiliza **SoftwareSerial** em pinos alternativos.
+
+### Conexão física
+
+| Pino ZN-53X | Descrição | Pino NodeMCU | GPIO |
+|---|---|---|---|
+| VCC | Alimentação | VIN (5V) ou 3,3V | — |
+| GND | Terra | GND | — |
+| TX | Transmissão de dados | D9 (RX software) | GPIO3 |
+| RX | Recepção de dados | D10 (TX software) | GPIO1 |
+
+> ⚠️ **GPIO1 e GPIO3** são os pinos UART0 do ESP8266. Durante o upload de firmware, eles são usados pela UART de boot. Considere usar outros pinos (ex: GPIO13/GPIO15) para SoftwareSerial se o upload com o sensor conectado causar problemas.
+
+### Diagrama de conexão
+
+```
+NodeMCU v3                ZN-53X
+─────────────             ──────────────
+VIN (5V)   ──────────────► VCC
+GND        ──────────────► GND
+D10 (TX)   ──────────────► RX
+D9  (RX)   ◄──────────────  TX
+```
+
+---
+
+## Protocolo R30x
+
+O protocolo R30x é baseado em pacotes UART com a seguinte estrutura:
+
+```
+┌────────┬────────┬────────┬──────────┬──────────┬─────────┬──────────────┬──────────┐
+│ Header │ Header │ Addr   │ Addr     │ Addr     │ Addr    │ Pkg Id       │ Pkg Len  │
+│ 0xEF   │ 0x01   │ 0xFF   │ 0xFF     │ 0xFF     │ 0xFF    │ 0x01 (cmd)   │ 2 bytes  │
+│        │        │        │          │          │         │ 0x02 (data)  │          │
+│        │        │        │          │          │         │ 0x07 (ack)   │          │
+│        │        │        │          │          │         │ 0x08 (end)   │          │
+└────────┴────────┴────────┴──────────┴──────────┴─────────┴──────────────┴──────────┘
+```
+
+Cada pacote termina com um **checksum de 2 bytes** (soma de todos os bytes do campo `Pkg Id` até o último byte de dados).
+
+### Códigos de confirmação (ACK)
+
+| Código | Constante | Significado |
+|---|---|---|
+| `0x00` | `FINGERPRINT_OK` | Sucesso |
+| `0x01` | `FINGERPRINT_PACKETRECIEVEERR` | Erro no pacote recebido |
+| `0x02` | `FINGERPRINT_NOFINGER` | Nenhum dedo detectado |
+| `0x03` | `FINGERPRINT_IMAGEFAIL` | Falha na captura da imagem |
+| `0x06` | `FINGERPRINT_IMAGEMESS` | Imagem muito bagunçada |
+| `0x07` | `FINGERPRINT_FEATUREFAIL` | Falha ao extrair características |
+| `0x08` | `FINGERPRINT_NOMATCH` | Dedo não encontrado nos templates |
+| `0x09` | `FINGERPRINT_NOTFOUND` | Nenhum template encontrado |
+| `0x0A` | `FINGERPRINT_ENROLLMISMATCH` | As duas capturas não correspondem |
+| `0x0B` | `FINGERPRINT_BADLOCATION` | Slot de armazenamento inválido |
+| `0x0C` | `FINGERPRINT_DBRANGEFAIL` | Número do slot fora do intervalo |
+| `0x13` | `FINGERPRINT_UPLOADFAIL` | Falha ao fazer upload do template |
+| `0x15` | `FINGERPRINT_DELETEFAIL` | Falha ao excluir template |
+| `0x18` | `FINGERPRINT_PASSFAIL` | Senha incorreta |
+
+---
+
+## Comandos principais
+
+### `GenImg` — Capturar imagem
+
+Instrui o sensor a capturar uma imagem do dedo presente. O dedo deve estar posicionado sobre o sensor antes de enviar este comando.
+
+```cpp
+uint8_t result = finger.getImage();
+
+switch (result) {
+  case FINGERPRINT_OK:
+    Serial.println("Imagem capturada com sucesso");
+    break;
+  case FINGERPRINT_NOFINGER:
+    Serial.println("Nenhum dedo detectado");
+    break;
+  case FINGERPRINT_IMAGEFAIL:
+    Serial.println("Falha na captura");
+    break;
+}
+```
+
+---
+
+### `Img2Tz` — Converter imagem em vetor de características
+
+Processa a imagem capturada e gera um vetor de características armazenado em um dos dois buffers internos do sensor.
+
+```cpp
+// buffer = 1 (primeira passagem) ou 2 (segunda passagem)
+uint8_t result = finger.image2Tz(1);
+
+if (result == FINGERPRINT_OK) {
+  Serial.println("Vetor extraído e armazenado no buffer 1");
+} else if (result == FINGERPRINT_IMAGEMESS) {
+  Serial.println("Imagem muito bagunçada — peça para reposicionar o dedo");
+} else if (result == FINGERPRINT_FEATUREFAIL) {
+  Serial.println("Falha ao extrair características");
+}
+```
+
+---
+
+### `CreateModel` — Criar modelo combinado
+
+Combina os vetores dos buffers 1 e 2 em um modelo biométrico final. Este comando só deve ser chamado após duas capturas bem-sucedidas com `Img2Tz(1)` e `Img2Tz(2)`.
+
+```cpp
+uint8_t result = finger.createModel();
+
+if (result == FINGERPRINT_OK) {
+  Serial.println("Modelo criado com sucesso");
+} else if (result == FINGERPRINT_ENROLLMISMATCH) {
+  Serial.println("As duas impressões não correspondem — tente novamente");
+}
+```
+
+---
+
+### `StoreModel` — Armazenar modelo em um slot
+
+Salva o modelo criado por `CreateModel` em um slot específico da flash interna do sensor (1–127).
+
+```cpp
+uint8_t slotId = 3;
+uint8_t result = finger.storeModel(slotId);
+
+if (result == FINGERPRINT_OK) {
+  Serial.printf("Template armazenado no slot %d\n", slotId);
+} else if (result == FINGERPRINT_BADLOCATION) {
+  Serial.println("Slot inválido");
+}
+```
+
+---
+
+### `GetModel` + `UploadTemplate` — Extrair template para upload
+
+Lê o modelo de um slot (ou do buffer após `CreateModel`) e transfere os 256 bytes via UART para o microcontrolador. Este é o comando usado para obter o template hexadecimal que será enviado via MQTT ao backend.
+
+```cpp
+// Após CreateModel(), o modelo fica no CharBuffer1
+// Use UploadTemplate para extrair via UART
+uint8_t templateBuffer[256];
+uint16_t templateSize = 0;
+
+// Solicita upload do template do buffer 1
+finger.writePacket(finger.theAddress, FINGERPRINT_UPLOAD, 2, {0x01});
+
+// Lê os pacotes de dados (pode chegar em múltiplos pacotes de 128 bytes)
+uint8_t byte;
+while (finger.readPacket(&byte)) {
+  templateBuffer[templateSize++] = byte;
+}
+
+// Converte para string hexadecimal (512 chars)
+String templateHex = "";
+for (int i = 0; i < 256; i++) {
+  if (templateBuffer[i] < 16) templateHex += "0";
+  templateHex += String(templateBuffer[i], HEX);
+}
+// templateHex agora tem 512 caracteres prontos para envio via MQTT
+```
+
+> ℹ️ A biblioteca **Adafruit Fingerprint Sensor Library** abstrai a maioria desses comandos. O acesso de baixo nível ao `UploadTemplate` pode exigir chamadas diretas via `writePacket()` / `readPacket()`.
+
+---
+
+### `Search` — Busca de matching (1:N)
+
+Compara o vetor no buffer 1 contra todos os templates armazenados na flash e retorna o slot correspondente, se encontrado.
+
+```cpp
+uint16_t matchedId    = 0;
+uint16_t matchedScore = 0;
+
+uint8_t result = finger.fingerSearch();
+
+if (result == FINGERPRINT_OK) {
+  matchedId    = finger.fingerID;
+  matchedScore = finger.confidence;
+  Serial.printf("Match! Slot: %d, Confiança: %d\n", matchedId, matchedScore);
+} else if (result == FINGERPRINT_NOTFOUND) {
+  Serial.println("Nenhum template correspondente encontrado");
+}
+```
+
+O campo `confidence` (0–100) indica a qualidade da correspondência. Valores acima de **50** são considerados confiáveis.
+
+---
+
+### `DeleteModel` — Remover template de um slot
+
+Remove um template específico da flash interna do sensor.
+
+```cpp
+uint8_t slotId = 3;
+uint8_t result = finger.deleteModel(slotId);
+
+if (result == FINGERPRINT_OK) {
+  Serial.printf("Template do slot %d removido\n", slotId);
+}
+```
+
+---
+
+## Inicialização com SoftwareSerial
+
+```cpp
+#include <SoftwareSerial.h>
+#include <Adafruit_Fingerprint.h>
+
+// Pinos SoftwareSerial
+SoftwareSerial fpSerial(3, 1); // RX, TX (GPIO3, GPIO1 no ESP8266)
+
+Adafruit_Fingerprint finger = Adafruit_Fingerprint(&fpSerial);
+
+void fingerprintSetup() {
+  finger.begin(57600);
+
+  if (finger.verifyPassword()) {
+    Serial.println("ZN-53X encontrado e senha verificada!");
+  } else {
+    Serial.println("ERRO: sensor biométrico não encontrado ou senha incorreta.");
+    // Entrar em loop de erro ou tentar reconexão
+    while (true) { delay(1000); }
+  }
+
+  // Exibe capacidade do sensor
+  finger.getParameters();
+  Serial.printf("Capacidade: %d templates\n", finger.capacity);
+  Serial.printf("Templates armazenados: %d\n", finger.templateCount);
+}
+```
+
+---
+
+## Fluxo completo de enrollment
+
+O enrollment captura o dedo duas vezes para gerar um modelo biométrico robusto. Cada passagem deve ser feita com o dedo levantado e reposicionado entre as capturas.
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                   FLUXO DE ENROLLMENT                          │
+└─────────────────────────────────────────────────────────────────┘
+
+Passagem 1:
+  1. Aguardar dedo no sensor
+  2. GenImg()       → capturar imagem
+  3. Img2Tz(1)      → extrair vetor para buffer 1
+  4. Aguardar dedo ser retirado
+  5. Indicar ao usuário para reposicionar o dedo
+
+Passagem 2:
+  6. Aguardar dedo no sensor
+  7. GenImg()       → capturar imagem
+  8. Img2Tz(2)      → extrair vetor para buffer 2
+
+Criação do modelo:
+  9. CreateModel()  → combinar buffer 1 + buffer 2
+  10. Se ENROLLMISMATCH → pedir nova tentativa (voltar ao passo 1)
+
+Extração do template:
+  11. GetModel() + UploadTemplate → 256 bytes via UART
+  12. Converter para hex (512 chars)
+  13. Enviar via MQTT: door/{id}/enrollment-result
+```
+
+### Implementação da máquina de estados
+
+```cpp
+enum EnrollStep {
+  ENROLL_WAIT_FIRST,
+  ENROLL_REMOVE_FINGER,
+  ENROLL_WAIT_SECOND,
+  ENROLL_CREATE_MODEL,
+  ENROLL_UPLOAD_TEMPLATE
+};
+
+EnrollStep step = ENROLL_WAIT_FIRST;
+
+// Chamada a cada iteração do loop (sem delay)
+void enrollmentLoop() {
+  switch (step) {
+
+    case ENROLL_WAIT_FIRST:
+      if (finger.getImage() == FINGERPRINT_OK) {
+        if (finger.image2Tz(1) == FINGERPRINT_OK) {
+          ledBlueSolid();
+          step = ENROLL_REMOVE_FINGER;
+        }
+      }
+      break;
+
+    case ENROLL_REMOVE_FINGER:
+      // Aguarda dedo ser retirado (getImage retorna NOFINGER)
+      if (finger.getImage() == FINGERPRINT_NOFINGER) {
+        ledBlueBlinkStart();
+        step = ENROLL_WAIT_SECOND;
+      }
+      break;
+
+    case ENROLL_WAIT_SECOND:
+      if (finger.getImage() == FINGERPRINT_OK) {
+        if (finger.image2Tz(2) == FINGERPRINT_OK) {
+          step = ENROLL_CREATE_MODEL;
+        }
+      }
+      break;
+
+    case ENROLL_CREATE_MODEL: {
+      uint8_t result = finger.createModel();
+      if (result == FINGERPRINT_OK) {
+        step = ENROLL_UPLOAD_TEMPLATE;
+      } else if (result == FINGERPRINT_ENROLLMISMATCH) {
+        // Impressões não correspondem — reiniciar
+        step = ENROLL_WAIT_FIRST;
+        ledBlueBlinkStart();
+      }
+      break;
+    }
+
+    case ENROLL_UPLOAD_TEMPLATE: {
+      String templateHex = uploadTemplateAsHex();
+      uint8_t quality    = finger.confidence;
+
+      publishEnrollmentResult(enrollmentId, templateHex, quality, "SUCCESS");
+
+      // Retornar ao modo fechadura
+      currentMode = MODE_DOOR;
+      step        = ENROLL_WAIT_FIRST;
+      ledOff();
+      break;
+    }
+  }
+}
+```
+
+---
+
+## Fluxo completo de matching (acesso)
+
+```cpp
+String readFingerprintTemplate() {
+  // Etapa 1: capturar imagem
+  uint8_t result = finger.getImage();
+  if (result != FINGERPRINT_OK) return "";
+
+  // Etapa 2: extrair vetor de características
+  result = finger.image2Tz(1);
+  if (result != FINGERPRINT_OK) return "";
+
+  // Etapa 3 (opcional): matching local antes de enviar ao backend
+  result = finger.fingerSearch();
+  if (result == FINGERPRINT_OK) {
+    // Slot encontrado localmente — mas ainda enviamos ao backend
+    // para verificação de permissão e registro de log
+    Serial.printf("Match local no slot %d (confiança: %d)\n",
+                  finger.fingerID, finger.confidence);
+  }
+
+  // Etapa 4: extrair template para envio remoto
+  return uploadTemplateAsHex();
+}
+```
+
+---
+
+## Tratamento de erros comuns
+
+| Situação | Código | Causa provável | Solução |
+|---|---|---|---|
+| Sensor não responde | — | Fiação incorreta ou baud rate errado | Verificar conexões TX/RX e `finger.begin(57600)` |
+| `IMAGEFAIL` constante | `0x03` | Sensor sujo ou danificado | Limpar a janela óptica com pano seco |
+| `IMAGEMESS` | `0x06` | Dedo mal posicionado ou úmido | Pedir ao usuário para secar e reposicionar |
+| `FEATUREFAIL` | `0x07` | Qualidade insuficiente da imagem | Tentar novamente (normal em ~5% das leituras) |
+| `ENROLLMISMATCH` | `0x0A` | As duas passagens não combinam | Reiniciar o enrollment do zero |
+| `NOTFOUND` no search | `0x09` | Template não está nos slots locais | Verificar se o template foi sincronizado via `sync-credentials` |
+| Upload incompleto | `0x13` | Falha de comunicação UART durante upload | Implementar retry com timeout |
+
+---
+
+## Cuidados com a memória no ESP8266
+
+O ESP8266 possui apenas **96 KB de RAM**. O template de 256 bytes mais a string hex de 512 chars consomem ~768 bytes. Em conjunto com as bibliotecas MQTT e JSON, o uso de memória pode ser crítico.
+
+### Boas práticas
+
+```cpp
+// ✅ Reutilizar buffer estático — não alocar na heap
+static uint8_t templateBuffer[256];
+static char    templateHex[513];  // 512 chars + null terminator
+
+void bufferToHex(const uint8_t* buf, size_t len, char* out) {
+  static const char hexChars[] = "0123456789abcdef";
+  for (size_t i = 0; i < len; i++) {
+    out[i * 2]     = hexChars[(buf[i] >> 4) & 0x0F];
+    out[i * 2 + 1] = hexChars[buf[i] & 0x0F];
+  }
+  out[len * 2] = '\0';
+}
+
+// ❌ Evitar — cria muitas cópias String na heap
+String templateHex = "";
+for (int i = 0; i < 256; i++) {
+  templateHex += String(templateBuffer[i], HEX);  // fragmentação de heap
+}
+```
+
+Use `ESP.getFreeHeap()` durante o desenvolvimento para monitorar o uso de memória e identificar vazamentos.
+
+---
+
+## Dependência no PlatformIO
+
+```ini
+; core/platformio.ini
+lib_deps =
+  adafruit/Adafruit Fingerprint Sensor Library @ ^2.1.0
+```
+
+A biblioteca encapsula o protocolo R30x completo e fornece as funções `getImage()`, `image2Tz()`, `createModel()`, `storeModel()`, `deleteModel()` e `fingerSearch()`.
+
+Para comandos de baixo nível não cobertos pela biblioteca (como `UploadTemplate 0x08`), use os métodos `writePacket()` e `readPacket()` diretamente.
+
+---
+
+## Referência dos comandos R30x
+
+| Comando | Código hex | Parâmetros principais | Retorno |
+|---|---|---|---|
+| `GenImg` | `0x01` | — | Imagem no buffer de imagem |
+| `Img2Tz` | `0x02` | `bufferId` (1 ou 2) | Vetor no CharBuffer N |
+| `Match` | `0x03` | — | Score de correspondência (1:1) |
+| `Search` | `0x04` | `bufferId`, `start`, `count` | `fingerID`, `score` |
+| `CreateModel` | `0x05` | — | Modelo em CharBuffer1 |
+| `StoreModel` | `0x06` | `bufferId`, `pageId` | — |
+| `GetModel` | `0x07` | `bufferId` | — |
+| `UploadTemplate` | `0x08` | `bufferId` | Stream de 256 bytes |
+| `DownloadTemplate` | `0x09` | — | — |
+| `GetImg` | `0x0A` | — | Stream de imagem |
+| `UploadImg` | `0x0B` | — | — |
+| `DeleteModel` | `0x0C` | `pageId`, `count` | — |
+| `Empty` | `0x0D` | — | Apaga todos os templates |
+| `SetSysPara` | `0x0E` | `paramNum`, `value` | — |
+| `ReadSysPara` | `0x0F` | — | Parâmetros do sistema |
+| `Handshake` | `0x40` | — | Verifica senha |

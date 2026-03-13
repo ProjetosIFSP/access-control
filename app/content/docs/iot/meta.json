@@ -1,0 +1,8 @@
+{
+  "title": "IoT & MQTT",
+  "pages": [
+    "protocolo-mqtt",
+    "fluxo-acesso",
+    "fluxo-enrollment"
+  ]
+}

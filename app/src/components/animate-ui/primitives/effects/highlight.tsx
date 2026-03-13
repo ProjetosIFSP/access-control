@@ -41,8 +41,7 @@ type HighlightContextType<T extends string> = {
 };
 
 const HighlightContext = React.createContext<
-	// eslint-disable-next-line @typescript-eslint/no-explicit-any
-	HighlightContextType<any> | undefined
+	HighlightContextType<string> | undefined
 >(undefined);
 
 function useHighlight<T extends string>(): HighlightContextType<T> {
@@ -326,6 +325,7 @@ function Highlight<T extends React.ElementType = "div">({
 					? render(children)
 					: render(
 							React.Children.map(children, (child, index) => (
+								// biome-ignore lint/suspicious/noArrayIndexKey: highlight children have no stable identity
 								<HighlightItem key={index} className={props?.itemsClassName}>
 									{child}
 								</HighlightItem>

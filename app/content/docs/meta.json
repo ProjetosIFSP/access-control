@@ -1,0 +1,12 @@
+{
+  "title": "Documentação",
+  "pages": [
+    "index",
+    "---Guias---",
+    "guia",
+    "---Referência---",
+    "api",
+    "iot",
+    "hardware"
+  ]
+}
