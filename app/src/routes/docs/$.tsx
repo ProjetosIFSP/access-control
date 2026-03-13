@@ -117,7 +117,12 @@ function DocContent({
 	const toc = mdxModule.toc ?? [];
 
 	return (
-		<DocsPage toc={toc} full={full}>
+		<DocsPage
+			toc={toc}
+			full={full}
+			tableOfContent={{ style: "clerk" }}
+			tableOfContentPopover={{ style: "clerk" }}
+		>
 			<DocsTitle>{title}</DocsTitle>
 			<DocsDescription>{description}</DocsDescription>
 			<DocsBody>

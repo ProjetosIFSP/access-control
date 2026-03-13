@@ -8,3 +8,8 @@ dist/
 
 .vscode/*
 .claude/*
+.codex/*
+
+CLAUDE.md
+CODEX.md
+AGENTS.md
