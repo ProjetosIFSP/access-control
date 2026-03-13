@@ -1,10 +1,18 @@
-@import "tailwindcss";
 @import "fumadocs-ui/css/neutral.css";
 @import "fumadocs-ui/css/preset.css";
+@import "tailwindcss";
 
 @import "tw-animate-css";
 
 @custom-variant dark (&:is(.dark *));
+
+.fd-sidebar,
+.fd-sidebar-content,
+[data-sidebar], [data-sidebar-placeholder], [data-sidebar-panel],
+#nd-sidebar, #nd-sidebar-mobile {
+  @apply bg-zinc-200 text-zinc-950 dark:bg-zinc-950 dark:text-zinc-50 border-none shadow-none;
+}
+
 
 @layer utilities {
   /* Hide scrollbar for Chrome, Safari and Opera */
