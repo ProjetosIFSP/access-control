@@ -4,7 +4,7 @@ import type { Root } from "fumadocs-core/page-tree";
 import { DocsLayout } from "fumadocs-ui/layouts/docs";
 import { RootProvider } from "fumadocs-ui/provider/tanstack";
 import { Loader2 } from "lucide-react";
-import appLogo from "@/assets/images/nameblack.png";
+import { Header } from "@/components/header";
 
 // Handler roda apenas no servidor — compilador substitui por RPC stub no cliente
 const fetchPageTree = createServerFn({ method: "GET" }).handler(async () => {
@@ -13,8 +13,7 @@ const fetchPageTree = createServerFn({ method: "GET" }).handler(async () => {
 });
 
 export const Route = createFileRoute("/docs")({
-	loader: async (): Promise<Root> =>
-		JSON.parse((await fetchPageTree()) as string),
+	loader: async () => JSON.parse((await fetchPageTree()) as string),
 	component: DocsLayoutComponent,
 	// Exibido enquanto o loader do pageTree ainda não resolveu
 	pendingComponent: DocsPending,
@@ -37,20 +36,12 @@ function DocsLayoutComponent() {
 			<DocsLayout
 				tree={pageTree}
 				nav={{
-					title: (
-						<span className="inline-flex items-center gap-2">
-							<img
-								src={appLogo}
-								alt="Logo do Controle de Acesso IoT"
-								className="h-7 w-auto rounded-sm object-contain"
-							/>
-							<span className="text-sm font-semibold md:text-base">
-								Controle de Acesso IoT
-							</span>
-						</span>
-					),
+					component: <Header docsMode />,
 					// url raiz da documentação
 					url: "/docs",
+				}}
+				searchToggle={{
+					enabled: true,
 				}}
 				links={[
 					{
@@ -60,8 +51,8 @@ function DocsLayoutComponent() {
 					},
 				]}
 				sidebar={{
-					// Permite colapsar a sidebar no desktop
-					collapsible: true,
+					// O controle de collapse fica no Header personalizado
+					collapsible: false,
 				}}
 			>
 				<Outlet />

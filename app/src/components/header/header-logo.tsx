@@ -139,8 +139,9 @@ export function HeaderLogo({ className }: HeaderLogoProps) {
 			onMouseEnter={handleMouseEnter}
 			onMouseLeave={handleMouseLeave}
 		>
-			<div className="flex group items-center text-sm md:text-xl font-bold text-zinc-900 dark:text-zinc-50 whitespace-nowrap">
-				C{/** biome-ignore lint/a11y/noSvgWithoutTitle: evitar tooltip */}
+			<div className="flex group items-center font-bold text-zinc-900 dark:text-zinc-50 whitespace-nowrap">
+				<span className="hidden text-sm md:inline md:text-xl">C</span>
+				{/** biome-ignore lint/a11y/noSvgWithoutTitle: evitar tooltip */}
 				<svg
 					ref={svgRef}
 					width="200"
@@ -171,7 +172,9 @@ export function HeaderLogo({ className }: HeaderLogoProps) {
 						/>
 					))}
 				</svg>
-				NTROLE DE ACESSO
+				<span className="hidden text-sm md:inline md:text-xl">
+					NTROLE DE ACESSO
+				</span>
 			</div>
 		</Link>
 	);

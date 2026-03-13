@@ -1,5 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
+import { useSearchContext } from "fumadocs-ui/contexts/search";
+import { Search } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Item, ItemContent, ItemDescription, ItemTitle } from "../ui/item";
 import {
@@ -14,10 +16,40 @@ import {
 
 const API_BASE_URL = import.meta.env.VITE_API_URL ?? "http://localhost:3333";
 
+interface HeaderNavProps {
+	docsMode?: boolean;
+}
+
+function DocsSearchButton() {
+	const { enabled, hotKey, setOpenSearch } = useSearchContext();
+
+	if (!enabled) return null;
+
+	const hotKeyLabel = hotKey[0]?.display;
+
+	return (
+		<button
+			type="button"
+			onClick={() => setOpenSearch(true)}
+			className={cn(
+				"inline-flex items-center gap-2 rounded-full border border-zinc-200 bg-white/70 px-3 py-2 text-sm text-zinc-700 backdrop-blur-sm transition-colors hover:bg-white dark:border-zinc-700 dark:bg-zinc-800/70 dark:text-zinc-200 dark:hover:bg-zinc-800",
+			)}
+		>
+			<Search className="size-4" />
+			<span>Pesquisar</span>
+			{hotKeyLabel && (
+				<span className="hidden rounded bg-zinc-100 px-1.5 py-0.5 text-xs text-zinc-500 dark:bg-zinc-700/70 dark:text-zinc-300 lg:inline">
+					{hotKeyLabel}
+				</span>
+			)}
+		</button>
+	);
+}
+
 /**
  * Central navigation menu with dropdown categories.
  */
-export function HeaderNav() {
+export function HeaderNav({ docsMode = false }: HeaderNavProps) {
 	const { data } = useQuery({
 		queryKey: ["users-me"],
 		queryFn: async () => {
@@ -36,10 +68,11 @@ export function HeaderNav() {
 	return (
 		<NavigationMenu
 			className={cn(
-				"hidden md:flex absolute left-1/2 -translate-x-1/2 bg-white/70 backdrop-blur-sm py-2 px-4 transition-all rounded-full",
+				"hidden md:flex absolute left-1/2 -translate-x-1/2 bg-white/70 backdrop-blur-sm py-2 px-4 transition-all rounded-full items-center gap-2",
 				"dark:bg-zinc-800/70",
 			)}
 		>
+			{docsMode && <DocsSearchButton />}
 			<NavigationMenuList>
 				{isAdmin && (
 					<NavigationMenuItem>
