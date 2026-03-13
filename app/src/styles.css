@@ -37,6 +37,12 @@
   }
 }
 
+@media (min-width: 768px) {
+  #nd-page {
+    margin-top: var(--docs-header-offset);
+  }
+}
+
 #nd-sidebar > div.flex.flex-col.border-t.p-4.pt-2.empty\:hidden {
   @apply border-none;
 }

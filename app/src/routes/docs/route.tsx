@@ -41,15 +41,11 @@ function DocsLayoutComponent() {
 					url: "/docs",
 				}}
 				searchToggle={{
-					enabled: true,
+					enabled: false,
 				}}
-				links={[
-					{
-						type: "main",
-						text: "← Portal",
-						url: "/",
-					},
-				]}
+				themeSwitch={{
+					enabled: false,
+				}}
 				sidebar={{
 					// O controle de collapse fica no Header personalizado
 					collapsible: false,
