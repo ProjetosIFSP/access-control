@@ -4,7 +4,8 @@ import type { Root } from "fumadocs-core/page-tree";
 import { DocsLayout } from "fumadocs-ui/layouts/docs";
 import { RootProvider } from "fumadocs-ui/provider/tanstack";
 import { Loader2 } from "lucide-react";
-import appLogo from "@/assets/images/nameblack.png";
+import { useEffect } from "react";
+import { Header } from "@/components/header";
 
 // Handler roda apenas no servidor — compilador substitui por RPC stub no cliente
 const fetchPageTree = createServerFn({ method: "GET" }).handler(async () => {
@@ -25,6 +26,15 @@ export const Route = createFileRoute("/docs")({
 function DocsLayoutComponent() {
 	const pageTree = Route.useLoaderData() as Root;
 
+	useEffect(() => {
+		const savedTheme = window.localStorage.getItem("theme");
+		const prefersDark = window.matchMedia(
+			"(prefers-color-scheme: dark)",
+		).matches;
+		const isDark = savedTheme ? savedTheme === "dark" : prefersDark;
+		document.documentElement.classList.toggle("dark", isDark);
+	}, []);
+
 	return (
 		<RootProvider
 			i18n={{
@@ -34,24 +44,12 @@ function DocsLayoutComponent() {
 				},
 			}}
 		>
+			<Header showDocsSearch />
 			<DocsLayout
 				tree={pageTree}
-				nav={{
-					title: (
-						<span className="inline-flex items-center gap-2">
-							<img
-								src={appLogo}
-								alt="Logo do Controle de Acesso IoT"
-								className="h-7 w-auto rounded-sm object-contain"
-							/>
-							<span className="text-sm font-semibold md:text-base">
-								Controle de Acesso IoT
-							</span>
-						</span>
-					),
-					// url raiz da documentação
-					url: "/docs",
-				}}
+				nav={{ enabled: false }}
+				themeSwitch={{ enabled: false }}
+				searchToggle={{ enabled: false }}
 				links={[
 					{
 						type: "main",

@@ -77,6 +77,23 @@ code {
   --sidebar-accent-foreground: oklch(0.21 0.006 285.885);
   --sidebar-border: oklch(0.92 0.004 286.32);
   --sidebar-ring: oklch(0.871 0.006 286.286);
+
+  /* Keep Fumadocs colors aligned with app design tokens. */
+  --fd-background: var(--background);
+  --fd-foreground: var(--foreground);
+  --fd-card: var(--background);
+  --fd-card-foreground: var(--card-foreground);
+  --fd-popover: var(--popover);
+  --fd-popover-foreground: var(--popover-foreground);
+  --fd-primary: var(--primary);
+  --fd-primary-foreground: var(--primary-foreground);
+  --fd-secondary: var(--background);
+  --fd-secondary-foreground: var(--foreground);
+  --fd-muted: var(--background);
+  --fd-muted-foreground: var(--muted-foreground);
+  --fd-accent: var(--accent);
+  --fd-accent-foreground: var(--accent-foreground);
+  --fd-border: var(--border);
 }
 
 .dark {
@@ -112,6 +129,22 @@ code {
   --sidebar-accent-foreground: oklch(0.985 0 0);
   --sidebar-border: oklch(0.274 0.006 286.033);
   --sidebar-ring: oklch(0.442 0.017 285.786);
+
+  --fd-background: var(--background);
+  --fd-foreground: var(--foreground);
+  --fd-card: var(--background);
+  --fd-card-foreground: var(--card-foreground);
+  --fd-popover: var(--popover);
+  --fd-popover-foreground: var(--popover-foreground);
+  --fd-primary: var(--primary);
+  --fd-primary-foreground: var(--primary-foreground);
+  --fd-secondary: var(--background);
+  --fd-secondary-foreground: var(--foreground);
+  --fd-muted: var(--background);
+  --fd-muted-foreground: var(--muted-foreground);
+  --fd-accent: var(--accent);
+  --fd-accent-foreground: var(--accent-foreground);
+  --fd-border: var(--border);
 }
 
 @theme inline {
@@ -159,6 +192,23 @@ code {
   }
   body {
     @apply bg-background text-foreground;
+  }
+}
+
+@layer components {
+  /* Unify docs regions (sidebar, content, TOC) to the same background base. */
+  .fd-layout,
+  .fd-sidebar,
+  .fd-sidebar-content,
+  .fd-toc,
+  .fd-toc .fd-scroll-container,
+  [data-sidebar],
+  [data-sidebar-placeholder],
+  [data-sidebar-panel],
+  [data-toc],
+  #nd-sidebar,
+  #nd-sidebar-mobile {
+    background-color: var(--fd-background);
   }
 }
 
