@@ -196,19 +196,15 @@ code {
 }
 
 @layer components {
-  /* Unify docs regions (sidebar, content, TOC) to the same background base. */
-  .fd-layout,
+  /* Unify docs sidebar to the same background as the app body. */
   .fd-sidebar,
   .fd-sidebar-content,
-  .fd-toc,
-  .fd-toc .fd-scroll-container,
   [data-sidebar],
   [data-sidebar-placeholder],
   [data-sidebar-panel],
-  [data-toc],
   #nd-sidebar,
   #nd-sidebar-mobile {
-    background-color: var(--fd-background);
+    @apply bg-zinc-200 text-zinc-950 dark:bg-zinc-950 dark:text-zinc-50;
   }
 }
 
