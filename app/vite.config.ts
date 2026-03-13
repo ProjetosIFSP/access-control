@@ -51,13 +51,12 @@ const config = defineConfig({
       "@tanstack/router-core",
       "@tanstack/router-core/ssr/client",
       // Fumadocs — pré-carregados para evitar re-otimização ao entrar em /docs
-      "fumadocs-ui",
+      // Nota: "fumadocs-ui" e "fumadocs-core" não têm entry "." — usar apenas sub-paths
       "fumadocs-ui/layouts/docs",
       "fumadocs-ui/page",
       "fumadocs-ui/mdx",
       "fumadocs-ui/provider/tanstack",
       "fumadocs-ui/components/card",
-      "fumadocs-core",
       "fumadocs-core/toc",
       "fumadocs-core/source",
       "fumadocs-core/page-tree",
