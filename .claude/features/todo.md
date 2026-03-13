@@ -1,6 +1,7 @@
 # Todo — Sistema de Controle de Acesso IoT
 
-> Última atualização: **DOCS-001** — Documentação completa criada com FumaDocs. 22 arquivos MDX cobrindo guias, API REST, protocolo MQTT e hardware. Rotas `/docs/$` e `/api/search` implementadas. Ver `implemented.md` → DOCS-001.
+> Última atualização: **TEST-001 + ASSETS-001** — Ícones e metadata portados da branch `homologation` para `development` (`favicon.svg`, `app-icon.svg`, `manifest.json` corrigido). Branch `tanstack-start-migration` deletada. 415 testes passando: 86 unitários para `services/users`, 174 unitários para `services/rooms`, 103 de performance para biometria/cn/query keys/URLs. Ver `implemented.md` → TEST-001.
+> Última atualização anterior: **SSE-001** — Atualização em tempo real da página de monitoramento de salas via Server-Sent Events. Endpoint `GET /rooms/events` criado no backend; módulo `sse-bus.ts` para pub/sub em memória; hook `useRoomEvents` no frontend invalida a query do TanStack Query ao receber eventos. Ver `implemented.md` → SSE-001.
 > Última atualização anterior: **UI-020 / UI-021** — Migração completa do `app/` de TanStack Router (Vite SPA) para TanStack Start (SSR + Vinxi). Pasta `app/` recriada do zero. FumaDocs integrado com rota `/docs/$`, API de busca `/api/search` e página "Hello World" em MDX. Dev server subindo limpo em ~2s. Ver `implemented.md` → UI-020 e UI-021.
 > Última atualização anterior: **HW-BIOMETRIC-ESP8266** — Tutorial de conexão e firmware de teste criados para NodeMCU v3 + ZN-53X + A21 UART. Dois sensores testáveis simultaneamente via `#define DUAL_SENSOR 1`. Ver `.claude/test/esp8266-biometric/`. PERM-005 resolvido; broker IoT corrigido (métodos HTTP, paths, sensorProtocol/sensorModel); checkUserRoomAccess movido para módulo de permissões; seed com controladores. Ver `implemented.md` → PERM-005 e INFRA-IOT-001.
 > Última atualização (análise): HW-007-ALT criado — análise de viabilidade do HLK-ZW111 (Hi-Link) como alternativa ao ZN-53X. Ver `.claude/features/HARDWARE/hw-007-alt-hlk-zw111.md`.
@@ -13,6 +14,25 @@
 ---
 
 ## ✅ Tasks concluídas (esta sessão)
+
+### TEST-001 + ASSETS-001 — Ícones/Metadata da homologation + Expansão da suite de testes
+
+- **Branch cleanup** — `tanstack-start-migration` deletada localmente (não existia remota).
+- **Assets** — `app/public/favicon.svg` e `app/public/app-icon.svg` portados da branch `homologation` (branding IFSP com cor `#379936`).
+- **manifest.json** — corrigido: `name`, `short_name`, `description`, `theme_color` (`#379936`), `background_color` (`#e4e4e7`) e ícones SVG (substituindo os defaults do TanStack App).
+- **`app/src/services/users/users.test.ts`** (86 testes) — cobertura completa de `usersQueryKeys`, `usersQueryOptions`, `currentUserQueryOptions`, `userRelationsQueryOptions`, `fetchCurrentUser`, `fetchUsers`, `createUser`, `updateUser`, `deleteUser`, `fetchUserRelations`. Testa filtros de URL, métodos HTTP, serialização de body, mensagens de erro e propagação de erros de rede.
+- **`app/src/services/rooms/rooms.test.ts`** (174 testes) — cobertura de `roomsQueryKeys`, todos os `queryOptions`, `fetchRoomsSummary`, `fetchRoomsAdmin` (incluindo mapeamento de dados da API), `fetchRoomTypes`, `createRoomType`, `updateRoomType`, `deleteRoomType`, `createRoom`, `updateRoom`, `deleteRoom`, `fetchBlocks`, `createBlock`, `updateBlock`, `deleteBlock`, `fetchRoomRelations`, `fetchRoomAccessLogs`.
+- **`app/src/lib/performance.test.ts`** (103 testes) — benchmarks com thresholds explícitos para: `isFingerRegistered` (10k iter < 200ms), `getFingerprintForFinger`, `countRegisteredInSet`, acesso a `FINGER_LABELS`/zonas (100k iter < 50ms), `cn` com merge de Tailwind conflitante, iteração sobre constantes de dedos, pipeline completo de verificação biométrica (10k pipelines com 10 digitais < 200ms), construção de query keys, serialização JSON de payloads, construção de URLs com `URL` constructor.
+- **Resultado**: `5 test files | 415 tests passed | 0 failed` em 1.57s.
+
+### SSE-001 — Atualização em tempo real da página de monitoramento (Server-Sent Events)
+
+- **Backend** — `server/src/lib/sse-bus.ts`: módulo singleton de pub/sub em memória usando `EventEmitter` do Node.js. Expõe `publishRoomStatus()` e `subscribeRoomStatus()`.
+- **Backend** — `server/src/api/routes/room.ts`: novo endpoint `GET /rooms/events` que abre uma conexão SSE, envia evento `connected` imediatamente, subscreve ao `sseBus` e emite evento `room-status` com os dados da sala sempre que o bus publica. Keep-alive com `: ping` a cada 25s. Cleanup automático ao fechar a conexão.
+- **Backend** — `server/src/api/routes/iot.ts`: após update bem-sucedido em `PUT /iot/devices/:controllerId/status`, chama `sseBus.publishRoomStatus(...)` para notificar todos os clientes SSE conectados.
+- **Frontend** — `app/src/hooks/use-room-events.ts`: hook `useRoomEvents()` que conecta ao endpoint SSE com `EventSource`, escuta o evento `room-status` e invalida `roomsQueryKeys.all` via `queryClient.invalidateQueries`. Implementa reconexão com backoff exponencial (3s → máx 30s).
+- **Frontend** — `app/src/routes/index.tsx`: chamada `useRoomEvents()` adicionada ao `RoomsPage`, ativando o stream de eventos enquanto a página está montada.
+
 
 ### DOCS-001 — Documentação completa com FumaDocs
 

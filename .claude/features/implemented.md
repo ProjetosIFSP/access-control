@@ -1236,6 +1236,113 @@ Portal Web → publica enrollment/{id}/start
 - Senha padrão R30x `0x00000000` é o default do construtor `Adafruit_Fingerprint` — sem necessidade de configurar
 - Rota `/iot/devices/:id/enrollment` é interna (broker → backend) e não exige cookie de sessão; o controllerId registrado no banco serve como contexto de autenticação implícita
 
+## SSE-001 — Atualização em Tempo Real via Server-Sent Events (Página de Monitoramento)
+
+**Status:** ✅ Concluído
+
+### Motivação
+
+A página de monitoramento de salas (`/`) exibia dados estáticos após o carregamento inicial. O estado das salas só era atualizado ao recarregar a página ou ao navegar. Como o sistema é IoT em tempo real (controladores publicam status via MQTT → backend), era essencial que o frontend refletisse mudanças de estado imediatamente.
+
+### Abordagem escolhida: Server-Sent Events (SSE)
+
+SSE foi preferido a WebSocket porque:
+- A comunicação é **unidirecional** (servidor → cliente): o frontend apenas precisa *receber* notificações, não enviar dados
+- **Nativo no browser** sem libs extras (`EventSource` API)
+- Mais simples de implementar e depurar que WebSocket
+- Compatível com o CORS já configurado no Fastify (`credentials: true`)
+
+### O que foi feito
+
+#### 1. `server/src/lib/sse-bus.ts` — Módulo de pub/sub em memória
+
+Singleton baseado em `EventEmitter` do Node.js com `maxListeners` ilimitado (para suportar muitas conexões simultâneas). Expõe:
+- `publishRoomStatus(event)` — chamado pela rota IoT após atualizar o status
+- `subscribeRoomStatus(handler)` — chamado pelo endpoint SSE; retorna função de cleanup
+
+```ts
+export const sseBus = {
+  publishRoomStatus(event: RoomStatusEvent) { ... },
+  subscribeRoomStatus(handler) { return () => emitter.off(...) },
+};
+```
+
+#### 2. `server/src/api/routes/room.ts` — Endpoint `GET /rooms/events`
+
+Registrado **antes** das demais rotas de `/rooms` para evitar conflito de parâmetros de path. Comportamento:
+- Seta headers SSE (`Content-Type: text/event-stream`, `Cache-Control: no-cache`, `Connection: keep-alive`, `X-Accel-Buffering: no`)
+- Envia evento `connected` imediatamente para confirmar a conexão
+- Subscreve ao `sseBus` e emite evento `room-status` com dados da sala a cada mudança
+- Mantém a conexão viva com `: ping` a cada 25s (evita timeout de proxies/load balancers)
+- Cleanup automático ao `close`/`aborted` da request (cancela intervalo + unsubscribe)
+
+#### 3. `server/src/api/routes/iot.ts` — Disparo do evento após update de status
+
+No handler `PUT /iot/devices/:controllerId/status`, após o update bem-sucedido:
+
+```ts
+sseBus.publishRoomStatus({
+  roomId: room.id,
+  doorState: room.doorState,
+  isLocked: room.isLocked,
+  lastStatusUpdateAt: room.lastStatusUpdateAt?.toISOString() ?? null,
+});
+```
+
+#### 4. `app/src/hooks/use-room-events.ts` — Hook `useRoomEvents`
+
+Hook React que:
+- Cria um `EventSource` apontando para `${API_BASE_URL}/rooms/events`
+- Escuta o evento `room-status` e chama `queryClient.invalidateQueries({ queryKey: roomsQueryKeys.all })`
+- Implementa **reconexão automática com backoff exponencial**: delay inicial 3s, multiplicador 2x, máximo 30s
+- Reseta o delay ao receber qualquer evento (conexão estável)
+- Fecha o `EventSource` e cancela timers no unmount (cleanup correto)
+
+#### 5. `app/src/routes/index.tsx` — Integração
+
+Uma única linha adicionada ao `RoomsPage`:
+
+```ts
+useRoomEvents();
+```
+
+O hook fica ativo enquanto a página estiver montada. Ao receber um evento SSE, o TanStack Query refaz o fetch de `/rooms/summary` automaticamente com os filtros ativos, atualizando a UI sem recarregar a página.
+
+### Fluxo completo
+
+```
+ESP32/ESP8266 publica door/{id}/status (MQTT)
+    │
+    └─► Broker IoT (iot/)
+            │
+            └─► PUT /iot/devices/:id/status (backend)
+                    │
+                    ├─► Atualiza banco (doorState, isLocked, lastStatusUpdateAt)
+                    └─► sseBus.publishRoomStatus(...)
+                                │
+                                └─► EventEmitter emite para todos os subscribers
+                                            │
+                                            └─► Cada conexão SSE aberta envia evento `room-status`
+                                                        │
+                                                        └─► Frontend: EventSource recebe evento
+                                                                    │
+                                                                    └─► queryClient.invalidateQueries(roomsQueryKeys.all)
+                                                                                │
+                                                                                └─► UI atualizada automaticamente
+```
+
+### Arquivos criados/modificados
+
+| Arquivo | Operação |
+|---------|----------|
+| `server/src/lib/sse-bus.ts` | **Criado** — pub/sub em memória |
+| `server/src/api/routes/room.ts` | **Modificado** — endpoint `GET /rooms/events` adicionado |
+| `server/src/api/routes/iot.ts` | **Modificado** — `sseBus.publishRoomStatus()` após update de status |
+| `app/src/hooks/use-room-events.ts` | **Criado** — hook com EventSource + reconexão + invalidação |
+| `app/src/routes/index.tsx` | **Modificado** — `useRoomEvents()` chamado em `RoomsPage` |
+
+---
+
 ## HW-001 (teste) — Firmware de Teste ESP32S [L453-460]
 
 **Ações tomadas:**
@@ -1243,3 +1350,72 @@ Portal Web → publica enrollment/{id}/start
 - Implementa: Wi-Fi, MQTT (PubSubClient), SCT-013 (detecção de corrente para estado de porta), botão (simulando reed switch)
 - Tópicos MQTT: `register`, `heartbeat`, `status`, `access-attempt`, `access-result`, `command`, `command-result`
 - Validado contra o broker Aedes do projeto
+
+## TEST-001 + ASSETS-001 — Ícones/Metadata da homologation + Expansão da Suite de Testes
+
+### Contexto
+
+Branch `tanstack-start-migration` havia ficado obsoleta após a migração ser concluída e mergeada em `development`. Os ícones e metadata de branding IFSP (`favicon.svg`, `app-icon.svg`, `manifest.json` correto) existiam na branch `homologation` mas não haviam sido portados para `development`, que ainda usava os defaults do TanStack App ("TanStack App", `theme_color: #000000`). A suite de testes existia apenas para `biometrics.ts` e `fingerprints.ts`; `services/users` e `services/rooms` não tinham cobertura.
+
+### Ações tomadas
+
+**Branch cleanup:**
+- Branch local `tanstack-start-migration` deletada (`git branch -D`). Não existia remota correspondente.
+
+**Assets portados de `homologation`:**
+- `app/public/favicon.svg` — ícone do IFSP (grid de quadrados verdes `#379936`, 18×24px SVG)
+- `app/public/app-icon.svg` — ícone de app com logotipo do sistema (498×498px SVG, fill `#F3F3F5`)
+- `app/public/manifest.json` — atualizado:
+  - `name`: "Controle de Acesso — IFSP Presidente Epitácio"
+  - `short_name`: "Controle de Acesso"
+  - `description`: descrição do sistema IoT
+  - `theme_color`: `#379936` (verde IFSP)
+  - `background_color`: `#e4e4e7`
+  - ícones: `favicon.svg` e `app-icon.svg` (ambos `sizes: "any"`, tipo SVG)
+
+O `__root.tsx` já referenciava `favicon.svg` e `app-icon.svg` via `head()` do TanStack Start — os arquivos simplesmente não existiam no `public/` do `development`.
+
+**`app/src/services/users/users.test.ts`** — 86 testes unitários:
+- `usersQueryKeys` — estabilidade de chaves, diferenciação por filtros/ids
+- `usersQueryOptions` — queryKey, staleTime, queryFn
+- `currentUserQueryOptions` — queryKey fixo, staleTime 5min, retry false
+- `userRelationsQueryOptions` — enabled condicional, queryKey com id
+- `fetchCurrentUser` — sucesso, endpoint `/users/me`, credentials, erros 401/403, rede
+- `fetchUsers` — filtragem de URL (q com trim, profileIds, page, pageSize), paginação, erros
+- `createUser` — POST, body serializado, profileIds, password, isAdmin, erros com/sem message
+- `updateUser` — PUT com id na URL (sem id no body), erros, IDs dinâmicos
+- `deleteUser` — DELETE 204, erros 404/403/500, rede
+- `fetchUserRelations` — endpoint `/users/:id/relations`, vínculos vazios, erros
+
+**`app/src/services/rooms/rooms.test.ts`** — 174 testes unitários:
+- `roomsQueryKeys` — all, types, blocks, summary, adminList, relations, accessLogs
+- `roomsSummaryQueryOptions`, `roomTypesQueryOptions`, `roomsAdminQueryOptions`, `blocksQueryOptions`, `roomRelationsQueryOptions`, `roomAccessLogsQueryOptions`
+- `fetchRoomsSummary` — filtros q/type/state, trim, credentials, erros
+- `fetchRoomsAdmin` — mapeamento da resposta da API (room+block → RoomSummaryAdmin), filtros typeIds/blockIds, requiresBiometry null→false, paginação, erros
+- `fetchRoomTypes` — listagem, endpoint, erros
+- `createRoomType` / `updateRoomType` / `deleteRoomType` — CRUD completo, body sem id, erros
+- `createRoom` / `updateRoom` / `deleteRoom` — CRUD, requiresBiometry/requiresRFID, profileIds/userIds, erros
+- `fetchBlocks` / `createBlock` / `updateBlock` / `deleteBlock` — CRUD de blocos
+- `fetchRoomRelations` — endpoint `/rooms/:id/relations`, vínculos vazios
+- `fetchRoomAccessLogs` — limit padrão 3, limit customizado, endpoint correto
+
+**`app/src/lib/performance.test.ts`** — 103 testes de performance:
+- `isFingerRegistered` — 10k chamadas com lista completa/vazia/parcial < 200ms; proporcionalidade linear
+- `getFingerprintForFinger` — 10k chamadas com lista de 100 entradas < 200ms
+- `countRegisteredInSet` — 10k chamadas com todos os cenários, sem efeito colateral
+- `FINGER_LABELS` — 100k acessos < 50ms, consistência após 100k iterações
+- hot-zones (`RIGHT_HAND_ZONES` / `LEFT_HAND_ZONES`) — 100k lookups < 50ms
+- `cn` — 10k chamadas com strings simples, objetos condicionais, merge Tailwind conflitante, arrays aninhados, muitos argumentos (10+), undefined/null/false < 200ms; idempotência
+- iteração sobre `ALL_FINGERS`/`FINGERS_RIGHT`/`FINGERS_LEFT` — 100k iter < 100ms
+- pipeline completo de verificação biométrica — 10k pipelines (countRegisteredInSet × 2 + getFingerprintForFinger × 10 + isFingerRegistered × 10) < 200ms; correção de resultado após 10k iter
+- construção de query keys — 100k arrays simples/complexos < 100ms
+- serialização JSON de payloads (CreateUserPayload, CreateRoomPayload) — 10k < 200ms
+- construção de URLs (`new URL()`) — 10k com filtros < 200ms; template literal mais rápido que URL constructor para paths sem params
+
+### Resultado
+
+```
+Test Files  5 passed (5)
+     Tests  415 passed (415)
+  Duration  1.57s
+```
