@@ -19,7 +19,13 @@ const config = defineConfig({
     mdx(MdxConfig),
   ],
   optimizeDeps: {
-    entries: ["./src/**/*.{ts,tsx}"],
+    entries: [
+      "./src/**/*.{ts,tsx}",
+      // Inclui auth-client explicitamente para o Vite descobrir better-auth
+      // antes da primeira requisição (evita re-otimização mid-render)
+      "./src/lib/auth-client.ts",
+      "./src/lib/auth.ts",
+    ],
     // Pré-declara dependências UI para evitar re-otimização lazy na primeira
     // carga de uma rota — sem isso o Vite descobre os pacotes tarde demais,
     // reinicia o bundle e cria duas cópias do React ("Invalid hook call")
@@ -68,6 +74,14 @@ const config = defineConfig({
       "hast-util-to-jsx-runtime",
       "vfile",
       "scroll-into-view-if-needed",
+      // better-auth deps com CJS ou sub-paths usados no cliente — podem entrar
+      // no optimizeDeps normalmente. Os pacotes ESM-only (better-auth,
+      // @better-auth/core, nanostores, @noble/*, jose) são tratados via
+      // ssr.noExternal abaixo e NÃO devem aparecer aqui.
+      "@better-fetch/fetch",
+      "defu",
+      // better-call tem CJS mas sub-paths como /error são descobertos tarde
+      "better-call/error",
       // Outros pacotes UI
       "cmdk",
       "vaul",
@@ -77,8 +91,22 @@ const config = defineConfig({
     ],
   },
   ssr: {
-    // Garante que fumadocs-mdx rode no Node.js sem ser bundlado para o cliente
-    noExternal: ["fumadocs-core", "fumadocs-ui"],
+    // Força bundling SSR para pacotes ESM-only que o Vite marcaria como
+    // external automaticamente. Sem isso o cliente recebe módulos ES não
+    // resolvidos e dispara re-otimização mid-render ("Invalid hook call").
+    noExternal: [
+      // Fumadocs
+      "fumadocs-core",
+      "fumadocs-ui",
+      // better-auth e toda a árvore de dependências ESM-only transitivas.
+      // Verificado via package.json: type=module sem export require/node.
+      "better-auth",
+      "@better-auth/core",
+      "nanostores",
+      "@noble/ciphers",
+      "@noble/hashes",
+      "jose",
+    ],
   },
   server: {
     proxy: {
