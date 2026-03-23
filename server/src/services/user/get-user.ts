@@ -39,6 +39,11 @@ export async function getUsers(qOrFilters?: string | GetUsersFilters) {
 	        WHERE ${accessCredential.userId} = ${user.id}
 	          AND ${accessCredential.type} = 'FINGERPRINT'
 	      )`.as("fingerprintCount"),
+			nfcCount: sql<string> /* sql */`(
+	        SELECT COUNT(*) FROM ${accessCredential}
+	        WHERE ${accessCredential.userId} = ${user.id}
+	          AND ${accessCredential.type} = 'NFC_TAG'
+	      )`.as("nfcCount"),
 		})
 		.from(user)
 		.$dynamic();
@@ -67,10 +72,7 @@ export async function getUsers(qOrFilters?: string | GetUsersFilters) {
 	// ── Count total (before pagination) ───────────────────────────────────────
 
 	// Build a count query that mirrors the same joins/conditions
-	let countQuery = db
-		.selectDistinct({ id: user.id })
-		.from(user)
-		.$dynamic();
+	let countQuery = db.selectDistinct({ id: user.id }).from(user).$dynamic();
 
 	if (profileIds && profileIds.length > 0) {
 		// biome-ignore lint/suspicious/noExplicitAny: drizzle typings restrictions
@@ -124,6 +126,7 @@ export async function getUsers(qOrFilters?: string | GetUsersFilters) {
 	const result = rows.map((u) => ({
 		...u,
 		fingerprintCount: Number.parseInt(u.fingerprintCount as string, 10),
+		nfcCount: Number.parseInt(u.nfcCount as string, 10),
 		profiles: profilesByUserId.get(u.id) ?? [],
 	}));
 

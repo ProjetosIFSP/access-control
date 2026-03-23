@@ -1,27 +1,40 @@
-import type { FastifyPluginAsyncZod } from "fastify-type-provider-zod";
-import {
-	FingerprintConflictError,
-	FingerprintDuplicateTemplateError,
-	registerFingerprint,
-} from "@/services/user/fingerprint/register-fingerprint";
-import {
-	FingerprintNotFoundError,
-	deleteFingerprint,
-	toggleFingerprint,
-} from "@/services/user/fingerprint/delete-fingerprint";
-import { listFingerprints } from "@/services/user/fingerprint/list-fingerprints";
-
 import { eq } from "drizzle-orm";
+import type { FastifyPluginAsyncZod } from "fastify-type-provider-zod";
 import type { SchemaWithExamples } from "@/api/openapi";
 import { db } from "@/db";
 import { userRoomPermission, userRoomTypePermission } from "@/db/schema/access";
 import { profile, userProfile } from "@/db/schema/profile";
 import { room, roomType } from "@/db/schema/room";
-import { requireAdmin, resolveSession, type GuardReply } from "@/lib/require-admin";
+import {
+	type GuardReply,
+	requireAdmin,
+	resolveSession,
+} from "@/lib/require-admin";
 import { z } from "@/lib/zod";
 import { createUser } from "@/services/user/create-user";
 import { deleteUser } from "@/services/user/delete-user";
+import {
+	deleteFingerprint,
+	FingerprintNotFoundError,
+	toggleFingerprint,
+} from "@/services/user/fingerprint/delete-fingerprint";
+import { listFingerprints } from "@/services/user/fingerprint/list-fingerprints";
+import {
+	FingerprintConflictError,
+	FingerprintDuplicateTemplateError,
+	registerFingerprint,
+} from "@/services/user/fingerprint/register-fingerprint";
 import { getUsers } from "@/services/user/get-user";
+import {
+	deleteNfcTag,
+	NfcNotFoundError,
+	toggleNfcTag,
+} from "@/services/user/nfc/delete-nfc";
+import { listNfcTags } from "@/services/user/nfc/list-nfc";
+import {
+	NfcDuplicateError,
+	registerNfcTag,
+} from "@/services/user/nfc/register-nfc";
 import { updateUser } from "@/services/user/update-user";
 
 // ── Schemas ───────────────────────────────────────────────────────────────────
@@ -48,6 +61,13 @@ const fingerprintSummarySchema = z.object({
 	createdAt: z.string().datetime(),
 });
 
+const nfcSummarySchema = z.object({
+	id: z.string().uuid(),
+	value: z.string(),
+	isActive: z.boolean(),
+	createdAt: z.string().datetime(),
+});
+
 const userSummarySchema = z.object({
 	id: z.string().uuid(),
 	name: z.string(),
@@ -58,6 +78,7 @@ const userSummarySchema = z.object({
 	updatedAt: z.string().datetime(),
 	hasCredentials: z.boolean(),
 	fingerprintCount: z.number(),
+	nfcCount: z.number(),
 	profiles: z.array(
 		z.object({
 			id: z.string(),
@@ -86,6 +107,7 @@ const listUsersResponseExample: z.infer<typeof listUsersResponseSchema> = {
 			updatedAt: "2025-02-11T09:42:00.000Z",
 			hasCredentials: true,
 			fingerprintCount: 2,
+			nfcCount: 1,
 			profiles: [{ id: "abc123", name: "Docentes" }],
 		},
 	],
@@ -178,7 +200,13 @@ export const userRoute: FastifyPluginAsyncZod = async (app) => {
 						.optional()
 						.describe("IDs de perfis separados por vírgula"),
 					page: z.coerce.number().int().min(1).optional().default(1),
-					pageSize: z.coerce.number().int().min(1).max(100).optional().default(20),
+					pageSize: z.coerce
+						.number()
+						.int()
+						.min(1)
+						.max(100)
+						.optional()
+						.default(20),
 				}),
 				response: {
 					200: listUsersResponseSchema,
@@ -403,6 +431,178 @@ export const userRoute: FastifyPluginAsyncZod = async (app) => {
 		},
 	);
 
+	// ── NfcTag endpoints ─────────────────────────────────────────────────
+
+	// GET /users/:id/nfc-tags — lista cartões NFC do usuário
+	app.get(
+		"/:id/nfc-tags",
+		{
+			schema: {
+				tags: ["users"],
+				summary: "Listar cartões NFC do usuário",
+				description: "Retorna as os cartões NFC cadastradas para um usuário.",
+				security: [{ sessionCookie: [] }],
+				params: z.object({ id: z.string().uuid() }),
+				response: {
+					200: z.array(nfcSummarySchema),
+				},
+			},
+		},
+		async (request, reply) => {
+			if (!(await requireAdmin(request, reply as unknown as GuardReply)))
+				return;
+
+			const { id: userId } = request.params as { id: string };
+			const records = await listNfcTags(userId);
+
+			return reply.status(200).send(
+				records.map((r) => ({
+					...r,
+					createdAt: r.createdAt.toISOString(),
+				})),
+			);
+		},
+	);
+
+	// POST /users/:id/nfc-tags — registra nova cartão NFC
+	app.post(
+		"/:id/nfc-tags",
+		{
+			schema: {
+				tags: ["users"],
+				summary: "Cadastrar cartão NFC",
+				description:
+					"Registra uma nova cartão NFC para o usuário. Apenas cartões únicos.",
+				security: [{ sessionCookie: [] }],
+				params: z.object({ id: z.string().uuid() }),
+				body: z.object({
+					value: z.string().min(1),
+				}),
+				response: {
+					201: nfcSummarySchema,
+					409: z.object({ message: z.string() }),
+				},
+			},
+		},
+		async (request, reply) => {
+			if (!(await requireAdmin(request, reply as unknown as GuardReply)))
+				return;
+
+			const { id: userId } = request.params as { id: string };
+			const { value } = request.body as {
+				value: string;
+			};
+
+			try {
+				const record = await registerNfcTag({ userId, value });
+				return reply.status(201).send({
+					...record,
+					createdAt: record.createdAt.toISOString(),
+				});
+			} catch (err) {
+				if (err instanceof NfcDuplicateError) {
+					return (reply as unknown as GuardReply)
+						.status(409)
+						.send({ message: err.message });
+				}
+				throw err;
+			}
+		},
+	);
+
+	// DELETE /users/:id/nfc-tags/:credentialId — remove cartão NFC
+	app.delete(
+		"/:id/nfc-tags/:credentialId",
+		{
+			schema: {
+				tags: ["users"],
+				summary: "Remover cartão NFC",
+				description: "Remove uma cartão NFC cadastrada do usuário.",
+				security: [{ sessionCookie: [] }],
+				params: z.object({
+					id: z.string().uuid(),
+					credentialId: z.string().uuid(),
+				}),
+				response: {
+					204: z.void(),
+					404: z.object({ message: z.string() }),
+				},
+			},
+		},
+		async (request, reply) => {
+			if (!(await requireAdmin(request, reply as unknown as GuardReply)))
+				return;
+
+			const { id: userId, credentialId } = request.params as {
+				id: string;
+				credentialId: string;
+			};
+
+			try {
+				await deleteNfcTag(userId, credentialId);
+				return reply.status(204).send();
+			} catch (err) {
+				if (err instanceof NfcNotFoundError) {
+					return (reply as unknown as GuardReply)
+						.status(404)
+						.send({ message: err.message });
+				}
+				throw err;
+			}
+		},
+	);
+
+	// PATCH /users/:id/nfc-tags/:credentialId — ativa/desativa cartão NFC
+	app.patch(
+		"/:id/nfc-tags/:credentialId",
+		{
+			schema: {
+				tags: ["users"],
+				summary: "Ativar/desativar cartão NFC",
+				description: "Alterna o status ativo/inativo de uma cartão NFC.",
+				security: [{ sessionCookie: [] }],
+				params: z.object({
+					id: z.string().uuid(),
+					credentialId: z.string().uuid(),
+				}),
+				body: z.object({
+					isActive: z.boolean(),
+				}),
+				response: {
+					200: nfcSummarySchema,
+					404: z.object({ message: z.string() }),
+				},
+			},
+		},
+		async (request, reply) => {
+			if (!(await requireAdmin(request, reply as unknown as GuardReply)))
+				return;
+
+			const { id: userId, credentialId } = request.params as {
+				id: string;
+				credentialId: string;
+			};
+			const { isActive } = request.body as { isActive: boolean };
+
+			try {
+				const record = await toggleNfcTag(userId, credentialId, isActive);
+				return reply.status(200).send({
+					...record,
+					value: record.value as (typeof FINGER_KEYS)[number],
+					createdAt: record.createdAt.toISOString(),
+				});
+			} catch (err) {
+				if (err instanceof NfcNotFoundError) {
+					return (reply as unknown as GuardReply)
+						.status(404)
+						.send({ message: err.message });
+				}
+				throw err;
+			}
+		},
+	);
+
+	// ── Relations / CRUD endpoints ────────────────────────────────────────────
 	// ── Relations / CRUD endpoints ────────────────────────────────────────────
 
 	// GET /users/:id/relations — perfis, salas e tipos de sala do usuário

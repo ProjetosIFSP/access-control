@@ -18,7 +18,7 @@
 }
 
 :root {
-  --docs-header-offset: calc(var(--fd-nav-height) + 8px);
+  --docs-header-offset: calc(40px);
 }
 
 #nd-sidebar,

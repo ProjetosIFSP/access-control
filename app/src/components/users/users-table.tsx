@@ -143,7 +143,7 @@ export function UsersTable({
 								<TableCell className="py-3 pr-4 pl-2">
 									<div className="flex items-center justify-end gap-1">
 										{/* Credential indicators */}
-										{(user.hasCredentials || user.fingerprintCount > 0) && (
+										{(user.hasCredentials || user.fingerprintCount > 0 || user.nfcCount > 0) && (
 											<div className="flex items-center gap-1 mr-1">
 												{user.hasCredentials && (
 													<Tooltip>

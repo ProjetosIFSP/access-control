@@ -8,6 +8,7 @@ export type UserSummary = {
 	updatedAt: string;
 	hasCredentials: boolean;
 	fingerprintCount: number;
+	nfcCount: number;
 	profiles: { id: string; name: string }[];
 };
 

@@ -19,6 +19,8 @@ import {
 	registerFingerprint,
 	userFingerprintsQueryOptions,
 } from "@/services/users/fingerprints";
+import { userNfcTagsQueryOptions } from "@/services/users/nfc-tags";
+import { NfcTab } from "./nfc-tab";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -29,7 +31,7 @@ interface FingerprintHandDrawerProps {
 	userName: string;
 }
 
-type ActiveHandTab = "left" | "right";
+type ActiveHandTab = "left" | "right" | "nfc";
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
@@ -54,6 +56,10 @@ export function FingerprintHandDrawer({
 	const reader = useFingerprintReader({ mode: "keyboard" });
 
 	// ── Fetch fingerprints ──────────────────────────────────────────────────────
+	const { data: nfcTags = [] } = useQuery({
+		...userNfcTagsQueryOptions(open ? userId : null),
+	});
+
 	const { data: fingerprints = [], isLoading: isLoadingFingerprints } =
 		useQuery({
 			...userFingerprintsQueryOptions(open ? userId : null),
@@ -197,6 +203,7 @@ export function FingerprintHandDrawer({
 	const TABS = [
 		{ key: "left" as const, label: "Mão Esquerda", count: leftCount },
 		{ key: "right" as const, label: "Mão Direita", count: rightCount },
+		{ key: "nfc" as const, label: "NFC", count: nfcTags.length },
 	];
 
 	return (
@@ -297,14 +304,11 @@ export function FingerprintHandDrawer({
 									transition={{ duration: 0.4, ease: EASE, delay: 0.37 }}
 								>
 									<span className="text-xs font-black tracking-wider uppercase text-primary">
-										BIOMETRIA
+										CREDENCIAIS
 									</span>
 									<div className="flex items-end justify-between gap-2">
 										<span className="text-4xl font-medium tracking-tight text-zinc-900 dark:text-zinc-50 leading-none truncate">
 											{userName}
-										</span>
-										<span className="text-xs font-black uppercase text-zinc-400 dark:text-zinc-500 pb-1 shrink-0">
-											{leftCount + rightCount}/10 digitais
 										</span>
 									</div>
 								</motion.div>
@@ -348,69 +352,59 @@ export function FingerprintHandDrawer({
 										))}
 									</div>
 
-									{/* Hand SVG — botões posicionados nas pontas dos dedos */}
-									<div className="flex justify-center">
-										{isLoadingFingerprints ? (
-											<div className="flex size-56 items-center justify-center">
-												<Loader2 className="size-6 animate-spin text-zinc-300 dark:text-zinc-600" />
-											</div>
-										) : (
-											<div className="relative size-56 text-zinc-300 dark:text-zinc-700">
-												<Hand
-													side={activeTab}
-													registeredFingers={fingerprints}
-													selectedFinger={selectedFinger}
-													onFingerClick={handleFingerClick}
-													readerStatus={reader.status}
-													captureActive={
-														reader.status === "waiting" ||
-														reader.status === "reading"
-													}
-													countdown={reader.countdown}
-													interactive
-												/>
-											</div>
-										)}
-									</div>
-
-									{selectedFinger ? (
-										<Button
-											variant="hoverOutline"
-											className="w-full text-black! dark:text-white! after:border-zinc-200! dark:after:border-zinc-800!"
-											overlayClassname="before:bg-zinc-200 dark:before:bg-zinc-800"
-											onClick={() => {
-												reader.cancelCapture();
-												setSelectedFinger(null);
-											}}
-										>
-											Cancelar leitura
-										</Button>
+									{activeTab === "nfc" ? (
+										<div className="w-full custom-scrollbar pb-16">
+											<NfcTab user={{ id: userId, name: userName }} />
+										</div>
 									) : (
-										<p className="text-center text-xs text-zinc-400 dark:text-zinc-500 pb-2">
-											Toque em um dedo para iniciar o cadastro
-										</p>
+										<div
+											key={activeTab}
+											className="flex flex-col gap-4 w-full animate-in fade-in slide-in-from-bottom-2 duration-300"
+										>
+											{/* Hand SVG — botões posicionados nas pontas dos dedos */}
+											<div className="flex justify-center">
+												{isLoadingFingerprints ? (
+													<div className="flex size-56 items-center justify-center">
+														<Loader2 className="size-6 animate-spin text-zinc-300 dark:text-zinc-600" />
+													</div>
+												) : (
+													<div className="relative size-56 text-zinc-300 dark:text-zinc-700">
+														<Hand
+															side={activeTab}
+															registeredFingers={fingerprints}
+															selectedFinger={selectedFinger}
+															onFingerClick={handleFingerClick}
+															readerStatus={reader.status}
+															captureActive={
+																reader.status === "waiting" ||
+																reader.status === "reading"
+															}
+															countdown={reader.countdown}
+															interactive
+														/>
+													</div>
+												)}
+											</div>
+
+											{selectedFinger ? (
+												<Button
+													variant="hoverOutline"
+													className="w-full text-black! dark:text-white! after:border-zinc-200! dark:after:border-zinc-800!"
+													overlayClassname="before:bg-zinc-200 dark:before:bg-zinc-800"
+													onClick={() => {
+														reader.cancelCapture();
+														setSelectedFinger(null);
+													}}
+												>
+													Cancelar leitura
+												</Button>
+											) : (
+												<p className="text-center text-xs text-zinc-400 dark:text-zinc-500 pb-2">
+													Toque em um dedo para iniciar o cadastro
+												</p>
+											)}
+										</div>
 									)}
-								</motion.div>
-
-								{/* Spacer */}
-								<div className="flex-1" />
-
-								{/* Footer */}
-								<motion.div
-									className="px-6 py-6"
-									initial={{ opacity: 0 }}
-									animate={{ opacity: 1 }}
-									exit={{ opacity: 0 }}
-									transition={{ duration: 0.3, ease: EASE, delay: 0.46 }}
-								>
-									<Button
-										onClick={handleClose}
-										variant="hoverOutline"
-										className="w-full text-black! dark:text-white! after:border-zinc-200! dark:after:border-zinc-800!"
-										overlayClassname="before:bg-zinc-200 dark:before:bg-zinc-800"
-									>
-										Fechar
-									</Button>
 								</motion.div>
 							</div>
 						</motion.div>
