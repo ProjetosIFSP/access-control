@@ -1,6 +1,6 @@
 import { and, count, ilike, inArray } from "drizzle-orm";
 import { db } from "@/db";
-import { block, room } from "@/db/schema/room";
+import { block, room, roomType } from "@/db/schema/room";
 import { eq } from "drizzle-orm";
 
 export interface GetRoomsFilters {
@@ -52,7 +52,8 @@ export async function getRooms(filters?: GetRoomsFilters) {
 	const baseQuery = db
 		.select()
 		.from(room)
-		.innerJoin(block, eq(block.id, room.blockId));
+		.innerJoin(block, eq(block.id, room.blockId))
+		.innerJoin(roomType, eq(roomType.id, room.typeId));
 
 	const result = await (whereClause
 		? baseQuery

@@ -120,6 +120,16 @@ export function HeaderNav({ docsMode = false }: HeaderNavProps) {
 						</NavigationMenuContent>
 					</NavigationMenuItem>
 				)}
+				{isAdmin && (
+					<NavigationMenuItem>
+						<NavigationMenuLink
+							asChild
+							className={navigationMenuTriggerStyle()}
+						>
+							<Link to="/logs">Logs</Link>
+						</NavigationMenuLink>
+					</NavigationMenuItem>
+				)}
 				<NavigationMenuItem>
 					<NavigationMenuLink asChild className={navigationMenuTriggerStyle()}>
 						<Link

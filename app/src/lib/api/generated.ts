@@ -1794,3 +1794,41 @@ export const patchIotDevicesControllerIdCommandsCommandIdAck = async (
 		headers: res.headers,
 	} as patchIotDevicesControllerIdCommandsCommandIdAckResponse;
 };
+
+export interface GetLogsParams {
+  roomId?: string;
+  userId?: string;
+  status?: "GRANTED" | "DENIED";
+  page?: number;
+  pageSize?: number;
+}
+export interface GetLogsResponse {
+  items: Array<{
+    id: string;
+    timestamp: string;
+    status: "GRANTED" | "DENIED";
+    reason: string | null;
+    credentialValueUsed: string;
+    roomName: string;
+    blockName: string;
+    roomId: string;
+    userId: string | null;
+    userName: string | null;
+    userEmail: string | null;
+  }>;
+  total: number;
+  page: number;
+  pageSize: number;
+  totalPages: number;
+}
+export const getLogs = async (params?: GetLogsParams, options?: RequestInit): Promise<GetLogsResponse> => {
+  const query = new URLSearchParams();
+  if (params?.roomId) query.append('roomId', params.roomId);
+  if (params?.userId) query.append('userId', params.userId);
+  if (params?.status) query.append('status', params.status);
+  if (params?.page) query.append('page', String(params.page));
+  if (params?.pageSize) query.append('pageSize', String(params.pageSize));
+  const res = await fetch(`/logs${query.toString() ? `?${query.toString()}` : ''}`, { ...options, method: 'GET' });
+  const body = await res.text();
+  return JSON.parse(body);
+};

@@ -1,6 +1,14 @@
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
-import { BookOpen, BookText, LayoutGrid, Menu, Users, X } from "lucide-react";
+import {
+	BookOpen,
+	BookText,
+	LayoutGrid,
+	Menu,
+	ScrollText,
+	Users,
+	X,
+} from "lucide-react";
 import { AnimatePresence, motion } from "motion/react";
 import { useEffect, useLayoutEffect, useState } from "react";
 import { createPortal } from "react-dom";
@@ -37,6 +45,13 @@ const NAV_ITEMS: NavItem[] = [
 		icon: <Users className="size-4" />,
 		adminOnly: true,
 		search: { q: undefined, profileIds: undefined, tab: undefined },
+	},
+	{
+		label: "Logs de Acesso",
+		to: "/logs",
+		icon: <ScrollText className="size-4" />,
+		adminOnly: true,
+		search: { roomId: undefined, userId: undefined },
 	},
 	{
 		label: "Salas e Blocos",

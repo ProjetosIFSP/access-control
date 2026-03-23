@@ -11,33 +11,9 @@ components:
       in: cookie
       name: auth_session
       description: Sessão de usuário gerenciada pela camada Auth baseada em cookies.
-  schemas:
-    Profile:
-      type: object
-      properties:
-        id:
-          type: string
-        name:
-          type: string
-        description:
-          type: string
-        createdAt:
-          type: string
-          format: date-time
-    RoomType:
-      type: object
-      properties:
-        id:
-          type: string
-        name:
-          type: string
-        description:
-          type: string
-        createdAt:
-          type: string
-          format: date-time
+  schemas: {}
 paths:
-  /auth/auth/{*}:
+  /auth/{action}:
     get: &a1
       summary: Delegar operações de autenticação
       tags:
@@ -54,6 +30,44 @@ paths:
         "200":
           description: Default Response
     post: *a1
+  /users/me:
+    get:
+      summary: Dados do usuário autenticado
+      tags:
+        - users
+      description: Retorna os dados do usuário logado, incluindo se é administrador.
+      security:
+        - sessionCookie: []
+      responses:
+        "200":
+          description: Default Response
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: string
+                    format: uuid
+                    pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+                  name:
+                    type: string
+                  email:
+                    type: string
+                    format: email
+                    pattern: ^(?!\.)(?!.*\.\.)([A-Za-z0-9_'+\-\.]*)[A-Za-z0-9_+-]@([A-Za-z0-9][A-Za-z0-9\-]*\.)+[A-Za-z]{2,}$
+                  image:
+                    nullable: true
+                    type: string
+                  isAdmin:
+                    type: boolean
+                required:
+                  - id
+                  - name
+                  - email
+                  - image
+                  - isAdmin
+                additionalProperties: false
   /users/:
     get:
       summary: Listar usuários
@@ -61,6 +75,34 @@ paths:
         - users
       description: Retorna os usuários cadastrados e indica se possuem credencial
         física associada.
+      parameters:
+        - schema:
+            type: string
+          in: query
+          name: q
+          required: false
+        - schema:
+            type: string
+          in: query
+          name: profileIds
+          required: false
+          description: IDs de perfis separados por vírgula
+        - schema:
+            default: 1
+            type: integer
+            minimum: 1
+            maximum: 9007199254740991
+          in: query
+          name: page
+          required: false
+        - schema:
+            default: 20
+            type: integer
+            minimum: 1
+            maximum: 100
+          in: query
+          name: pageSize
+          required: false
       security:
         - sessionCookie: []
       responses:
@@ -101,6 +143,23 @@ paths:
                           pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d(?::[0-5]\d(?:\.\d+)?)?(?:Z))$
                         hasCredentials:
                           type: boolean
+                        fingerprintCount:
+                          type: number
+                        nfcCount:
+                          type: number
+                        profiles:
+                          type: array
+                          items:
+                            type: object
+                            properties:
+                              id:
+                                type: string
+                              name:
+                                type: string
+                            required:
+                              - id
+                              - name
+                            additionalProperties: false
                       required:
                         - id
                         - name
@@ -110,9 +169,24 @@ paths:
                         - createdAt
                         - updatedAt
                         - hasCredentials
+                        - fingerprintCount
+                        - nfcCount
+                        - profiles
                       additionalProperties: false
+                  total:
+                    type: number
+                  page:
+                    type: number
+                  pageSize:
+                    type: number
+                  totalPages:
+                    type: number
                 required:
                   - result
+                  - total
+                  - page
+                  - pageSize
+                  - totalPages
                 additionalProperties: false
                 example:
                   result:
@@ -124,6 +198,1136 @@ paths:
                       createdAt: 2025-01-10T13:25:00.000Z
                       updatedAt: 2025-02-11T09:42:00.000Z
                       hasCredentials: true
+                      fingerprintCount: 2
+                      nfcCount: 1
+                      profiles:
+                        - id: abc123
+                          name: Docentes
+                  total: 1
+                  page: 1
+                  pageSize: 20
+                  totalPages: 1
+    post:
+      summary: Criar usuário
+      tags:
+        - users
+      description: Cria um novo usuário no sistema. Opcionalmente vincula perfis,
+        salas e tipos de sala.
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                  minLength: 2
+                email:
+                  type: string
+                  format: email
+                  pattern: ^(?!\.)(?!.*\.\.)([A-Za-z0-9_'+\-\.]*)[A-Za-z0-9_+-]@([A-Za-z0-9][A-Za-z0-9\-]*\.)+[A-Za-z]{2,}$
+                isAdmin:
+                  default: false
+                  type: boolean
+                password:
+                  type: string
+                  minLength: 6
+                profileIds:
+                  type: array
+                  items:
+                    type: string
+                    format: uuid
+                    pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+                roomIds:
+                  type: array
+                  items:
+                    type: string
+                    format: uuid
+                    pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+                roomTypeIds:
+                  type: array
+                  items:
+                    type: string
+                    format: uuid
+                    pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+              required:
+                - name
+                - email
+        required: true
+      security:
+        - sessionCookie: []
+      responses:
+        "201":
+          description: Default Response
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: string
+                    format: uuid
+                    pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+                  name:
+                    type: string
+                  email:
+                    type: string
+                    format: email
+                    pattern: ^(?!\.)(?!.*\.\.)([A-Za-z0-9_'+\-\.]*)[A-Za-z0-9_+-]@([A-Za-z0-9][A-Za-z0-9\-]*\.)+[A-Za-z]{2,}$
+                  image:
+                    nullable: true
+                    type: string
+                  isAdmin:
+                    type: boolean
+                  createdAt:
+                    type: string
+                    format: date-time
+                    pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d(?::[0-5]\d(?:\.\d+)?)?(?:Z))$
+                  updatedAt:
+                    type: string
+                    format: date-time
+                    pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d(?::[0-5]\d(?:\.\d+)?)?(?:Z))$
+                required:
+                  - id
+                  - name
+                  - email
+                  - image
+                  - isAdmin
+                  - createdAt
+                  - updatedAt
+                additionalProperties: false
+  /users/{id}/fingerprints:
+    get:
+      summary: Listar digitais do usuário
+      tags:
+        - users
+      description: Retorna as impressões digitais cadastradas para um usuário.
+      parameters:
+        - schema:
+            type: string
+            format: uuid
+            pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+          in: path
+          name: id
+          required: true
+      security:
+        - sessionCookie: []
+      responses:
+        "200":
+          description: Default Response
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    id:
+                      type: string
+                      format: uuid
+                      pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+                    finger:
+                      type: string
+                      enum:
+                        - right_thumb
+                        - right_index
+                        - right_middle
+                        - right_ring
+                        - right_pinky
+                        - left_thumb
+                        - left_index
+                        - left_middle
+                        - left_ring
+                        - left_pinky
+                    isActive:
+                      type: boolean
+                    createdAt:
+                      type: string
+                      format: date-time
+                      pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d(?::[0-5]\d(?:\.\d+)?)?(?:Z))$
+                  required:
+                    - id
+                    - finger
+                    - isActive
+                    - createdAt
+                  additionalProperties: false
+    post:
+      summary: Cadastrar digital
+      tags:
+        - users
+      description: Registra uma nova impressão digital para o usuário. Máximo de 1 por dedo.
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                finger:
+                  type: string
+                  enum:
+                    - right_thumb
+                    - right_index
+                    - right_middle
+                    - right_ring
+                    - right_pinky
+                    - left_thumb
+                    - left_index
+                    - left_middle
+                    - left_ring
+                    - left_pinky
+                template:
+                  type: string
+                  minLength: 1
+              required:
+                - finger
+                - template
+        required: true
+      parameters:
+        - schema:
+            type: string
+            format: uuid
+            pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+          in: path
+          name: id
+          required: true
+      security:
+        - sessionCookie: []
+      responses:
+        "201":
+          description: Default Response
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: string
+                    format: uuid
+                    pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+                  finger:
+                    type: string
+                    enum:
+                      - right_thumb
+                      - right_index
+                      - right_middle
+                      - right_ring
+                      - right_pinky
+                      - left_thumb
+                      - left_index
+                      - left_middle
+                      - left_ring
+                      - left_pinky
+                  isActive:
+                    type: boolean
+                  createdAt:
+                    type: string
+                    format: date-time
+                    pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d(?::[0-5]\d(?:\.\d+)?)?(?:Z))$
+                required:
+                  - id
+                  - finger
+                  - isActive
+                  - createdAt
+                additionalProperties: false
+        "409":
+          description: Default Response
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                required:
+                  - message
+                additionalProperties: false
+  /users/{id}/fingerprints/{credentialId}:
+    delete:
+      summary: Remover digital
+      tags:
+        - users
+      description: Remove uma impressão digital cadastrada do usuário.
+      parameters:
+        - schema:
+            type: string
+            format: uuid
+            pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+          in: path
+          name: id
+          required: true
+        - schema:
+            type: string
+            format: uuid
+            pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+          in: path
+          name: credentialId
+          required: true
+      security:
+        - sessionCookie: []
+      responses:
+        "204":
+          description: Default Response
+          content:
+            application/json:
+              schema: {}
+        "404":
+          description: Default Response
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                required:
+                  - message
+                additionalProperties: false
+    patch:
+      summary: Ativar/desativar digital
+      tags:
+        - users
+      description: Alterna o status ativo/inativo de uma impressão digital.
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                isActive:
+                  type: boolean
+              required:
+                - isActive
+        required: true
+      parameters:
+        - schema:
+            type: string
+            format: uuid
+            pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+          in: path
+          name: id
+          required: true
+        - schema:
+            type: string
+            format: uuid
+            pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+          in: path
+          name: credentialId
+          required: true
+      security:
+        - sessionCookie: []
+      responses:
+        "200":
+          description: Default Response
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: string
+                    format: uuid
+                    pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+                  finger:
+                    type: string
+                    enum:
+                      - right_thumb
+                      - right_index
+                      - right_middle
+                      - right_ring
+                      - right_pinky
+                      - left_thumb
+                      - left_index
+                      - left_middle
+                      - left_ring
+                      - left_pinky
+                  isActive:
+                    type: boolean
+                  createdAt:
+                    type: string
+                    format: date-time
+                    pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d(?::[0-5]\d(?:\.\d+)?)?(?:Z))$
+                required:
+                  - id
+                  - finger
+                  - isActive
+                  - createdAt
+                additionalProperties: false
+        "404":
+          description: Default Response
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                required:
+                  - message
+                additionalProperties: false
+  /users/{id}/nfc-tags:
+    get:
+      summary: Listar cartões NFC do usuário
+      tags:
+        - users
+      description: Retorna as os cartões NFC cadastradas para um usuário.
+      parameters:
+        - schema:
+            type: string
+            format: uuid
+            pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+          in: path
+          name: id
+          required: true
+      security:
+        - sessionCookie: []
+      responses:
+        "200":
+          description: Default Response
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    id:
+                      type: string
+                      format: uuid
+                      pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+                    value:
+                      type: string
+                    isActive:
+                      type: boolean
+                    createdAt:
+                      type: string
+                      format: date-time
+                      pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d(?::[0-5]\d(?:\.\d+)?)?(?:Z))$
+                  required:
+                    - id
+                    - value
+                    - isActive
+                    - createdAt
+                  additionalProperties: false
+    post:
+      summary: Cadastrar cartão NFC
+      tags:
+        - users
+      description: Registra uma nova cartão NFC para o usuário. Apenas cartões únicos.
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                value:
+                  type: string
+                  minLength: 1
+              required:
+                - value
+        required: true
+      parameters:
+        - schema:
+            type: string
+            format: uuid
+            pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+          in: path
+          name: id
+          required: true
+      security:
+        - sessionCookie: []
+      responses:
+        "201":
+          description: Default Response
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: string
+                    format: uuid
+                    pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+                  value:
+                    type: string
+                  isActive:
+                    type: boolean
+                  createdAt:
+                    type: string
+                    format: date-time
+                    pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d(?::[0-5]\d(?:\.\d+)?)?(?:Z))$
+                required:
+                  - id
+                  - value
+                  - isActive
+                  - createdAt
+                additionalProperties: false
+        "409":
+          description: Default Response
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                required:
+                  - message
+                additionalProperties: false
+  /users/{id}/nfc-tags/{credentialId}:
+    delete:
+      summary: Remover cartão NFC
+      tags:
+        - users
+      description: Remove uma cartão NFC cadastrada do usuário.
+      parameters:
+        - schema:
+            type: string
+            format: uuid
+            pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+          in: path
+          name: id
+          required: true
+        - schema:
+            type: string
+            format: uuid
+            pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+          in: path
+          name: credentialId
+          required: true
+      security:
+        - sessionCookie: []
+      responses:
+        "204":
+          description: Default Response
+          content:
+            application/json:
+              schema: {}
+        "404":
+          description: Default Response
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                required:
+                  - message
+                additionalProperties: false
+    patch:
+      summary: Ativar/desativar cartão NFC
+      tags:
+        - users
+      description: Alterna o status ativo/inativo de uma cartão NFC.
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                isActive:
+                  type: boolean
+              required:
+                - isActive
+        required: true
+      parameters:
+        - schema:
+            type: string
+            format: uuid
+            pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+          in: path
+          name: id
+          required: true
+        - schema:
+            type: string
+            format: uuid
+            pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+          in: path
+          name: credentialId
+          required: true
+      security:
+        - sessionCookie: []
+      responses:
+        "200":
+          description: Default Response
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: string
+                    format: uuid
+                    pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+                  value:
+                    type: string
+                  isActive:
+                    type: boolean
+                  createdAt:
+                    type: string
+                    format: date-time
+                    pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d(?::[0-5]\d(?:\.\d+)?)?(?:Z))$
+                required:
+                  - id
+                  - value
+                  - isActive
+                  - createdAt
+                additionalProperties: false
+        "404":
+          description: Default Response
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                required:
+                  - message
+                additionalProperties: false
+  /users/{id}/relations:
+    get:
+      summary: Vínculos do usuário
+      tags:
+        - users
+      description: Retorna os perfis, salas e tipos de sala associados ao usuário.
+      parameters:
+        - schema:
+            type: string
+            format: uuid
+            pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+          in: path
+          name: id
+          required: true
+      security:
+        - sessionCookie: []
+      responses:
+        "200":
+          description: Default Response
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  profiles:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id:
+                          type: string
+                        name:
+                          type: string
+                        description:
+                          type: string
+                      required:
+                        - id
+                        - name
+                        - description
+                      additionalProperties: false
+                  rooms:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id:
+                          type: string
+                        name:
+                          type: string
+                        blockId:
+                          type: string
+                      required:
+                        - id
+                        - name
+                        - blockId
+                      additionalProperties: false
+                  roomTypes:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id:
+                          type: string
+                        name:
+                          type: string
+                        abbreviation:
+                          type: string
+                      required:
+                        - id
+                        - name
+                        - abbreviation
+                      additionalProperties: false
+                required:
+                  - profiles
+                  - rooms
+                  - roomTypes
+                additionalProperties: false
+  /users/{id}:
+    put:
+      summary: Atualizar usuário
+      tags:
+        - users
+      description: Atualiza os dados de um usuário e sincroniza perfis, salas e tipos
+        de sala.
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                email:
+                  type: string
+                  format: email
+                  pattern: ^(?!\.)(?!.*\.\.)([A-Za-z0-9_'+\-\.]*)[A-Za-z0-9_+-]@([A-Za-z0-9][A-Za-z0-9\-]*\.)+[A-Za-z]{2,}$
+                isAdmin:
+                  type: boolean
+                profileIds:
+                  type: array
+                  items:
+                    type: string
+                    format: uuid
+                    pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+                roomIds:
+                  type: array
+                  items:
+                    type: string
+                    format: uuid
+                    pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+                roomTypeIds:
+                  type: array
+                  items:
+                    type: string
+                    format: uuid
+                    pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+      parameters:
+        - schema:
+            type: string
+            format: uuid
+            pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+          in: path
+          name: id
+          required: true
+      security:
+        - sessionCookie: []
+      responses:
+        "200":
+          description: Default Response
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: string
+                    format: uuid
+                    pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+                  name:
+                    type: string
+                  email:
+                    type: string
+                    format: email
+                    pattern: ^(?!\.)(?!.*\.\.)([A-Za-z0-9_'+\-\.]*)[A-Za-z0-9_+-]@([A-Za-z0-9][A-Za-z0-9\-]*\.)+[A-Za-z]{2,}$
+                  image:
+                    nullable: true
+                    type: string
+                  isAdmin:
+                    type: boolean
+                  createdAt:
+                    type: string
+                    format: date-time
+                    pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d(?::[0-5]\d(?:\.\d+)?)?(?:Z))$
+                  updatedAt:
+                    type: string
+                    format: date-time
+                    pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d(?::[0-5]\d(?:\.\d+)?)?(?:Z))$
+                required:
+                  - id
+                  - name
+                  - email
+                  - image
+                  - isAdmin
+                  - createdAt
+                  - updatedAt
+                additionalProperties: false
+    delete:
+      summary: Excluir usuário
+      tags:
+        - users
+      description: Remove um usuário do sistema.
+      parameters:
+        - schema:
+            type: string
+            format: uuid
+            pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+          in: path
+          name: id
+          required: true
+      security:
+        - sessionCookie: []
+      responses:
+        "204":
+          description: Default Response
+          content:
+            application/json:
+              schema: {}
+  /logs/:
+    get:
+      summary: Listar logs de acesso
+      tags:
+        - logs
+      description: Retorna os logs de acesso paginados com suporte a filtros.
+      parameters:
+        - schema:
+            type: string
+            format: uuid
+            pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+          in: query
+          name: roomId
+          required: false
+        - schema:
+            type: string
+            format: uuid
+            pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+          in: query
+          name: userId
+          required: false
+        - schema:
+            type: string
+            enum:
+              - GRANTED
+              - DENIED
+          in: query
+          name: status
+          required: false
+        - schema:
+            default: 1
+            type: integer
+            minimum: 1
+            maximum: 9007199254740991
+          in: query
+          name: page
+          required: false
+        - schema:
+            default: 20
+            type: integer
+            minimum: 1
+            maximum: 100
+          in: query
+          name: pageSize
+          required: false
+      security:
+        - sessionCookie: []
+      responses:
+        "200":
+          description: Default Response
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id:
+                          type: string
+                          format: uuid
+                          pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+                        timestamp:
+                          anyOf:
+                            - type: string
+                              format: date-time
+                            - type: string
+                        status:
+                          type: string
+                          enum:
+                            - GRANTED
+                            - DENIED
+                        reason:
+                          nullable: true
+                          type: string
+                        credentialValueUsed:
+                          type: string
+                        roomName:
+                          type: string
+                        blockName:
+                          type: string
+                        roomId:
+                          type: string
+                          format: uuid
+                          pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+                        userId:
+                          nullable: true
+                          type: string
+                          format: uuid
+                          pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+                        userName:
+                          nullable: true
+                          type: string
+                        userEmail:
+                          nullable: true
+                          type: string
+                          format: email
+                          pattern: ^(?!\.)(?!.*\.\.)([A-Za-z0-9_'+\-\.]*)[A-Za-z0-9_+-]@([A-Za-z0-9][A-Za-z0-9\-]*\.)+[A-Za-z]{2,}$
+                      required:
+                        - id
+                        - timestamp
+                        - status
+                        - reason
+                        - credentialValueUsed
+                        - roomName
+                        - blockName
+                        - roomId
+                        - userId
+                        - userName
+                        - userEmail
+                      additionalProperties: false
+                  total:
+                    type: number
+                  page:
+                    type: number
+                  pageSize:
+                    type: number
+                  totalPages:
+                    type: number
+                required:
+                  - items
+                  - total
+                  - page
+                  - pageSize
+                  - totalPages
+                additionalProperties: false
+  /rooms/events:
+    get:
+      summary: Stream de eventos de status das salas (SSE)
+      tags:
+        - rooms
+      description: Abre uma conexão Server-Sent Events. O servidor emite um evento
+        `room-status` sempre que o estado de uma sala é atualizado pelo
+        controlador IoT.
+      responses:
+        "200":
+          description: Default Response
+          content:
+            application/json:
+              schema: {}
+  /rooms/summary:
+    get:
+      summary: Resumo de salas agrupadas por bloco
+      tags:
+        - rooms
+      description: Retorna todas as salas agrupadas por bloco com nome, tipo, estado e
+        horário da última atualização. Se o chamador estiver autenticado, inclui
+        também quem está usando a sala no momento e quem foi o último
+        utilizador.
+      parameters:
+        - schema:
+            type: string
+          in: query
+          name: q
+          required: false
+          description: Filtro de busca por nome da sala, bloco ou (para admin) usuário
+        - schema:
+            type: string
+          in: query
+          name: type
+          required: false
+          description: Filtrar por abreviação do tipo de sala
+        - schema:
+            type: string
+            enum:
+              - aberta
+              - fechada
+              - alerta
+          in: query
+          name: state
+          required: false
+          description: Filtrar por estado da porta
+      responses:
+        "200":
+          description: Default Response
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  authenticated:
+                    type: boolean
+                  isAdmin:
+                    type: boolean
+                  result:
+                    type: array
+                    items:
+                      anyOf:
+                        - type: object
+                          properties:
+                            block:
+                              type: object
+                              properties:
+                                id:
+                                  type: string
+                                  format: uuid
+                                  pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+                                name:
+                                  type: string
+                              required:
+                                - id
+                                - name
+                              additionalProperties: false
+                            rooms:
+                              type: array
+                              items:
+                                type: object
+                                properties:
+                                  id:
+                                    type: string
+                                    format: uuid
+                                    pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+                                  name:
+                                    type: string
+                                  typeAbbreviation:
+                                    type: string
+                                  state:
+                                    type: string
+                                    enum:
+                                      - aberta
+                                      - fechada
+                                      - alerta
+                                  lastStatusUpdateAt:
+                                    nullable: true
+                                    type: string
+                                    format: date-time
+                                    pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d(?::[0-5]\d(?:\.\d+)?)?(?:Z))$
+                                  currentUser:
+                                    nullable: true
+                                    type: object
+                                    properties:
+                                      id:
+                                        type: string
+                                        format: uuid
+                                        pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+                                      name:
+                                        type: string
+                                      email:
+                                        type: string
+                                        format: email
+                                        pattern: ^(?!\.)(?!.*\.\.)([A-Za-z0-9_'+\-\.]*)[A-Za-z0-9_+-]@([A-Za-z0-9][A-Za-z0-9\-]*\.)+[A-Za-z]{2,}$
+                                    required:
+                                      - id
+                                      - name
+                                      - email
+                                    additionalProperties: false
+                                  lastUser:
+                                    nullable: true
+                                    type: object
+                                    properties:
+                                      id:
+                                        type: string
+                                        format: uuid
+                                        pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+                                      name:
+                                        type: string
+                                      email:
+                                        type: string
+                                        format: email
+                                        pattern: ^(?!\.)(?!.*\.\.)([A-Za-z0-9_'+\-\.]*)[A-Za-z0-9_+-]@([A-Za-z0-9][A-Za-z0-9\-]*\.)+[A-Za-z]{2,}$
+                                    required:
+                                      - id
+                                      - name
+                                      - email
+                                    additionalProperties: false
+                                required:
+                                  - id
+                                  - name
+                                  - typeAbbreviation
+                                  - state
+                                  - lastStatusUpdateAt
+                                  - currentUser
+                                  - lastUser
+                                additionalProperties: false
+                          required:
+                            - block
+                            - rooms
+                          additionalProperties: false
+                        - type: object
+                          properties:
+                            block:
+                              type: object
+                              properties:
+                                id:
+                                  type: string
+                                  format: uuid
+                                  pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+                                name:
+                                  type: string
+                              required:
+                                - id
+                                - name
+                              additionalProperties: false
+                            rooms:
+                              type: array
+                              items:
+                                type: object
+                                properties:
+                                  id:
+                                    type: string
+                                    format: uuid
+                                    pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+                                  name:
+                                    type: string
+                                  typeAbbreviation:
+                                    type: string
+                                  state:
+                                    type: string
+                                    enum:
+                                      - aberta
+                                      - fechada
+                                      - alerta
+                                  lastStatusUpdateAt:
+                                    nullable: true
+                                    type: string
+                                    format: date-time
+                                    pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d(?::[0-5]\d(?:\.\d+)?)?(?:Z))$
+                                required:
+                                  - id
+                                  - name
+                                  - typeAbbreviation
+                                  - state
+                                  - lastStatusUpdateAt
+                                additionalProperties: false
+                          required:
+                            - block
+                            - rooms
+                          additionalProperties: false
+                required:
+                  - authenticated
+                  - isAdmin
+                  - result
+                additionalProperties: false
+                example:
+                  authenticated: true
+                  isAdmin: true
+                  result:
+                    - block:
+                        id: 1cf51c96-86a9-4fb3-b8e8-556a745d4423
+                        name: Bloco A
+                      rooms:
+                        - id: cdea3efb-650d-4c8a-a9c0-8ee97d739f5c
+                          name: Laboratório 101
+                          typeAbbreviation: LAB
+                          state: aberta
+                          lastStatusUpdateAt: 2025-02-20T14:30:00.000Z
+                          currentUser:
+                            id: 7b3cf58e-353f-48de-b2fd-6f203d64d3f8
+                            name: Ana Souza
+                            email: ana.souza@ifsp.edu.br
+                          lastUser:
+                            id: 7b3cf58e-353f-48de-b2fd-6f203d64d3f8
+                            name: Ana Souza
+                            email: ana.souza@ifsp.edu.br
   /rooms/:
     get:
       summary: Listar salas e blocos
@@ -131,6 +1335,41 @@ paths:
         - rooms
       description: Retorna as salas cadastradas, incluindo estado atual da porta e
         informações do bloco.
+      parameters:
+        - schema:
+            type: string
+          in: query
+          name: q
+          required: false
+          description: Filtrar por nome da sala
+        - schema:
+            type: string
+          in: query
+          name: typeIds
+          required: false
+          description: IDs de tipos separados por vírgula
+        - schema:
+            type: string
+          in: query
+          name: blockIds
+          required: false
+          description: IDs de blocos separados por vírgula
+        - schema:
+            default: 1
+            type: integer
+            minimum: 1
+            maximum: 9007199254740991
+          in: query
+          name: page
+          required: false
+        - schema:
+            default: 20
+            type: integer
+            minimum: 1
+            maximum: 100
+          in: query
+          name: pageSize
+          required: false
       security:
         - sessionCookie: []
       responses:
@@ -159,6 +1398,18 @@ paths:
                               type: string
                               format: uuid
                               pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+                            typeId:
+                              type: string
+                              format: uuid
+                              pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+                            typeAbbreviation:
+                              type: string
+                            typeName:
+                              type: string
+                            requiresBiometry:
+                              type: boolean
+                            requiresRFID:
+                              type: boolean
                             isLocked:
                               nullable: true
                               type: boolean
@@ -181,6 +1432,9 @@ paths:
                             - id
                             - name
                             - blockId
+                            - typeId
+                            - requiresBiometry
+                            - requiresRFID
                             - isLocked
                             - doorState
                             - lastStatusUpdateAt
@@ -203,15 +1457,34 @@ paths:
                         - room
                         - block
                       additionalProperties: false
+                  total:
+                    type: number
+                  page:
+                    type: number
+                  pageSize:
+                    type: number
+                  totalPages:
+                    type: number
                 required:
                   - result
+                  - total
+                  - page
+                  - pageSize
+                  - totalPages
                 additionalProperties: false
                 example:
+                  total: 1
+                  page: 1
+                  pageSize: 20
+                  totalPages: 1
                   result:
                     - room:
                         id: cdea3efb-650d-4c8a-a9c0-8ee97d739f5c
                         name: Laboratório 101
                         blockId: 1cf51c96-86a9-4fb3-b8e8-556a745d4423
+                        typeId: a1b2c3d4-e5f6-7890-abcd-ef1234567890
+                        requiresBiometry: false
+                        requiresRFID: false
                         isLocked: true
                         doorState: CLOSED
                         lastStatusUpdateAt: 2025-02-20T14:30:00.000Z
@@ -219,12 +1492,126 @@ paths:
                       block:
                         id: 1cf51c96-86a9-4fb3-b8e8-556a745d4423
                         name: Prédio Principal
-  /doors/:
-    get:
-      summary: Listar controladores de porta
+    post:
+      summary: Criar sala
       tags:
-        - doors
-      description: Retorna todos os controladores físicos cadastrados, status atual e último comando enviado.
+        - rooms
+      description: Cria uma nova sala. Opcionalmente vincula perfis e usuários com
+        acesso direto.
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                  minLength: 2
+                blockId:
+                  type: string
+                  format: uuid
+                  pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+                typeId:
+                  type: string
+                  format: uuid
+                  pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+                requiresBiometry:
+                  type: boolean
+                requiresRFID:
+                  type: boolean
+                profileIds:
+                  type: array
+                  items:
+                    type: string
+                    format: uuid
+                    pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+                userIds:
+                  type: array
+                  items:
+                    type: string
+                    format: uuid
+                    pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+              required:
+                - name
+                - blockId
+                - typeId
+        required: true
+      security:
+        - sessionCookie: []
+      responses:
+        "201":
+          description: Default Response
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: string
+                    format: uuid
+                    pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+                  name:
+                    type: string
+                  blockId:
+                    type: string
+                    format: uuid
+                    pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+                  typeId:
+                    type: string
+                    format: uuid
+                    pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+                  typeAbbreviation:
+                    type: string
+                  typeName:
+                    type: string
+                  requiresBiometry:
+                    type: boolean
+                  requiresRFID:
+                    type: boolean
+                  isLocked:
+                    nullable: true
+                    type: boolean
+                  doorState:
+                    type: string
+                    enum:
+                      - OPEN
+                      - CLOSED
+                      - UNKNOWN
+                  lastStatusUpdateAt:
+                    nullable: true
+                    type: string
+                    format: date-time
+                    pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d(?::[0-5]\d(?:\.\d+)?)?(?:Z))$
+                  createdAt:
+                    type: string
+                    format: date-time
+                    pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d(?::[0-5]\d(?:\.\d+)?)?(?:Z))$
+                required:
+                  - id
+                  - name
+                  - blockId
+                  - typeId
+                  - requiresBiometry
+                  - requiresRFID
+                  - isLocked
+                  - doorState
+                  - lastStatusUpdateAt
+                  - createdAt
+                additionalProperties: false
+  /rooms/{id}/relations:
+    get:
+      summary: Vínculos da sala
+      tags:
+        - rooms
+      description: Retorna os perfis e usuários com acesso direto associados à sala.
+      parameters:
+        - schema:
+            type: string
+            format: uuid
+            pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+          in: path
+          name: id
+          required: true
       security:
         - sessionCookie: []
       responses:
@@ -234,30 +1621,51 @@ paths:
             application/json:
               schema:
                 type: object
-
-  /profiles/:
-    get:
-      summary: Listar perfis
-      tags:
-        - profiles
-      responses:
-        '200':
-          description: Lista de perfis
-          content:
-            application/json:
-              schema:
-                type: object
                 properties:
-                  result:
+                  profiles:
                     type: array
                     items:
-                      $ref: '#/components/schemas/Profile'
-    post:
-      summary: Criar perfil
+                      type: object
+                      properties:
+                        id:
+                          type: string
+                        name:
+                          type: string
+                        description:
+                          type: string
+                      required:
+                        - id
+                        - name
+                        - description
+                      additionalProperties: false
+                  users:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id:
+                          type: string
+                        name:
+                          type: string
+                        email:
+                          type: string
+                      required:
+                        - id
+                        - name
+                        - email
+                      additionalProperties: false
+                required:
+                  - profiles
+                  - users
+                additionalProperties: false
+  /rooms/{id}:
+    put:
+      summary: Atualizar sala
       tags:
-        - profiles
+        - rooms
+      description: Atualiza os dados de uma sala e sincroniza perfis e usuários com
+        acesso direto.
       requestBody:
-        required: true
         content:
           application/json:
             schema:
@@ -265,219 +1673,547 @@ paths:
               properties:
                 name:
                   type: string
-                description:
+                  minLength: 2
+                blockId:
                   type: string
-      responses:
-        '201':
-          description: Perfil criado
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Profile'
-
-  /users/{userId}/profiles:
-    get:
-      summary: Listar perfis de um usuário
-      tags: [profiles]
+                  format: uuid
+                  pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+                typeId:
+                  type: string
+                  format: uuid
+                  pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+                requiresBiometry:
+                  type: boolean
+                requiresRFID:
+                  type: boolean
+                profileIds:
+                  type: array
+                  items:
+                    type: string
+                    format: uuid
+                    pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+                userIds:
+                  type: array
+                  items:
+                    type: string
+                    format: uuid
+                    pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
       parameters:
-        - in: path
-          name: userId
-          required: true
-          schema:
+        - schema:
             type: string
-      responses:
-        '200':
-          description: Perfis do usuário
-    post:
-      summary: Atribuir perfil ao usuário
-      tags: [profiles]
-      parameters:
-        - in: path
-          name: userId
+            format: uuid
+            pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+          in: path
+          name: id
           required: true
-          schema:
-            type: string
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              properties:
-                profileId:
-                  type: string
+      security:
+        - sessionCookie: []
       responses:
-        '204':
-          description: Perfil atribuído
-
-  /rooms/{roomId}/profiles:
-    get:
-      summary: Listar perfis com acesso à sala
-      tags: [profiles]
-      parameters:
-        - in: path
-          name: roomId
-          required: true
-          schema:
-            type: string
-      responses:
-        '200':
-          description: Perfis listados
-    post:
-      summary: Atribuir perfil à sala
-      tags: [profiles]
-      parameters:
-        - in: path
-          name: roomId
-          required: true
-          schema:
-            type: string
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              properties:
-                profileId:
-                  type: string
-      responses:
-        '204':
-          description: Perfil atribuído à sala
-
-  /access/verify:
-    post:
-      summary: Verificar permissão multimodal (usado por controladores)
-      tags: [access]
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              properties:
-                roomId:
-                  type: string
-                credentialValue:
-                  type: string
-                type:
-                  type: string
-                  enum: [BIOMETRY, RFID]
-      responses:
-        '200':
-          description: Resultado da verificação
+        "200":
+          description: Default Response
           content:
             application/json:
               schema:
                 type: object
                 properties:
-                  granted:
-                    type: boolean
-                  reason:
+                  id:
                     type: string
-      /room-types/:
-        post:
-          summary: Criar tipo de sala
-          tags: [room-types]
-          requestBody:
-            required: true
-            content:
-              application/json:
-                schema:
-                  type: object
-                  properties:
-                    name:
-                      type: string
-                    description:
-                      type: string
-          responses:
-            '201':
-              description: Tipo criado
-              content:
-                application/json:
-                  schema:
-                    $ref: '#/components/schemas/RoomType'
-
-      /room-types/{roomTypeId}/users:
-        post:
-          summary: Atribuir permissão de tipo a usuário
-          tags: [room-types]
-          parameters:
-            - in: path
-              name: roomTypeId
-              required: true
+                    format: uuid
+                    pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+                  name:
+                    type: string
+                  blockId:
+                    type: string
+                    format: uuid
+                    pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+                  typeId:
+                    type: string
+                    format: uuid
+                    pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+                  typeAbbreviation:
+                    type: string
+                  typeName:
+                    type: string
+                  requiresBiometry:
+                    type: boolean
+                  requiresRFID:
+                    type: boolean
+                  isLocked:
+                    nullable: true
+                    type: boolean
+                  doorState:
+                    type: string
+                    enum:
+                      - OPEN
+                      - CLOSED
+                      - UNKNOWN
+                  lastStatusUpdateAt:
+                    nullable: true
+                    type: string
+                    format: date-time
+                    pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d(?::[0-5]\d(?:\.\d+)?)?(?:Z))$
+                  createdAt:
+                    type: string
+                    format: date-time
+                    pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d(?::[0-5]\d(?:\.\d+)?)?(?:Z))$
+                required:
+                  - id
+                  - name
+                  - blockId
+                  - typeId
+                  - requiresBiometry
+                  - requiresRFID
+                  - isLocked
+                  - doorState
+                  - lastStatusUpdateAt
+                  - createdAt
+                additionalProperties: false
+    delete:
+      summary: Excluir sala
+      tags:
+        - rooms
+      description: Remove uma sala do sistema.
+      parameters:
+        - schema:
+            type: string
+            format: uuid
+            pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+          in: path
+          name: id
+          required: true
+      security:
+        - sessionCookie: []
+      responses:
+        "204":
+          description: Default Response
+          content:
+            application/json:
+              schema: {}
+  /rooms/{id}/profiles:
+    post:
+      summary: Atribuir perfil à sala
+      tags:
+        - rooms
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                profileId:
+                  type: string
+                  format: uuid
+                  pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+              required:
+                - profileId
+        required: true
+      parameters:
+        - schema:
+            type: string
+            format: uuid
+            pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+          in: path
+          name: id
+          required: true
+      security:
+        - sessionCookie: []
+      responses:
+        "204":
+          description: Default Response
+          content:
+            application/json:
+              schema: {}
+  /rooms/{id}/profiles/{profileId}:
+    delete:
+      summary: Remover perfil da sala
+      tags:
+        - rooms
+      parameters:
+        - schema:
+            type: string
+            format: uuid
+            pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+          in: path
+          name: id
+          required: true
+        - schema:
+            type: string
+            format: uuid
+            pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+          in: path
+          name: profileId
+          required: true
+      security:
+        - sessionCookie: []
+      responses:
+        "204":
+          description: Default Response
+          content:
+            application/json:
+              schema: {}
+  /rooms/{id}/users:
+    post:
+      summary: Atribuir permissão direta de usuário à sala
+      tags:
+        - rooms
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                userId:
+                  type: string
+                  format: uuid
+                  pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+                expiresAt:
+                  type: string
+                  format: date-time
+                  pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d(?::[0-5]\d(?:\.\d+)?)?(?:Z))$
+              required:
+                - userId
+        required: true
+      parameters:
+        - schema:
+            type: string
+            format: uuid
+            pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+          in: path
+          name: id
+          required: true
+      security:
+        - sessionCookie: []
+      responses:
+        "201":
+          description: Default Response
+          content:
+            application/json:
               schema:
-                type: string
-          requestBody:
-            required: true
-            content:
-              application/json:
-                schema:
-                  type: object
-                  properties:
-                    userId:
-                      type: string
-          responses:
-            '204':
-              description: Permissão atribuída
-        delete:
-          summary: Remover permissão de tipo de usuário
-          tags: [room-types]
-          parameters:
-            - in: path
-              name: roomTypeId
-              required: true
+                type: object
+                properties:
+                  id:
+                    type: string
+                    format: uuid
+                    pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+                required:
+                  - id
+                additionalProperties: false
+  /rooms/{id}/users/{userId}:
+    delete:
+      summary: Remover permissão direta de usuário da sala
+      tags:
+        - rooms
+      parameters:
+        - schema:
+            type: string
+            format: uuid
+            pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+          in: path
+          name: id
+          required: true
+        - schema:
+            type: string
+            format: uuid
+            pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+          in: path
+          name: userId
+          required: true
+      security:
+        - sessionCookie: []
+      responses:
+        "204":
+          description: Default Response
+          content:
+            application/json:
+              schema: {}
+  /rooms/{id}/users/bulk:
+    post:
+      summary: Sincronizar usuários com acesso direto à sala
+      tags:
+        - rooms
+      description: Substitui completamente a lista de usuários com permissão direta
+        para a sala.
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                userIds:
+                  type: array
+                  items:
+                    type: string
+                    format: uuid
+                    pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+              required:
+                - userIds
+        required: true
+      parameters:
+        - schema:
+            type: string
+            format: uuid
+            pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+          in: path
+          name: id
+          required: true
+      security:
+        - sessionCookie: []
+      responses:
+        "204":
+          description: Default Response
+          content:
+            application/json:
+              schema: {}
+  /rooms/{id}/profiles/bulk:
+    post:
+      summary: Sincronizar perfis com acesso à sala
+      tags:
+        - rooms
+      description: Substitui completamente a lista de perfis com permissão para a sala.
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                profileIds:
+                  type: array
+                  items:
+                    type: string
+                    format: uuid
+                    pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+              required:
+                - profileIds
+        required: true
+      parameters:
+        - schema:
+            type: string
+            format: uuid
+            pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+          in: path
+          name: id
+          required: true
+      security:
+        - sessionCookie: []
+      responses:
+        "204":
+          description: Default Response
+          content:
+            application/json:
+              schema: {}
+  /rooms/{id}/access-logs:
+    get:
+      summary: Logs de acesso recentes de uma sala
+      tags:
+        - rooms
+      description: Retorna os últimos registros de acesso (GRANTED) de uma sala.
+        Requer autenticação de admin.
+      parameters:
+        - schema:
+            type: integer
+            minimum: 1
+            maximum: 50
+          in: query
+          name: limit
+          required: false
+        - schema:
+            type: string
+            format: uuid
+            pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+          in: path
+          name: id
+          required: true
+      security:
+        - sessionCookie: []
+      responses:
+        "200":
+          description: Default Response
+          content:
+            application/json:
               schema:
-                type: string
-            - in: path
-              name: userId
-              required: true
+                type: object
+                properties:
+                  logs:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id:
+                          type: string
+                        status:
+                          type: string
+                        reason:
+                          nullable: true
+                          type: string
+                        timestamp:
+                          type: string
+                          format: date-time
+                          pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d(?::[0-5]\d(?:\.\d+)?)?(?:Z))$
+                        userId:
+                          nullable: true
+                          type: string
+                        userName:
+                          nullable: true
+                          type: string
+                        userEmail:
+                          nullable: true
+                          type: string
+                      required:
+                        - id
+                        - status
+                        - reason
+                        - timestamp
+                        - userId
+                        - userName
+                        - userEmail
+                      additionalProperties: false
+                required:
+                  - logs
+                additionalProperties: false
+  /doors/:
+    get:
+      summary: Listar controladores de porta
+      tags:
+        - doors
+      description: Retorna todos os controladores físicos cadastrados, status atual e
+        último comando enviado.
+      security:
+        - sessionCookie: []
+      responses:
+        "200":
+          description: Default Response
+          content:
+            application/json:
               schema:
-                type: string
-          responses:
-            '204':
-              description: Permissão removida
-
-      /room-types/{roomTypeId}/profiles:
-        post:
-          summary: Atribuir permissão de tipo a perfil
-          tags: [room-types]
-          parameters:
-            - in: path
-              name: roomTypeId
-              required: true
-              schema:
-                type: string
-          requestBody:
-            required: true
-            content:
-              application/json:
-                schema:
-                  type: object
-                  properties:
-                    profileId:
-                      type: string
-          responses:
-            '204':
-              description: Permissão atribuída
-        delete:
-          summary: Remover permissão de tipo de perfil
-          tags: [room-types]
-          parameters:
-            - in: path
-              name: roomTypeId
-              required: true
-              schema:
-                type: string
-            - in: path
-              name: profileId
-              required: true
-              schema:
-                type: string
-          responses:
-            '204':
-              description: Permissão removida
- 
+                type: object
+                properties:
+                  controllers:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        controllerId:
+                          type: string
+                        room:
+                          type: object
+                          properties:
+                            id:
+                              type: string
+                              format: uuid
+                              pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+                            name:
+                              type: string
+                            blockName:
+                              type: string
+                            doorState:
+                              type: string
+                              enum:
+                                - OPEN
+                                - CLOSED
+                                - UNKNOWN
+                            isLocked:
+                              nullable: true
+                              type: boolean
+                            lastStatusUpdateAt:
+                              nullable: true
+                              type: string
+                              format: date-time
+                              pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d(?::[0-5]\d(?:\.\d+)?)?(?:Z))$
+                          required:
+                            - id
+                            - name
+                            - blockName
+                            - doorState
+                            - isLocked
+                            - lastStatusUpdateAt
+                          additionalProperties: false
+                        controller:
+                          type: object
+                          properties:
+                            firmwareVersion:
+                              nullable: true
+                              type: string
+                            lastSeenAt:
+                              type: string
+                              format: date-time
+                              pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d(?::[0-5]\d(?:\.\d+)?)?(?:Z))$
+                          required:
+                            - firmwareVersion
+                            - lastSeenAt
+                          additionalProperties: false
+                        lastCommand:
+                          nullable: true
+                          type: object
+                          properties:
+                            id:
+                              type: string
+                              format: uuid
+                              pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+                            type:
+                              type: string
+                              enum:
+                                - UNLOCK
+                                - LOCK
+                                - SYNC_STATE
+                            status:
+                              type: string
+                              enum:
+                                - PENDING
+                                - SENT
+                                - COMPLETED
+                                - FAILED
+                                - EXPIRED
+                            createdAt:
+                              type: string
+                              format: date-time
+                              pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d(?::[0-5]\d(?:\.\d+)?)?(?:Z))$
+                            sentAt:
+                              nullable: true
+                              type: string
+                              format: date-time
+                              pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d(?::[0-5]\d(?:\.\d+)?)?(?:Z))$
+                            processedAt:
+                              nullable: true
+                              type: string
+                              format: date-time
+                              pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d(?::[0-5]\d(?:\.\d+)?)?(?:Z))$
+                          required:
+                            - id
+                            - type
+                            - status
+                            - createdAt
+                            - sentAt
+                            - processedAt
+                          additionalProperties: false
+                      required:
+                        - controllerId
+                        - room
+                        - controller
+                        - lastCommand
+                      additionalProperties: false
+                required:
+                  - controllers
+                additionalProperties: false
+                example:
+                  controllers:
+                    - controllerId: controller-lab-101
+                      room:
+                        id: f05c9cd2-3f5f-40bc-9219-028f8f8aaf75
+                        name: Laboratório 101
+                        blockName: Prédio Principal
+                        doorState: CLOSED
+                        isLocked: true
+                        lastStatusUpdateAt: 2025-02-20T14:30:00.000Z
+                      controller:
+                        firmwareVersion: 1.2.3
+                        lastSeenAt: 2025-02-20T14:31:12.000Z
+                      lastCommand:
+                        id: 6d2dbfb1-9a90-4f49-9af2-6520f9a2c2f5
+                        type: LOCK
+                        status: SENT
+                        createdAt: 2025-02-20T14:29:45.000Z
+                        sentAt: 2025-02-20T14:29:50.000Z
+                        processedAt: null
   /doors/{controllerId}/commands:
     get:
       summary: Histórico de comandos
@@ -804,6 +2540,7 @@ paths:
                 type: object
                 properties:
                   roomId:
+                    nullable: true
                     type: string
                     format: uuid
                     pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
@@ -918,11 +2655,21 @@ paths:
                 firmwareVersion:
                   type: string
                   minLength: 1
+                sensorProtocol:
+                  type: string
+                  enum:
+                    - R30X
+                    - BOLAND
+                sensorModel:
+                  type: string
+                  minLength: 1
               required:
                 - roomId
               example:
                 roomId: f05c9cd2-3f5f-40bc-9219-028f8f8aaf75
                 firmwareVersion: 1.2.3
+                sensorProtocol: R30X
+                sensorModel: ZN-53X
         required: true
       parameters:
         - schema:
@@ -951,6 +2698,15 @@ paths:
                       firmwareVersion:
                         nullable: true
                         type: string
+                      sensorProtocol:
+                        nullable: true
+                        type: string
+                        enum:
+                          - R30X
+                          - BOLAND
+                      sensorModel:
+                        nullable: true
+                        type: string
                       lastSeenAt:
                         type: string
                         format: date-time
@@ -959,6 +2715,8 @@ paths:
                       - id
                       - roomId
                       - firmwareVersion
+                      - sensorProtocol
+                      - sensorModel
                       - lastSeenAt
                     additionalProperties: false
                 required:
@@ -969,6 +2727,8 @@ paths:
                     id: controller-lab-101
                     roomId: f05c9cd2-3f5f-40bc-9219-028f8f8aaf75
                     firmwareVersion: 1.2.3
+                    sensorProtocol: R30X
+                    sensorModel: ZN-53X
                     lastSeenAt: 2025-02-20T14:31:12.000Z
   /iot/devices/{controllerId}/heartbeat:
     patch:
@@ -1015,6 +2775,15 @@ paths:
                       firmwareVersion:
                         nullable: true
                         type: string
+                      sensorProtocol:
+                        nullable: true
+                        type: string
+                        enum:
+                          - R30X
+                          - BOLAND
+                      sensorModel:
+                        nullable: true
+                        type: string
                       lastSeenAt:
                         type: string
                         format: date-time
@@ -1023,6 +2792,8 @@ paths:
                       - id
                       - roomId
                       - firmwareVersion
+                      - sensorProtocol
+                      - sensorModel
                       - lastSeenAt
                     additionalProperties: false
                 required:
@@ -1033,6 +2804,8 @@ paths:
                     id: controller-lab-101
                     roomId: f05c9cd2-3f5f-40bc-9219-028f8f8aaf75
                     firmwareVersion: 1.2.3
+                    sensorProtocol: R30X
+                    sensorModel: ZN-53X
                     lastSeenAt: 2025-02-20T14:31:12.000Z
         "404":
           description: Default Response
@@ -1461,6 +3234,121 @@ paths:
                       expiresAt: 2025-02-20T15:00:00.000Z
                       createdAt: 2025-02-20T14:58:00.000Z
                       sentAt: 2025-02-20T14:58:05.000Z
+  /iot/devices/{controllerId}/enrollment:
+    post:
+      summary: Registrar digital via terminal de enrollment
+      tags:
+        - iot
+      description: Endpoint interno chamado pelo broker MQTT ao processar o resultado
+        de enrollment biométrico capturado por um controlador físico. Não exige
+        cookie de sessão — autenticado pelo controllerId.
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                userId:
+                  type: string
+                  format: uuid
+                  pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+                finger:
+                  type: string
+                  enum:
+                    - right_thumb
+                    - right_index
+                    - right_middle
+                    - right_ring
+                    - right_pinky
+                    - left_thumb
+                    - left_index
+                    - left_middle
+                    - left_ring
+                    - left_pinky
+                template:
+                  type: string
+                  minLength: 1
+                enrollmentId:
+                  type: string
+                  minLength: 1
+              required:
+                - userId
+                - finger
+                - template
+              example:
+                userId: 7b3cf58e-353f-48de-b2fd-6f203d64d3f8
+                finger: right_index
+                template: 4152010000000000...
+                enrollmentId: enroll-abc-123
+        required: true
+      parameters:
+        - schema:
+            type: string
+            minLength: 1
+          in: path
+          name: controllerId
+          required: true
+      responses:
+        "201":
+          description: Default Response
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: string
+                    format: uuid
+                    pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+                  finger:
+                    type: string
+                    enum:
+                      - right_thumb
+                      - right_index
+                      - right_middle
+                      - right_ring
+                      - right_pinky
+                      - left_thumb
+                      - left_index
+                      - left_middle
+                      - left_ring
+                      - left_pinky
+                  isActive:
+                    type: boolean
+                  createdAt:
+                    type: string
+                    format: date-time
+                    pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d(?::[0-5]\d(?:\.\d+)?)?(?:Z))$
+                required:
+                  - id
+                  - finger
+                  - isActive
+                  - createdAt
+                additionalProperties: false
+        "404":
+          description: Default Response
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                required:
+                  - message
+                additionalProperties: false
+        "409":
+          description: Default Response
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                required:
+                  - message
+                additionalProperties: false
   /iot/devices/{controllerId}/commands/{commandId}/ack:
     patch:
       summary: Confirmar execução de comando

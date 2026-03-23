@@ -17,6 +17,7 @@ import {
 } from "lucide-react";
 import { useState } from "react";
 import { Badge } from "@/components/ui/badge";
+import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import {
 	Table,
@@ -54,24 +55,23 @@ const columns = [
 
 function DoorStateBadge({ state }: { state: string }) {
 	const normalized = state?.toUpperCase();
+
+	let colorClass = "bg-destructive";
+	let title = state || "Desconhecido";
+
 	if (normalized === "OPEN" || normalized === "OPENED") {
-		return (
-			<Badge className="gap-1 py-0 px-1.5 text-[10px] bg-emerald-100 text-emerald-700 border-emerald-200 hover:bg-emerald-100 dark:bg-emerald-900/30 dark:text-emerald-300 dark:border-emerald-800">
-				<DoorOpen className="size-2.5" /> Aberta
-			</Badge>
-		);
+		colorClass = "bg-primary";
+		title = "Aberta";
+	} else if (normalized === "CLOSED") {
+		colorClass = "bg-zinc-400 dark:bg-zinc-600";
+		title = "Fechada";
+	} else if (!state || normalized === "UNKNOWN") {
+		colorClass = "bg-zinc-300 dark:bg-zinc-700";
+		title = "Desconhecido";
 	}
-	if (normalized === "CLOSED") {
-		return (
-			<Badge className="gap-1 py-0 px-1.5 text-[10px] bg-zinc-100 text-zinc-600 border-zinc-200 hover:bg-zinc-100 dark:bg-zinc-800 dark:text-zinc-300 dark:border-zinc-700">
-				<DoorClosed className="size-2.5" /> Fechada
-			</Badge>
-		);
-	}
+
 	return (
-		<Badge variant="secondary" className="py-0 px-1.5 text-[10px]">
-			{state ?? "Desconhecido"}
-		</Badge>
+		<div className={cn("size-2.5 rounded-full", colorClass)} title={title} />
 	);
 }
 
@@ -124,15 +124,17 @@ export function RoomsTable({ rooms, onEdit, onDelete }: RoomsTableProps) {
 												{room.name}
 											</span>
 											<DoorStateBadge state={room.doorState} />
+											{room.typeAbbreviation && (
+												<Badge
+													variant="secondary"
+													className="py-0 px-1 text-[10px] whitespace-nowrap h-5"
+												>
+													{room.typeAbbreviation}
+												</Badge>
+											)}
 										</div>
 										<div className="flex items-center gap-2 text-xs text-zinc-400 dark:text-zinc-500 leading-tight">
 											<span>{room.blockName || "—"}</span>
-											{room.typeAbbreviation && (
-												<>
-													<span>·</span>
-													<span>{room.typeAbbreviation}</span>
-												</>
-											)}
 										</div>
 									</div>
 								</TableCell>

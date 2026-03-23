@@ -12,6 +12,7 @@ import { doorRoute } from "@/api/routes/door";
 import { iotRoute } from "@/api/routes/iot";
 import { roomRoute } from "@/api/routes/room";
 import { userRoute } from "@/api/routes/user";
+import { logsRoute } from "@/api/routes/logs";
 
 async function generateOpenApiSpec() {
 	const app = fastify({ logger: false }).withTypeProvider<ZodTypeProvider>();
@@ -23,6 +24,7 @@ async function generateOpenApiSpec() {
 
 	app.register(authRoute, { prefix: "/auth" });
 	app.register(userRoute, { prefix: "/users" });
+        app.register(logsRoute, { prefix: "/logs" });
 	app.register(roomRoute, { prefix: "/rooms" });
 	app.register(doorRoute, { prefix: "/doors" });
 	app.register(iotRoute, { prefix: "/iot" });

@@ -156,6 +156,8 @@ export async function fetchRoomsAdmin(
 				name: string;
 				blockId: string;
 				typeId: string;
+				typeAbbreviation?: string;
+				typeName?: string;
 				requiresBiometry: boolean;
 				requiresRFID: boolean;
 				isLocked: boolean | null;
@@ -178,8 +180,9 @@ export async function fetchRoomsAdmin(
 			blockId: room.blockId,
 			blockName: block.name,
 			typeId: room.typeId,
-			typeAbbreviation: "",
-			typeName: "",
+			typeAbbreviation: room.typeAbbreviation || "",
+			typeName: room.typeName || "",
+
 			requiresBiometry: room.requiresBiometry ?? false,
 			requiresRFID: room.requiresRFID ?? false,
 			doorState: room.doorState,

@@ -339,7 +339,7 @@ export function FingerprintHandDrawer({
 												{count > 0 && (
 													<span
 														className={cn(
-															"inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-full text-[10px] font-semibold",
+															"inline-flex items-center justify-center min-w-4.5 h-4.5 px-1 rounded-full text-[10px] font-semibold",
 															activeTab === key
 																? "bg-primary text-primary-foreground"
 																: "bg-zinc-100 text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400",

@@ -14,6 +14,7 @@ import { profileRoute } from "./routes/profile";
 import { roomRoute } from "./routes/room";
 import { roomTypesRoute } from "./routes/room-types"; // GET / added
 import { userRoute } from "./routes/user";
+import { logsRoute } from "./routes/logs";
 
 const app = fastify({
 	routerOptions: {
@@ -36,6 +37,7 @@ async function bootstrap() {
 
 	app.register(authRoute, { prefix: "/auth" });
 	app.register(userRoute, { prefix: "/users" });
+        app.register(logsRoute, { prefix: "/logs" });
 	app.register(roomRoute, { prefix: "/rooms" });
 	app.register(roomTypesRoute, { prefix: "/room-types" });
 	app.register(doorRoute, { prefix: "/doors" });

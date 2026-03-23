@@ -3,6 +3,7 @@ import relativeTime from "dayjs/plugin/relativeTime";
 import "dayjs/locale/pt-br";
 import { useQuery } from "@tanstack/react-query";
 import { X } from "lucide-react";
+import { Link } from "@tanstack/react-router";
 import { AnimatePresence, motion } from "motion/react";
 import { useEffect, useLayoutEffect } from "react";
 import { Button } from "@/components/ui/button";
@@ -300,12 +301,13 @@ export function RoomDrawer({
 
 										{/* "Ver mais" link */}
 										{!logsLoading && totalLogs > 0 && (
-											<a
-												href="/logs"
+											<Link
+												to="/logs"
+												search={{ roomId: room.id }}
 												className="text-xs text-center text-zinc-400 dark:text-zinc-500 hover:text-zinc-600 dark:hover:text-zinc-300 transition-colors pt-1"
 											>
 												mais {totalLogs} ocupantes na última semana...
-											</a>
+											</Link>
 										)}
 									</motion.div>
 								)}
