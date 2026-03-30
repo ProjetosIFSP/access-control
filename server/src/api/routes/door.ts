@@ -11,8 +11,8 @@ import { createDoorCommand } from "@/services/iot/commands";
 import { getDoorControllerById } from "@/services/iot/door-controller";
 import { getControllerAccessLogs } from "@/services/iot/get-controller-access-logs";
 import { getControllerCommands } from "@/services/iot/get-controller-commands";
+import { getControllerTargets } from "@/services/iot/get-controller-targets";
 import { getDoorControllers } from "@/services/iot/get-door-controllers";
-
 
 const commandTypeValues = doorCommandTypeEnum.enumValues as [
 	(typeof doorCommandTypeEnum.enumValues)[number],
@@ -106,6 +106,24 @@ const accessLogEntrySchema = z.object({
 const controllerAccessLogsResponseSchema = z.object({
 	roomId: z.string().uuid().nullable(),
 	logs: z.array(accessLogEntrySchema),
+});
+
+const controllerTargetSchema = z.object({
+	controllerId: z.string(),
+	firmwareVersion: z.string().nullable(),
+	lastSeenAt: z.string().datetime(),
+	sensorModel: z.string().nullable(),
+	sensorProtocol: z.string().nullable(),
+});
+
+const roomControllerTargetSchema = controllerTargetSchema.extend({
+	roomId: z.string().uuid(),
+	roomName: z.string(),
+});
+
+const controllerTargetsResponseSchema = z.object({
+	pairingControllers: z.array(controllerTargetSchema),
+	roomControllers: z.array(roomControllerTargetSchema),
 });
 
 const sampleControllerId = "controller-lab-101" as const;
@@ -213,8 +231,6 @@ const controllerNotFoundExample = {
 	code: "CONTROLLER_NOT_FOUND" as const,
 };
 
-
-
 export const doorRoute: FastifyPluginAsyncZod = async (app) => {
 	app.get(
 		"/",
@@ -261,6 +277,44 @@ export const doorRoute: FastifyPluginAsyncZod = async (app) => {
 				})),
 			};
 			return reply.status(200).send(payload);
+		},
+	);
+
+	app.get(
+		"/credential-targets",
+		{
+			schema: {
+				tags: ["doors"],
+				summary: "Listar destinos de credenciais",
+				description:
+					"Retorna controladores em modo de pareamento e controladores vinculados a salas para uso no cadastro de credenciais.",
+				security: [{ sessionCookie: [] }],
+				response: {
+					200: controllerTargetsResponseSchema,
+				},
+			} satisfies SchemaWithExamples,
+		},
+		async (_request, reply) => {
+			const targets = await getControllerTargets();
+
+			return reply.status(200).send({
+				pairingControllers: targets.pairingControllers.map((controller) => ({
+					controllerId: controller.controllerId,
+					firmwareVersion: controller.firmwareVersion,
+					lastSeenAt: controller.lastSeenAt.toISOString(),
+					sensorModel: controller.sensorModel,
+					sensorProtocol: controller.sensorProtocol,
+				})),
+				roomControllers: targets.roomControllers.map((controller) => ({
+					controllerId: controller.controllerId,
+					roomId: controller.roomId,
+					roomName: controller.roomName,
+					firmwareVersion: controller.firmwareVersion,
+					lastSeenAt: controller.lastSeenAt.toISOString(),
+					sensorModel: controller.sensorModel,
+					sensorProtocol: controller.sensorProtocol,
+				})),
+			});
 		},
 	);
 

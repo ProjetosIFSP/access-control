@@ -2,7 +2,10 @@ import type { BlockFormValues } from "@/components/blocks/block-form-panel";
 import { BlockFormPanel } from "@/components/blocks/block-form-panel";
 import type { RoomTypeFormValues } from "@/components/room-types/room-type-form-panel";
 import { RoomTypeFormPanel } from "@/components/room-types/room-type-form-panel";
-import type { RoomFormValues } from "@/components/rooms-admin/room-form-panel";
+import type {
+	RoomControllerOption,
+	RoomFormValues,
+} from "@/components/rooms-admin/room-form-panel";
 import { RoomFormPanel } from "@/components/rooms-admin/room-form-panel";
 import { SplitViewPanel } from "@/components/ui/split-view";
 import { SplitViewPanelHeader } from "@/components/ui/split-view-panel-header";
@@ -16,6 +19,7 @@ interface RoomsSidePanelProps {
 	panelSubtitle: string;
 	allBlocks: BlockSummary[];
 	roomTypes: RoomType[];
+	controllerOptions: RoomControllerOption[];
 	onClose: () => void;
 	// Room form
 	isSubmittingRoom: boolean;
@@ -34,6 +38,7 @@ export function RoomsSidePanel({
 	panelSubtitle,
 	allBlocks,
 	roomTypes,
+	controllerOptions,
 	onClose,
 	isSubmittingRoom,
 	onSubmitRoom,
@@ -68,6 +73,7 @@ export function RoomsSidePanel({
 						room={editRoom}
 						blocks={allBlocks}
 						roomTypes={roomTypes}
+						controllerOptions={controllerOptions}
 						isSubmitting={isSubmittingRoom}
 						onSubmit={onSubmitRoom}
 						onCancel={onClose}

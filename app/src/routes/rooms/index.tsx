@@ -6,6 +6,7 @@ import { toast } from "sonner";
 
 import { SplitView, SplitViewMain } from "@/components/ui/split-view";
 import { useDebounce } from "@/hooks/use-debounce";
+import { controllerTargetsQueryOptions } from "@/services/doors";
 import { profilesQueryOptions } from "@/services/profiles";
 import type { RoomsAdminFilters } from "@/services/rooms";
 import {
@@ -47,11 +48,12 @@ import { PAGE_SIZE, roomsSearchParams } from "./-types";
 
 export const Route = createFileRoute("/rooms/")({
 	beforeLoad: async ({ context }) => {
+		if (typeof document === "undefined") return;
 		try {
 			const me = await context.queryClient.ensureQueryData(
 				currentUserQueryOptions,
 			);
-			if (!me.isAdmin)
+			if (!me?.isAdmin)
 				throw redirect({
 					to: "/",
 					search: { q: undefined, type: undefined, state: undefined },
@@ -64,13 +66,16 @@ export const Route = createFileRoute("/rooms/")({
 			});
 		}
 	},
-	loader: ({ context }) =>
-		Promise.all([
+	loader: ({ context }) => {
+		if (typeof document === "undefined") return Promise.resolve();
+		return Promise.all([
 			context.queryClient.ensureQueryData(roomsAdminQueryOptions({ page: 1 })),
 			context.queryClient.ensureQueryData(blocksQueryOptions),
 			context.queryClient.ensureQueryData(roomTypesQueryOptions),
 			context.queryClient.ensureQueryData(profilesQueryOptions),
-		]),
+			context.queryClient.ensureQueryData(controllerTargetsQueryOptions),
+		]);
+	},
 	component: RoomsManagePage,
 });
 
@@ -226,6 +231,10 @@ function RoomsManagePage() {
 		error: roomTypesErrorObj,
 	} = useQuery(roomTypesQueryOptions);
 
+	const { data: controllerTargetsData } = useQuery(
+		controllerTargetsQueryOptions,
+	);
+
 	const allRooms = roomsData?.result ?? [];
 	const allBlocks = blocksData?.result ?? [];
 	const roomTypes = roomTypesData?.result ?? [];
@@ -286,6 +295,29 @@ function RoomsManagePage() {
 			})),
 		[roomTypes],
 	);
+
+	const controllerOptions = useMemo(() => {
+		const pairing = (controllerTargetsData?.pairingControllers ?? []).map(
+			(controller) => ({
+				controllerId: controller.controllerId,
+				label: `${controller.controllerId} (pareamento)`,
+				group: "pairing" as const,
+			}),
+		);
+
+		const roomAssigned = (controllerTargetsData?.roomControllers ?? [])
+			.filter((controller) => {
+				if (panelMode.kind !== "editRoom") return false;
+				return controller.roomId === panelMode.item.id;
+			})
+			.map((controller) => ({
+				controllerId: controller.controllerId,
+				label: `${controller.controllerId} (${controller.roomName})`,
+				group: "room" as const,
+			}));
+
+		return [...pairing, ...roomAssigned];
+	}, [controllerTargetsData, panelMode]);
 
 	// ── Panel labels (memoized) ──────────────────────────────────────────────────
 	const panelTitle = useMemo(() => {
@@ -531,6 +563,7 @@ function RoomsManagePage() {
 						panelSubtitle={panelSubtitle}
 						allBlocks={allBlocks}
 						roomTypes={roomTypes}
+						controllerOptions={controllerOptions}
 						onClose={closePanel}
 						isSubmittingRoom={
 							panelMode.kind === "editRoom"

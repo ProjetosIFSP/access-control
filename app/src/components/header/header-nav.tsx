@@ -3,6 +3,7 @@ import { Link } from "@tanstack/react-router";
 import { useSearchContext } from "fumadocs-ui/contexts/search";
 import { Search } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { currentUserQueryOptions } from "@/services/users";
 import { Item, ItemContent, ItemDescription, ItemTitle } from "../ui/item";
 import {
 	NavigationMenu,
@@ -13,8 +14,6 @@ import {
 	NavigationMenuTrigger,
 	navigationMenuTriggerStyle,
 } from "../ui/navigation-menu";
-
-const API_BASE_URL = import.meta.env.VITE_API_URL ?? "http://localhost:3333";
 
 interface HeaderNavProps {
 	docsMode?: boolean;
@@ -50,20 +49,9 @@ function DocsSearchButton() {
  * Central navigation menu with dropdown categories.
  */
 export function HeaderNav({ docsMode = false }: HeaderNavProps) {
-	const { data } = useQuery({
-		queryKey: ["users-me"],
-		queryFn: async () => {
-			const res = await fetch(`${API_BASE_URL}/users/me`, {
-				credentials: "include",
-			});
-			if (!res.ok) return { isAdmin: false };
-			return res.json() as Promise<{ isAdmin: boolean }>;
-		},
-		staleTime: 1000 * 60 * 5,
-		retry: false,
-	});
+	const { data: user } = useQuery(currentUserQueryOptions);
 
-	const isAdmin = !!data?.isAdmin;
+	const isAdmin = !!user?.isAdmin;
 
 	return (
 		<NavigationMenu

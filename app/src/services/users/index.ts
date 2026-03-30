@@ -35,11 +35,17 @@ export const usersQueryKeys = {
 
 // ── API Functions ─────────────────────────────────────────────────────────────
 
-export async function fetchCurrentUser(): Promise<{ isAdmin: boolean }> {
+export async function fetchCurrentUser(): Promise<{
+	id: string;
+	name: string;
+	email: string;
+	image: string | null;
+	isAdmin: boolean;
+} | null> {
 	const res = await fetch(`${API_BASE_URL}/users/me`, {
 		credentials: "include",
 	});
-	if (!res.ok) throw new Error("Falha ao obter usuário atual");
+	if (!res.ok) return null;
 	return res.json();
 }
 

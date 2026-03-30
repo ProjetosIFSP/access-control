@@ -1,6 +1,5 @@
-import type { FastifyPluginAsyncZod } from "fastify-type-provider-zod";
-import { sseBus } from "@/lib/sse-bus";
 import { and, eq, inArray } from "drizzle-orm";
+import type { FastifyPluginAsyncZod } from "fastify-type-provider-zod";
 import { v7 as uuidv7 } from "uuid";
 import type { SchemaWithExamples } from "@/api/openapi";
 import { db } from "@/db";
@@ -9,11 +8,14 @@ import { user } from "@/db/schema/auth";
 import { doorStateEnum } from "@/db/schema/enums";
 import { profile, profileRoomPermission } from "@/db/schema/profile";
 import {
+	type GuardReply,
 	requireAdmin,
 	resolveSession,
-	type GuardReply,
 } from "@/lib/require-admin";
+import { sseBus } from "@/lib/sse-bus";
 import { z } from "@/lib/zod";
+import { ControllerNotAvailableError } from "@/services/iot/controller-pairing";
+import { getRoomAccessLogs } from "@/services/iot/get-room-access-logs";
 import { addUserRoomPermission } from "@/services/permissions/add-user-room-permission";
 import { removeUserRoomPermission } from "@/services/permissions/remove-user-room-permission";
 import { createRoom } from "@/services/room/create-room";
@@ -21,7 +23,6 @@ import { deleteRoom } from "@/services/room/delete-room";
 import { getRooms } from "@/services/room/get-room";
 import { getRoomsSummary } from "@/services/room/get-rooms-summary";
 import { updateRoom } from "@/services/room/update-room";
-import { getRoomAccessLogs } from "@/services/iot/get-room-access-logs";
 
 // ── Schemas ───────────────────────────────────────────────────────────────────
 
@@ -36,6 +37,7 @@ const roomSummarySchema = z.object({
 	id: z.string().uuid(),
 	name: z.string(),
 	blockId: z.string().uuid(),
+	controllerId: z.string().nullable(),
 	typeId: z.string().uuid(),
 	typeAbbreviation: z.string().optional(),
 	typeName: z.string().optional(),
@@ -76,6 +78,7 @@ const listRoomsResponseExample: z.infer<typeof listRoomsResponseSchema> = {
 				id: "cdea3efb-650d-4c8a-a9c0-8ee97d739f5c",
 				name: "Laboratório 101",
 				blockId: "1cf51c96-86a9-4fb3-b8e8-556a745d4423",
+				controllerId: "esp8266-aabbccddeeff",
 				typeId: "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
 				requiresBiometry: false,
 				requiresRFID: false,
@@ -169,6 +172,7 @@ const roomBodySchema = z.object({
 	name: z.string().min(2),
 	blockId: z.string().uuid(),
 	typeId: z.string().uuid(),
+	controllerId: z.string().min(1).nullable().optional(),
 	requiresBiometry: z.boolean().optional(),
 	requiresRFID: z.boolean().optional(),
 	profileIds: z.array(z.string().uuid()).optional(),
@@ -361,18 +365,22 @@ export const roomRoute: FastifyPluginAsyncZod = async (app) => {
 				pageSize: pageSize ?? 20,
 			});
 			const payload: z.infer<typeof listRoomsResponseSchema> = {
-				result: rooms.result.map(({ room, block, room_type }) => ({
-					room: {
-						...room,
-						typeAbbreviation: room_type?.abbreviation,
-						typeName: room_type?.name,
-						requiresBiometry: room.requiresBiometry ?? false,
-						requiresRFID: room.requiresRFID ?? false,
-						lastStatusUpdateAt: room.lastStatusUpdateAt?.toISOString() ?? null,
-						createdAt: room.createdAt.toISOString(),
-					},
-					block,
-				})),
+				result: rooms.result.map(
+					({ room, block, room_type, door_controller }) => ({
+						room: {
+							...room,
+							controllerId: door_controller?.id ?? null,
+							typeAbbreviation: room_type?.abbreviation,
+							typeName: room_type?.name,
+							requiresBiometry: room.requiresBiometry ?? false,
+							requiresRFID: room.requiresRFID ?? false,
+							lastStatusUpdateAt:
+								room.lastStatusUpdateAt?.toISOString() ?? null,
+							createdAt: room.createdAt.toISOString(),
+						},
+						block,
+					}),
+				),
 				total: rooms.total,
 				page: rooms.page,
 				pageSize: rooms.pageSize,
@@ -441,6 +449,7 @@ export const roomRoute: FastifyPluginAsyncZod = async (app) => {
 				body: roomBodySchema,
 				response: {
 					201: roomSummarySchema,
+					409: z.object({ message: z.string() }),
 				},
 			},
 		},
@@ -452,24 +461,35 @@ export const roomRoute: FastifyPluginAsyncZod = async (app) => {
 				name,
 				blockId,
 				typeId,
+				controllerId,
 				requiresBiometry,
 				requiresRFID,
 				profileIds,
 				userIds,
 			} = request.body as z.infer<typeof roomBodySchema>;
 
-			const created = await createRoom({
-				name,
-				blockId,
-				typeId,
-				requiresBiometry,
-				requiresRFID,
-				profileIds,
-				userIds,
-			});
+			let created: Awaited<ReturnType<typeof createRoom>>;
+			try {
+				created = await createRoom({
+					name,
+					blockId,
+					typeId,
+					controllerId,
+					requiresBiometry,
+					requiresRFID,
+					profileIds,
+					userIds,
+				});
+			} catch (error) {
+				if (error instanceof ControllerNotAvailableError) {
+					return reply.status(409).send({ message: error.message });
+				}
+				throw error;
+			}
 
 			return reply.status(201).send({
 				...created,
+				controllerId: created.controllerId,
 				requiresBiometry: created.requiresBiometry ?? false,
 				requiresRFID: created.requiresRFID ?? false,
 				lastStatusUpdateAt: created.lastStatusUpdateAt?.toISOString() ?? null,
@@ -492,6 +512,7 @@ export const roomRoute: FastifyPluginAsyncZod = async (app) => {
 				body: roomBodySchema.partial(),
 				response: {
 					200: roomSummarySchema,
+					409: z.object({ message: z.string() }),
 				},
 			},
 		},
@@ -504,25 +525,36 @@ export const roomRoute: FastifyPluginAsyncZod = async (app) => {
 				name,
 				blockId,
 				typeId,
+				controllerId,
 				requiresBiometry,
 				requiresRFID,
 				profileIds,
 				userIds,
 			} = request.body as Partial<z.infer<typeof roomBodySchema>>;
 
-			const updated = await updateRoom({
-				id,
-				name,
-				blockId,
-				typeId,
-				requiresBiometry,
-				requiresRFID,
-				profileIds,
-				userIds,
-			});
+			let updated: Awaited<ReturnType<typeof updateRoom>>;
+			try {
+				updated = await updateRoom({
+					id,
+					name,
+					blockId,
+					typeId,
+					controllerId,
+					requiresBiometry,
+					requiresRFID,
+					profileIds,
+					userIds,
+				});
+			} catch (error) {
+				if (error instanceof ControllerNotAvailableError) {
+					return reply.status(409).send({ message: error.message });
+				}
+				throw error;
+			}
 
 			return reply.status(200).send({
 				...updated,
+				controllerId: updated.controllerId,
 				requiresBiometry: updated.requiresBiometry ?? false,
 				requiresRFID: updated.requiresRFID ?? false,
 				lastStatusUpdateAt: updated.lastStatusUpdateAt?.toISOString() ?? null,

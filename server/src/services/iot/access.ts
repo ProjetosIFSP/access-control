@@ -1,11 +1,9 @@
-import { and, eq } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import { db } from "@/db";
-import { accessCredential, accessLog } from "@/db/schema/access";
-import { user } from "@/db/schema/auth";
+import { accessLog } from "@/db/schema/access";
 import { doorController } from "@/db/schema/door";
 import { accessStatusEnum, credentialTypeEnum } from "@/db/schema/enums";
-import { room } from "@/db/schema/room";
-import { checkUserRoomAccess } from "@/services/permissions/check-user-room-access";
+import { verifyAccess } from "@/services/permissions/verify-access";
 
 const ACCESS_STATUSES = accessStatusEnum.enumValues;
 const CREDENTIAL_TYPES = credentialTypeEnum.enumValues;
@@ -37,18 +35,6 @@ interface AccessDecision {
 
 const DENY_REASONS = {
 	UNKNOWN_CONTROLLER: "UNKNOWN_CONTROLLER",
-	UNKNOWN_CREDENTIAL: "UNKNOWN_CREDENTIAL",
-	CREDENTIAL_DISABLED: "CREDENTIAL_DISABLED",
-	NO_PERMISSION: "NO_PERMISSION",
-	EXPIRED_PERMISSION: "EXPIRED_PERMISSION",
-} as const;
-
-const GRANT_REASONS = {
-	ADMIN_OVERRIDE: "ADMIN_OVERRIDE",
-	DIRECT_USER_ROOM: "DIRECT_USER_ROOM",
-	DIRECT_USER_ROOM_TYPE: "DIRECT_USER_ROOM_TYPE",
-	PROFILE_ROOM: "PROFILE_ROOM",
-	PROFILE_ROOM_TYPE: "PROFILE_ROOM_TYPE",
 } as const;
 
 export async function processAccessAttempt(
@@ -57,21 +43,13 @@ export async function processAccessAttempt(
 	const { controllerId, credentialType, credentialValue, requestId } = input;
 	const now = new Date();
 
-	// Buscar controlador + sala (inclui typeId para verificação por tipo)
+	// Buscar controlador
 	const [controllerRecord] = await db
 		.select({
-			controller: {
-				id: doorController.id,
-				roomId: doorController.roomId,
-			},
-			room: {
-				id: room.id,
-				name: room.name,
-				typeId: room.typeId,
-			},
+			id: doorController.id,
+			roomId: doorController.roomId,
 		})
 		.from(doorController)
-		.innerJoin(room, eq(room.id, doorController.roomId))
 		.where(eq(doorController.id, controllerId));
 
 	if (!controllerRecord) {
@@ -85,130 +63,39 @@ export async function processAccessAttempt(
 	await db
 		.update(doorController)
 		.set({ lastSeenAt: now })
-		.where(eq(doorController.id, controllerRecord.controller.id));
+		.where(eq(doorController.id, controllerRecord.id));
 
-	// Buscar credencial + usuário
-	const [credentialRecord] = await db
-		.select({
-			credential: {
-				id: accessCredential.id,
-				userId: accessCredential.userId,
-				isActive: accessCredential.isActive,
-				type: accessCredential.type,
-			},
-			user: {
-				id: user.id,
-				name: user.name,
-				isAdmin: user.isAdmin,
-			},
-		})
-		.from(accessCredential)
-		.innerJoin(user, eq(user.id, accessCredential.userId))
-		.where(
-			and(
-				eq(accessCredential.value, credentialValue),
-				eq(accessCredential.type, credentialType),
-			),
-		)
-		.limit(1);
-
-	if (!credentialRecord) {
-		await db.insert(accessLog).values({
-			roomId: controllerRecord.room.id,
-			userId: null,
-			accessCredentialId: null,
-			credentialValueUsed: credentialValue,
-			status: "DENIED",
-			reason: DENY_REASONS.UNKNOWN_CREDENTIAL,
-		});
-
+	// Dispositivo em modo pareamento — apenas registra leitura, não verifica acesso
+	if (!controllerRecord.roomId) {
 		return {
 			status: "DENIED",
-			reason: DENY_REASONS.UNKNOWN_CREDENTIAL,
-			room: controllerRecord.room,
+			reason: "PAIRING_MODE",
 			requestId,
 		};
 	}
 
-	if (!credentialRecord.credential.isActive) {
-		await db.insert(accessLog).values({
-			roomId: controllerRecord.room.id,
-			userId: credentialRecord.user.id,
-			accessCredentialId: credentialRecord.credential.id,
-			credentialValueUsed: credentialValue,
-			status: "DENIED",
-			reason: DENY_REASONS.CREDENTIAL_DISABLED,
-		});
-
-		return {
-			status: "DENIED",
-			reason: DENY_REASONS.CREDENTIAL_DISABLED,
-			room: controllerRecord.room,
-			user: credentialRecord.user,
-			requestId,
-		};
-	}
-
-	// Curto-circuito: admins têm acesso irrestrito
-	if (credentialRecord.user.isAdmin) {
-		await db.insert(accessLog).values({
-			roomId: controllerRecord.room.id,
-			userId: credentialRecord.user.id,
-			accessCredentialId: credentialRecord.credential.id,
-			credentialValueUsed: credentialValue,
-			status: "GRANTED",
-			reason: GRANT_REASONS.ADMIN_OVERRIDE,
-		});
-
-		return {
-			status: "GRANTED",
-			reason: GRANT_REASONS.ADMIN_OVERRIDE,
-			room: controllerRecord.room,
-			user: credentialRecord.user,
-			requestId,
-		};
-	}
-
-	// Verificação unificada: 4 níveis de permissão (PERM-001 a PERM-004)
-	const permissionResult = await checkUserRoomAccess(
-		credentialRecord.user.id,
-		controllerRecord.room.id,
-		controllerRecord.room.typeId,
-	);
-
-	if (!permissionResult.granted) {
-		await db.insert(accessLog).values({
-			roomId: controllerRecord.room.id,
-			userId: credentialRecord.user.id,
-			accessCredentialId: credentialRecord.credential.id,
-			credentialValueUsed: credentialValue,
-			status: "DENIED",
-			reason: permissionResult.reason,
-		});
-
-		return {
-			status: "DENIED",
-			reason: permissionResult.reason,
-			room: controllerRecord.room,
-			user: credentialRecord.user,
-			requestId,
-		};
-	}
-
-	await db.insert(accessLog).values({
-		roomId: controllerRecord.room.id,
-		userId: credentialRecord.user.id,
-		accessCredentialId: credentialRecord.credential.id,
-		credentialValueUsed: credentialValue,
-		status: "GRANTED",
-		reason: permissionResult.reason,
+	const verifyResult = await verifyAccess({
+		roomId: controllerRecord.roomId,
+		credentialValue,
+		type: credentialType,
 	});
 
+	if (verifyResult.room) {
+		await db.insert(accessLog).values({
+			roomId: verifyResult.room.id,
+			userId: verifyResult.user?.id ?? null,
+			accessCredentialId: verifyResult.credentialId ?? null,
+			credentialValueUsed: credentialValue,
+			status: verifyResult.granted ? "GRANTED" : "DENIED",
+			reason: verifyResult.reason,
+		});
+	}
+
 	return {
-		status: "GRANTED",
-		reason: permissionResult.reason,
-		room: controllerRecord.room,
-		user: credentialRecord.user,
+		status: verifyResult.granted ? "GRANTED" : "DENIED",
+		reason: verifyResult.reason,
+		room: verifyResult.room,
+		user: verifyResult.user,
 		requestId,
 	};
 }

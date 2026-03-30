@@ -155,6 +155,7 @@ export async function fetchRoomsAdmin(
 				id: string;
 				name: string;
 				blockId: string;
+				controllerId: string | null;
 				typeId: string;
 				typeAbbreviation?: string;
 				typeName?: string;
@@ -178,6 +179,7 @@ export async function fetchRoomsAdmin(
 			id: room.id,
 			name: room.name,
 			blockId: room.blockId,
+			controllerId: room.controllerId ?? null,
 			blockName: block.name,
 			typeId: room.typeId,
 			typeAbbreviation: room.typeAbbreviation || "",

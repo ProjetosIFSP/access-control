@@ -14,10 +14,9 @@ import { useEffect, useLayoutEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { currentUserQueryOptions } from "@/services/users";
 
 // ── Constants ─────────────────────────────────────────────────────────────────
-
-const API_BASE_URL = import.meta.env.VITE_API_URL ?? "http://localhost:3333";
 
 const EASE: [number, number, number, number] = [0.65, 0.01, 0.05, 0.99];
 const EASE_CLOSE: [number, number, number, number] = [0.65, 0.05, 0, 1];
@@ -255,20 +254,9 @@ function MobileNavDrawer({ open, onClose, isAdmin }: MobileNavDrawerProps) {
 export function MobileNav() {
 	const [open, setOpen] = useState(false);
 
-	const { data } = useQuery({
-		queryKey: ["users-me"],
-		queryFn: async () => {
-			const res = await fetch(`${API_BASE_URL}/users/me`, {
-				credentials: "include",
-			});
-			if (!res.ok) return { isAdmin: false };
-			return res.json() as Promise<{ isAdmin: boolean }>;
-		},
-		staleTime: 1000 * 60 * 5,
-		retry: false,
-	});
+	const { data: user } = useQuery(currentUserQueryOptions);
 
-	const isAdmin = !!data?.isAdmin;
+	const isAdmin = !!user?.isAdmin;
 
 	return (
 		<>

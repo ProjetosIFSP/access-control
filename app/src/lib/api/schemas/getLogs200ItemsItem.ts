@@ -5,6 +5,7 @@
  * API REST para gerenciamento de usuários, salas e integrações IoT do sistema de controle de acesso.
  * OpenAPI spec version: 1.0.0
  */
+import type { GetLogs200ItemsItemCredentialType } from './getLogs200ItemsItemCredentialType';
 import type { GetLogs200ItemsItemStatus } from './getLogs200ItemsItemStatus';
 
 export type GetLogs200ItemsItem = {
@@ -15,6 +16,10 @@ export type GetLogs200ItemsItem = {
   /** @nullable */
   reason: string | null;
   credentialValueUsed: string;
+  /** @nullable */
+  credentialType: GetLogs200ItemsItemCredentialType;
+  /** @nullable */
+  controllerId: string | null;
   roomName: string;
   blockName: string;
   /** @pattern ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$ */

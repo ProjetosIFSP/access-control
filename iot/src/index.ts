@@ -1,22 +1,39 @@
-import { createServer as createHttpServer, type IncomingMessage } from "http";
-import { createServer as createNetServer } from "net";
-import { Duplex } from "stream";
 import {
-	createBroker,
-	type Client,
-	type PublishPacket,
-	type AedesPublishPacket,
-} from "aedes";
+	createServer as createHttpServer,
+	type IncomingMessage,
+} from "node:http";
+import { createRequire } from "node:module";
+import { createServer as createNetServer } from "node:net";
+import type { Duplex } from "node:stream";
+import type { AedesPublishPacket, Client, PublishPacket } from "aedes";
 import { config as loadEnv } from "dotenv";
 import pino from "pino";
 import { fetch, Headers } from "undici";
 import websocketStream from "websocket-stream";
-import WebSocket, { WebSocketServer } from "ws";
+import type WebSocket from "ws";
+import { WebSocketServer } from "ws";
 import z from "zod";
 
 type HttpMethod = "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
 
 loadEnv();
+
+const require = createRequire(import.meta.url);
+const aedesModule = require("aedes") as {
+	createBroker?: () => {
+		handle: (...args: unknown[]) => void;
+		on: (...args: unknown[]) => void;
+	};
+	(): {
+		handle: (...args: unknown[]) => void;
+		on: (...args: unknown[]) => void;
+	};
+};
+
+const createBroker =
+	typeof aedesModule.createBroker === "function"
+		? aedesModule.createBroker
+		: aedesModule;
 
 const logger = pino({
 	level: process.env.LOG_LEVEL ?? "info",
@@ -32,7 +49,7 @@ const COMMAND_POLL_INTERVAL = parseInt(
 
 const doorStateValues = ["OPEN", "CLOSED", "UNKNOWN"] as const;
 const credentialTypeValues = ["FINGERPRINT", "NFC_TAG"] as const;
-const commandTypeValues = ["UNLOCK", "LOCK", "SYNC_STATE"] as const;
+const commandTypeValues = ["UNLOCK", "LOCK", "SYNC_STATE", "NFC_WRITE"] as const;
 const commandAckStatusValues = ["COMPLETED", "FAILED"] as const;
 
 type DoorState = (typeof doorStateValues)[number];
@@ -43,7 +60,8 @@ type CommandAckStatus = (typeof commandAckStatusValues)[number];
 const sensorProtocolValues = ["R30X", "BOLAND"] as const;
 
 const registerPayloadSchema = z.object({
-	roomId: z.string().min(1),
+	roomId: z.string().min(1).optional(),
+	pairingMode: z.boolean().optional(),
 	firmwareVersion: z.string().min(1).optional(),
 	sensorProtocol: z.enum(sensorProtocolValues).optional(),
 	sensorModel: z.string().min(1).optional(),
@@ -65,6 +83,10 @@ const accessAttemptPayloadSchema = z.object({
 	credentialType: z.enum(credentialTypeValues),
 	credentialValue: z.string().min(1),
 	requestId: z.string().min(1).optional(),
+	/** userId gravado no setor MIFARE do cartão — para dupla verificação */
+	cardUserId: z.string().optional(),
+	/** Token de autenticação do dispositivo IoT */
+	deviceSecret: z.string().optional(),
 });
 
 const accessDecisionSchema = z.object({
@@ -109,7 +131,8 @@ const commandResponseSchema = z.object({
 const apiRegisterResponseSchema = z.object({
 	controller: z.object({
 		id: z.string(),
-		roomId: z.string(),
+		roomId: z.string().nullable(),
+		pairingMode: z.boolean(),
 		firmwareVersion: z.string().nullable(),
 		sensorProtocol: z.string().nullable(),
 		sensorModel: z.string().nullable(),
@@ -189,7 +212,8 @@ broker.on("publish", (packet: AedesPublishPacket, client: Client | null) => {
 	if (handleTopic("heartbeat", topic, payloadString, handleHeartbeat)) return;
 	if (handleTopic("status", topic, payloadString, handleStatus)) return;
 	if (handleTopic("access", topic, payloadString, handleAccessAttempt)) return;
-	if (handleTopic("commandResult", topic, payloadString, handleCommandResult)) return;
+	if (handleTopic("commandResult", topic, payloadString, handleCommandResult))
+		return;
 	handleTopic("enrollmentResult", topic, payloadString, handleEnrollmentResult);
 });
 
@@ -222,6 +246,7 @@ async function handleRegister(controllerId: string, payload: string) {
 		`/iot/devices/${controllerId}`,
 		JSON.stringify({
 			roomId: data.roomId,
+			pairingMode: data.pairingMode,
 			firmwareVersion: data.firmwareVersion,
 			sensorProtocol: data.sensorProtocol,
 			sensorModel: data.sensorModel,
@@ -233,6 +258,7 @@ async function handleRegister(controllerId: string, payload: string) {
 		{
 			controllerId,
 			roomId: registerResponse.controller.roomId,
+			pairingMode: registerResponse.controller.pairingMode,
 			sensorProtocol: registerResponse.controller.sensorProtocol,
 			sensorModel: registerResponse.controller.sensorModel,
 		},
@@ -246,7 +272,11 @@ async function handleHeartbeat(controllerId: string, payload: string) {
 	const parsed = safeParseJson(payload);
 	const data = heartbeatPayloadSchema.parse(parsed);
 
-	await callApi("PATCH", `/iot/devices/${controllerId}/heartbeat`, JSON.stringify(data));
+	await callApi(
+		"PATCH",
+		`/iot/devices/${controllerId}/heartbeat`,
+		JSON.stringify(data),
+	);
 	ensureCommandPolling(controllerId);
 }
 
@@ -287,10 +317,14 @@ async function handleAccessAttempt(controllerId: string, payload: string) {
 			credentialType: data.credentialType,
 			credentialValue: data.credentialValue,
 			requestId: data.requestId,
+			cardUserId: data.cardUserId,
+			deviceSecret: data.deviceSecret,
 		}),
 	);
 
 	const decision = accessDecisionSchema.parse(response);
+	// Inclui userId para que o firmware possa gravar no cartão MIFARE
+	// no mesmo toque (toque único) sem necessidade de uma 2ª aproximação.
 	await publish(`door/${controllerId}/access-result`, decision);
 	logger.info(
 		{
@@ -490,7 +524,10 @@ async function enqueueUnlockCommand(controllerId: string) {
 		);
 		await pollCommands(controllerId);
 	} catch (error) {
-		logger.error({ err: error, controllerId }, "Unable to enqueue unlock command");
+		logger.error(
+			{ err: error, controllerId },
+			"Unable to enqueue unlock command",
+		);
 	}
 }
 

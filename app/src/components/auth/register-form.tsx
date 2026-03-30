@@ -1,4 +1,5 @@
 import { useForm } from "@tanstack/react-form";
+import { useQueryClient } from "@tanstack/react-query";
 import { Loader2 } from "lucide-react";
 import { useId, useState } from "react";
 import { z } from "zod";
@@ -8,6 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { authClient } from "@/lib/auth-client";
+import { currentUserQueryOptions } from "@/services/users";
 
 const fieldSchemas = {
 	name: z.string().min(2, "Nome deve ter ao menos 2 caracteres"),
@@ -25,6 +27,7 @@ interface RegisterFormProps {
 }
 
 export function RegisterForm({ onSuccess }: RegisterFormProps) {
+	const queryClient = useQueryClient();
 	const id = useId();
 	const [formError, setFormError] = useState<string | null>(null);
 
@@ -47,6 +50,9 @@ export function RegisterForm({ onSuccess }: RegisterFormProps) {
 				setFormError(error.message ?? "Erro ao criar conta. Tente novamente.");
 				return;
 			}
+			await queryClient.invalidateQueries({
+				queryKey: currentUserQueryOptions.queryKey,
+			});
 			onSuccess?.();
 		},
 	});

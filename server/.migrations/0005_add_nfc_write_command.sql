@@ -1,0 +1,1 @@
+ALTER TYPE "public"."door_command_type" ADD VALUE 'NFC_WRITE';

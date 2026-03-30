@@ -1,3 +1,4 @@
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "@tanstack/react-router";
 import gsap from "gsap";
 import { Bell, ChevronDown, LogOut, Settings, User } from "lucide-react";
@@ -7,15 +8,16 @@ import { RegisterForm } from "@/components/auth/register-form";
 import { useIsMobile } from "@/hooks/use-is-mobile";
 import { authClient } from "@/lib/auth-client";
 import { cn } from "@/lib/utils";
+import { currentUserQueryOptions } from "@/services/users";
 import { AnimatedThemeToggler } from "../ui/animated-theme-toggler";
 import { Avatar, AvatarFallback, AvatarImage } from "../ui/avatar";
 import { Button } from "../ui/button";
 import { Separator } from "../ui/separator";
 
 export function UserMenu() {
-	const { data: session, isPending } = authClient.useSession();
-	const isLoggedIn = !!session?.user;
-	const user = session?.user;
+	const queryClient = useQueryClient();
+	const { data: user, isPending } = useQuery(currentUserQueryOptions);
+	const isLoggedIn = !!user;
 	const [activeTab, setActiveTab] = useState<"login" | "register">("login");
 
 	const containerRef = useRef<HTMLDivElement>(null);
@@ -217,6 +219,9 @@ export function UserMenu() {
 		await authClient.signOut({
 			fetchOptions: {
 				onSuccess: () => {
+					queryClient.invalidateQueries({
+						queryKey: currentUserQueryOptions.queryKey,
+					});
 					close();
 					router.navigate({
 						to: "/",
@@ -242,7 +247,7 @@ export function UserMenu() {
 			<div
 				ref={containerRef}
 				className={cn(
-					"bg-white/70 flex flex-col backdrop-blur-sm rounded-[1.5rem] overflow-hidden ml-auto transition-colors min-h-10 md:min-h-12",
+					"bg-white/70 flex flex-col backdrop-blur-sm rounded-3xl overflow-hidden ml-auto transition-colors min-h-10 md:min-h-12",
 					"dark:bg-zinc-800/70",
 				)}
 			>

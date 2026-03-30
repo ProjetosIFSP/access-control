@@ -37,6 +37,7 @@ export const doorCommandTypeEnum = pgEnum("door_command_type", [
 	"UNLOCK",
 	"LOCK",
 	"SYNC_STATE",
+	"NFC_WRITE", // Instrui o terminal NFC a gravar userId no cartão (MIFARE Classic)
 ]);
 
 export const doorCommandStatusEnum = pgEnum("door_command_status", [

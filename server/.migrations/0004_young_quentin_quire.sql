@@ -1,0 +1,1 @@
+ALTER TABLE "door_controller" ALTER COLUMN "room_id" DROP NOT NULL;

@@ -1,8 +1,8 @@
 import { useQuery } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
 import dayjs from "dayjs";
-import { ScrollText } from "lucide-react";
-import { useState } from "react";
+import { ScrollText, Search } from "lucide-react";
+import { useEffect, useState } from "react";
 import { z } from "zod";
 import { CrudPageHeader } from "#/components/ui/crud-page-header";
 import {
@@ -12,13 +12,25 @@ import {
 	EmptyMedia,
 	EmptyTitle,
 } from "@/components/ui/empty";
+import { Input } from "@/components/ui/input";
+import {
+	Select,
+	SelectContent,
+	SelectItem,
+	SelectTrigger,
+	SelectValue,
+} from "@/components/ui/select";
 import { TableSkeleton } from "@/components/ui/table-skeleton";
+import { useDebounce } from "@/hooks/use-debounce";
+import type { GetLogs200ItemsItem, GetLogsStatus } from "@/lib/api/schemas";
 import { logsQueryOptions } from "@/services/logs";
 
 const logsSearchSchema = z.object({
+	q: z.string().optional(),
 	roomId: z.string().optional(),
 	userId: z.string().optional(),
-	status: z.enum(["GRANTED", "DENIED"]).optional(),
+	status: z.enum(["GRANTED", "DENIED", "all"]).optional(),
+	page: z.number().optional().catch(1),
 });
 
 export const Route = createFileRoute("/logs/")({
@@ -26,13 +38,50 @@ export const Route = createFileRoute("/logs/")({
 	component: LogsPage,
 });
 
+type SearchType = ReturnType<typeof Route.useSearch>;
+
 function LogsPage() {
-	const { roomId, userId, status } = Route.useSearch();
-	const [page, setPage] = useState(1);
+	const search = Route.useSearch();
+	const navigate = Route.useNavigate();
+	const { q, roomId, userId, status, page = 1 } = search;
 	const pageSize = 20;
 
+	const [inputValue, setInputValue] = useState(q ?? "");
+	const debouncedQ = useDebounce(inputValue, 500);
+
+	useEffect(() => {
+		navigate({
+			search: (prev: SearchType) => ({
+				...prev,
+				q: debouncedQ || undefined,
+				page: 1,
+			}),
+			replace: true,
+		});
+	}, [debouncedQ, navigate]);
+
+	const handleStatusChange = (val: string) => {
+		navigate({
+			search: (prev: SearchType) => ({
+				...prev,
+				status: (val === "all" ? undefined : val) as
+					| "GRANTED"
+					| "DENIED"
+					| undefined,
+				page: 1,
+			}),
+		});
+	};
+
 	const { data, isLoading } = useQuery(
-		logsQueryOptions({ page, pageSize, roomId, userId, status }),
+		logsQueryOptions({
+			page,
+			pageSize,
+			roomId,
+			userId,
+			status: (status === "all" ? undefined : status) as GetLogsStatus,
+			q,
+		}),
 	);
 
 	return (
@@ -42,6 +91,27 @@ function LogsPage() {
 				subtitle="Acompanhe o histórico de acessos às salas do sistema."
 			/>
 
+			<div className="flex flex-wrap items-center gap-4">
+				<div className="relative max-w-sm flex-1">
+					<Search className="absolute left-2.5 top-2.5 h-4 w-4 text-zinc-500" />
+					<Input
+						placeholder="Buscar por usuário ou sala..."
+						className="pl-9 bg-white"
+						value={inputValue}
+						onChange={(e) => setInputValue(e.target.value)}
+					/>
+				</div>
+				<Select value={status ?? "all"} onValueChange={handleStatusChange}>
+					<SelectTrigger className="w-45 bg-white rounded-full">
+						<SelectValue placeholder="Status do acesso" />
+					</SelectTrigger>
+					<SelectContent>
+						<SelectItem value="all">Todos os acessos</SelectItem>
+						<SelectItem value="GRANTED">Permitido</SelectItem>
+						<SelectItem value="DENIED">Negado</SelectItem>
+					</SelectContent>
+				</Select>
+			</div>
 			{isLoading ? (
 				<TableSkeleton rows={10} />
 			) : !data || data.items.length === 0 ? (
@@ -82,7 +152,7 @@ function LogsPage() {
 									</tr>
 								</thead>
 								<tbody className="[&_tr:last-child]:border-0">
-									{data?.items.map((log) => (
+									{data?.items.map((log: GetLogs200ItemsItem) => (
 										<tr
 											key={log.id}
 											className="border-b transition-colors hover:bg-zinc-100/50 data-[state=selected]:bg-zinc-100 dark:hover:bg-zinc-800/50 dark:data-[state=selected]:bg-zinc-800"
@@ -127,7 +197,14 @@ function LogsPage() {
 						<div className="flex gap-2">
 							<button
 								type="button"
-								onClick={() => setPage((p) => Math.max(1, p - 1))}
+								onClick={() =>
+									navigate({
+										search: (prev: SearchType) => ({
+											...prev,
+											page: Math.max(1, page - 1),
+										}),
+									})
+								}
 								disabled={page === 1}
 								className="inline-flex items-center justify-center rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50 border border-input bg-background shadow-sm hover:bg-accent hover:text-accent-foreground h-9 px-4 py-2"
 							>
@@ -139,7 +216,12 @@ function LogsPage() {
 							<button
 								type="button"
 								onClick={() =>
-									setPage((p) => Math.min(data?.totalPages || 1, p + 1))
+									navigate({
+										search: (prev: SearchType) => ({
+											...prev,
+											page: Math.min(data?.totalPages || 1, page + 1),
+										}),
+									})
 								}
 								disabled={!data || page >= (data.totalPages || 1)}
 								className="inline-flex items-center justify-center rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50 border border-input bg-background shadow-sm hover:bg-accent hover:text-accent-foreground h-9 px-4 py-2"

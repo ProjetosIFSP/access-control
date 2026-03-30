@@ -1,4 +1,4 @@
-import { eq } from "drizzle-orm";
+import { eq, isNull, gte, and } from "drizzle-orm";
 import { db } from "@/db";
 import { doorController } from "@/db/schema/door";
 import { doorStateEnum, sensorProtocolEnum } from "@/db/schema/enums";
@@ -13,7 +13,7 @@ type SensorProtocol = (typeof SENSOR_PROTOCOLS)[number];
 
 interface RegisterDoorControllerInput {
 	controllerId: string;
-	roomId: string;
+	roomId?: string;
 	firmwareVersion?: string;
 	sensorProtocol?: SensorProtocol;
 	sensorModel?: string;
@@ -22,7 +22,7 @@ interface RegisterDoorControllerInput {
 interface RegisterDoorControllerResult {
 	controller: {
 		id: string;
-		roomId: string;
+		roomId: string | null;
 		firmwareVersion: string | null;
 		sensorProtocol: string | null;
 		sensorModel: string | null;
@@ -41,7 +41,7 @@ export async function registerDoorController(
 		.insert(doorController)
 		.values({
 			id: controllerId,
-			roomId,
+			roomId: roomId ?? null,
 			firmwareVersion: firmwareVersion ?? null,
 			sensorProtocol: sensorProtocol ?? null,
 			sensorModel: sensorModel ?? null,
@@ -50,7 +50,7 @@ export async function registerDoorController(
 		.onConflictDoUpdate({
 			target: doorController.id,
 			set: {
-				roomId,
+				...(roomId !== undefined ? { roomId } : {}),
 				firmwareVersion: firmwareVersion ?? null,
 				...(sensorProtocol !== undefined ? { sensorProtocol } : {}),
 				...(sensorModel !== undefined ? { sensorModel } : {}),
@@ -123,6 +123,10 @@ export async function updateDoorStatus(input: UpdateDoorStatusInput) {
 			return null;
 		}
 
+		if (!controller.roomId) {
+			return null;
+		}
+
 		await tx
 			.update(doorController)
 			.set({
@@ -164,4 +168,26 @@ export async function getDoorControllerById(controllerId: string) {
 		.limit(1);
 
 	return controller ?? null;
+}
+
+export async function getPairingControllers() {
+	const oneMinuteAgo = new Date(Date.now() - 60 * 1000);
+
+	const controllers = await db
+		.select({
+			id: doorController.id,
+			sensorProtocol: doorController.sensorProtocol,
+			sensorModel: doorController.sensorModel,
+			firmwareVersion: doorController.firmwareVersion,
+			lastSeenAt: doorController.lastSeenAt,
+		})
+		.from(doorController)
+		.where(
+			and(
+				isNull(doorController.roomId),
+				gte(doorController.lastSeenAt, oneMinuteAgo)
+			)
+		);
+
+	return controllers;
 }

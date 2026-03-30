@@ -12,7 +12,7 @@ export const permissionsRoute: FastifyPluginAsyncZod = async (app) => {
 				body: z.object({
 					roomId: z.string().uuid(),
 					credentialValue: z.string(),
-					type: z.enum(["BIOMETRY", "RFID"]),
+					type: z.enum(["FINGERPRINT", "NFC_TAG"]),
 				}),
 				response: {
 					200: z.object({
@@ -26,7 +26,7 @@ export const permissionsRoute: FastifyPluginAsyncZod = async (app) => {
 			const { roomId, credentialValue, type } = request.body as {
 				roomId: string;
 				credentialValue: string;
-				type: "BIOMETRY" | "RFID";
+				type: "FINGERPRINT" | "NFC_TAG";
 			};
 			const { verifyAccess } = await import(
 				"../../services/permissions/verify-access.js"

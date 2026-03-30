@@ -2,14 +2,20 @@ import { and, eq, inArray } from "drizzle-orm";
 import { v7 as uuidv7 } from "uuid";
 import { db } from "@/db";
 import { userRoomPermission } from "@/db/schema/access";
+import { doorController } from "@/db/schema/door";
 import { profileRoomPermission } from "@/db/schema/profile";
 import { room } from "@/db/schema/room";
+import {
+	bindControllerToRoom,
+	unbindControllerFromRoom,
+} from "@/services/iot/controller-pairing";
 
 interface UpdateRoomInput {
 	id: string;
 	name?: string;
 	blockId?: string;
 	typeId?: string;
+	controllerId?: string | null;
 	requiresBiometry?: boolean;
 	requiresRFID?: boolean;
 	profileIds?: string[];
@@ -87,6 +93,7 @@ export async function updateRoom({
 	name,
 	blockId,
 	typeId,
+	controllerId,
 	requiresBiometry,
 	requiresRFID,
 	profileIds,
@@ -119,9 +126,24 @@ export async function updateRoom({
 		await syncRoomUsers(id, userIds);
 	}
 
-	const rows = await db.select().from(room).where(eq(room.id, id));
+	if (controllerId !== undefined) {
+		if (controllerId === null) {
+			await unbindControllerFromRoom(id);
+		} else {
+			await bindControllerToRoom(controllerId, id);
+		}
+	}
 
-	if (!rows[0]) throw new Error("Sala não encontrada");
+	const [updatedRoom] = await db.select().from(room).where(eq(room.id, id));
+	if (!updatedRoom) throw new Error("Sala não encontrada");
 
-	return rows[0];
+	const [controller] = await db
+		.select({ controllerId: doorController.id })
+		.from(doorController)
+		.where(eq(doorController.roomId, id));
+
+	return {
+		...updatedRoom,
+		controllerId: controller?.controllerId ?? null,
+	};
 }

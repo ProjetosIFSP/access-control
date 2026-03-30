@@ -11,7 +11,10 @@ import { MultiSelect } from "@/components/ui/multi-select";
 import {
 	Select,
 	SelectContent,
+	SelectGroup,
 	SelectItem,
+	SelectLabel,
+	SelectSeparator,
 	SelectTrigger,
 	SelectValue,
 } from "@/components/ui/select";
@@ -30,14 +33,24 @@ const roomFormSchema = z.object({
 	name: z.string().min(1, "Nome obrigatorio").min(2, "Minimo 2 caracteres"),
 	blockId: z.string().min(1, "Bloco obrigatorio"),
 	typeId: z.string().min(1, "Tipo obrigatorio"),
+	controllerId: z.string(),
 	requiresBiometry: z.boolean(),
 	requiresRFID: z.boolean(),
 });
+
+const NO_CONTROLLER_VALUE = "__none__";
+
+export interface RoomControllerOption {
+	controllerId: string;
+	label: string;
+	group: "pairing" | "room";
+}
 
 export interface RoomFormValues {
 	name: string;
 	blockId: string;
 	typeId: string;
+	controllerId: string | null;
 	requiresBiometry: boolean;
 	requiresRFID: boolean;
 	profileIds?: string[];
@@ -48,6 +61,7 @@ interface RoomFormPanelProps {
 	room: RoomSummaryAdmin | null;
 	blocks: BlockSummary[];
 	roomTypes: RoomType[];
+	controllerOptions: RoomControllerOption[];
 	isSubmitting: boolean;
 	onSubmit: (values: RoomFormValues) => void;
 	onCancel: () => void;
@@ -57,6 +71,7 @@ export function RoomFormPanel({
 	room,
 	blocks,
 	roomTypes,
+	controllerOptions,
 	isSubmitting,
 	onSubmit,
 	onCancel,
@@ -91,13 +106,20 @@ export function RoomFormPanel({
 			name: room?.name ?? "",
 			blockId: room?.blockId ?? "",
 			typeId: room?.typeId ?? "",
+			controllerId: room?.controllerId ?? NO_CONTROLLER_VALUE,
 			requiresBiometry: room?.requiresBiometry ?? false,
 			requiresRFID: room?.requiresRFID ?? false,
 			profileIds: [] as string[],
 			userIds: [] as string[],
 		},
 		onSubmit: async ({ value }) => {
-			onSubmit(value);
+			onSubmit({
+				...value,
+				controllerId:
+					value.controllerId === NO_CONTROLLER_VALUE
+						? null
+						: value.controllerId,
+			});
 		},
 	});
 
@@ -106,6 +128,7 @@ export function RoomFormPanel({
 			name: room?.name ?? "",
 			blockId: room?.blockId ?? "",
 			typeId: room?.typeId ?? "",
+			controllerId: room?.controllerId ?? NO_CONTROLLER_VALUE,
 			requiresBiometry: room?.requiresBiometry ?? false,
 			requiresRFID: room?.requiresRFID ?? false,
 			profileIds: relationsData?.profiles.map((p) => p.id) ?? [],
@@ -222,6 +245,65 @@ export function RoomFormPanel({
 										{rt.name} ({rt.abbreviation})
 									</SelectItem>
 								))}
+							</SelectContent>
+						</Select>
+					</FormField>
+				)}
+			</form.Field>
+
+			{/* Controlador */}
+			<form.Field name="controllerId">
+				{(field) => (
+					<FormField
+						label="Controlador"
+						htmlFor={`${id}-controller`}
+						hint="Controladores em pareamento aparecem livres; controladores de sala aparecem para reaproveitamento controlado."
+					>
+						<Select
+							value={field.state.value}
+							onValueChange={(v) => field.handleChange(v)}
+						>
+							<SelectTrigger
+								id={`${id}-controller`}
+								className="bg-white dark:bg-zinc-900 w-full"
+							>
+								<SelectValue placeholder="Selecionar controlador" />
+							</SelectTrigger>
+							<SelectContent>
+								<SelectItem value={NO_CONTROLLER_VALUE}>
+									Sem controlador (manter em pareamento)
+								</SelectItem>
+								{controllerOptions.length > 0 && <SelectSeparator />}
+
+								<SelectGroup>
+									<SelectLabel>Modo Pareamento</SelectLabel>
+									{controllerOptions
+										.filter((option) => option.group === "pairing")
+										.map((option) => (
+											<SelectItem
+												key={option.controllerId}
+												value={option.controllerId}
+											>
+												{option.label}
+											</SelectItem>
+										))}
+								</SelectGroup>
+
+								<SelectSeparator />
+
+								<SelectGroup>
+									<SelectLabel>Controladores de Sala</SelectLabel>
+									{controllerOptions
+										.filter((option) => option.group === "room")
+										.map((option) => (
+											<SelectItem
+												key={option.controllerId}
+												value={option.controllerId}
+											>
+												{option.label}
+											</SelectItem>
+										))}
+								</SelectGroup>
 							</SelectContent>
 						</Select>
 					</FormField>

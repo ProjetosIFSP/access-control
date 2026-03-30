@@ -56,10 +56,9 @@ export const doorController = pgTable("door_controller", {
 	// Pode ser o MAC Address ou outro identificador único do hardware
 	id: text("id").primaryKey(),
 
-	// Todo controlador está associado a uma sala.
-	// O modo terminal é ativado temporariamente via MQTT — a sala permanece associada.
+	// Controlador pode iniciar em modo de pareamento sem sala.
+	// Quando vinculado, fica exclusivo de uma sala.
 	roomId: text("room_id")
-		.notNull()
 		.unique()
 		.references(() => room.id, { onDelete: "cascade" }),
 

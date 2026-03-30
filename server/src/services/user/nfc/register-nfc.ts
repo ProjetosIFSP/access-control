@@ -62,10 +62,13 @@ export async function registerNfcTag(
 }
 
 function isUniqueViolation(err: unknown): boolean {
-	return (
-		typeof err === "object" &&
-		err !== null &&
-		"code" in err &&
-		(err as { code: string }).code === "23505"
-	);
+	const hasPgCode = (e: unknown): boolean =>
+		typeof e === "object" &&
+		e !== null &&
+		"code" in e &&
+		(e as { code: string }).code === "23505";
+
+	// Drizzle ORM wraps the original PostgreSQL error inside a DrizzleError:
+	// the pg error (with code "23505") lives in err.cause, not on err directly.
+	return hasPgCode(err) || hasPgCode((err as { cause?: unknown })?.cause);
 }

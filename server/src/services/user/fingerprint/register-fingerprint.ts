@@ -83,22 +83,26 @@ export async function registerFingerprint(
 }
 
 function isUniqueViolation(err: unknown): boolean {
-	return (
-		typeof err === "object" &&
-		err !== null &&
-		"code" in err &&
-		(err as { code: string }).code === "23505"
-	);
+	const hasPgCode = (e: unknown): boolean =>
+		typeof e === "object" &&
+		e !== null &&
+		"code" in e &&
+		(e as { code: string }).code === "23505";
+
+	// Drizzle ORM wraps the original PostgreSQL error inside a DrizzleError:
+	// the pg error (with code "23505") lives in err.cause, not on err directly.
+	return hasPgCode(err) || hasPgCode((err as { cause?: unknown })?.cause);
 }
 
 function getConflictColumn(err: unknown): string | null {
-	if (
-		typeof err === "object" &&
-		err !== null &&
-		"constraint" in err
-	) {
-		const constraint = (err as { constraint: string }).constraint ?? "";
-		if (constraint.includes("value")) return "value";
-	}
-	return null;
+	const extract = (e: unknown): string | null => {
+		if (typeof e === "object" && e !== null && "constraint" in e) {
+			const constraint = (e as { constraint: string }).constraint ?? "";
+			if (constraint.includes("value")) return "value";
+		}
+		return null;
+	};
+
+	// Check both the error itself and its Drizzle-wrapped cause.
+	return extract(err) ?? extract((err as { cause?: unknown })?.cause);
 }

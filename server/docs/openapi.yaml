@@ -13,23 +13,6 @@ components:
       description: Sessão de usuário gerenciada pela camada Auth baseada em cookies.
   schemas: {}
 paths:
-  /auth/{action}:
-    get: &a1
-      summary: Delegar operações de autenticação
-      tags:
-        - auth
-      description: Proxy reverso para o Auth.js, responsável pelos fluxos de login,
-        callback de provedores e sessões baseadas em cookie.
-      parameters:
-        - schema:
-            type: string
-          in: path
-          name: "*"
-          required: true
-      responses:
-        "200":
-          description: Default Response
-    post: *a1
   /users/me:
     get:
       summary: Dados do usuário autenticado
@@ -981,6 +964,11 @@ paths:
       parameters:
         - schema:
             type: string
+          in: query
+          name: q
+          required: false
+        - schema:
+            type: string
             format: uuid
             pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
           in: query
@@ -1000,6 +988,20 @@ paths:
               - DENIED
           in: query
           name: status
+          required: false
+        - schema:
+            type: string
+            format: date-time
+            pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d(?::[0-5]\d(?:\.\d+)?)?(?:Z))$
+          in: query
+          name: from
+          required: false
+        - schema:
+            type: string
+            format: date-time
+            pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d(?::[0-5]\d(?:\.\d+)?)?(?:Z))$
+          in: query
+          name: to
           required: false
         - schema:
             default: 1
@@ -1051,6 +1053,15 @@ paths:
                           type: string
                         credentialValueUsed:
                           type: string
+                        credentialType:
+                          nullable: true
+                          type: string
+                          enum:
+                            - FINGERPRINT
+                            - NFC_TAG
+                        controllerId:
+                          nullable: true
+                          type: string
                         roomName:
                           type: string
                         blockName:
@@ -1078,6 +1089,8 @@ paths:
                         - status
                         - reason
                         - credentialValueUsed
+                        - credentialType
+                        - controllerId
                         - roomName
                         - blockName
                         - roomId

@@ -6,7 +6,8 @@ export const authRoute: FastifyPluginAsyncZod = async (app) => {
 		method: ["GET", "POST"],
 		url: "/*",
 		schema: {
-			tags: ["auth"],
+			hide: true,
+				tags: ["auth"],
 			summary: "Delegar operações de autenticação",
 			description:
 				"Proxy reverso para o Auth.js, responsável pelos fluxos de login, callback de provedores e sessões baseadas em cookie.",

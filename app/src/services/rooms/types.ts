@@ -100,6 +100,7 @@ export type RoomSummaryAdmin = {
 	id: string;
 	name: string;
 	blockId: string;
+	controllerId: string | null;
 	blockName: string;
 	typeId: string;
 	typeAbbreviation: string;
@@ -124,6 +125,7 @@ export type CreateRoomPayload = {
 	name: string;
 	blockId: string;
 	typeId: string;
+	controllerId?: string | null;
 	requiresBiometry?: boolean;
 	requiresRFID?: boolean;
 	profileIds?: string[];
@@ -135,6 +137,7 @@ export type UpdateRoomPayload = {
 	name: string;
 	blockId: string;
 	typeId: string;
+	controllerId?: string | null;
 	requiresBiometry?: boolean;
 	requiresRFID?: boolean;
 	profileIds?: string[];

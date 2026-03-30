@@ -28,6 +28,7 @@ export type RegisterFingerprintPayload = {
 	finger: FingerKey;
 	/** Template bruto capturado pelo leitor (hex ou string do modo keyboard) */
 	template: string;
+	enrolledByControllerId?: string;
 };
 
 export type DeleteFingerprintPayload = {

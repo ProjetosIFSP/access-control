@@ -1,10 +1,15 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Loader2, X, Nfc } from "lucide-react";
-import { useState, useEffect } from "react";
-import { useNfcReader } from "@/hooks/use-nfc-reader";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { Loader2, Nfc, X } from "lucide-react";
+import { useEffect } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
+import { useMqttNfcReader } from "@/hooks/use-mqtt-nfc-reader";
+import { useNfcReader } from "@/hooks/use-nfc-reader";
 import { cn } from "@/lib/utils";
+import {
+	formatUid,
+	normalizeUid,
+} from "@/lib/nfc";
 import {
 	nfcTagQueryKeys,
 	registerNfcTag,
@@ -13,21 +18,26 @@ import {
 
 interface NfcTabProps {
 	user: { id: string; name: string };
+	/** ID do dispositivo RC522 selecionado no selector acima das tabs. null = usar leitor HID/USB. */
+	selectedControllerId: string | null;
 }
 
-export function NfcTab({ user }: NfcTabProps) {
+export function NfcTab({ user, selectedControllerId }: NfcTabProps) {
 	const queryClient = useQueryClient();
 
+	// ── Tags cadastradas ─────────────────────────────────────────────────────────
 	const nfcQuery = useQuery(userNfcTagsQueryOptions(user.id));
 	const nfcTags = nfcQuery.data ?? [];
 
-	const [deleteId, setDeleteId] = useState<string | null>(null);
-
+	// ── Mutação de cadastro ─────────────────────────────────────────────────────
 	const registerMutation = useMutation({
 		mutationFn: registerNfcTag,
-		onSuccess: () => {
+		onSuccess: (_data, variables) => {
+			const wasMqttEnroll = !!variables.enrolledByControllerId;
 			toast.success("Cartão NFC cadastrado com sucesso", {
-				description: "O cartão já pode ser usado para acesso.",
+				description: wasMqttEnroll
+					? "O terminal RC522 gravou os dados de segurança no cartão."
+					: "O cartão já pode ser usado para acesso.",
 			});
 			queryClient.invalidateQueries({
 				queryKey: nfcTagQueryKeys.list(user.id),
@@ -42,7 +52,6 @@ export function NfcTab({ user }: NfcTabProps) {
 
 	const { mutate: deleteMutate } = useMutation({
 		mutationFn: async (credentialId: string) => {
-			setDeleteId(credentialId);
 			const { deleteNfcTag } = await import("@/services/users/nfc-tags");
 			return deleteNfcTag({ userId: user.id, credentialId });
 		},
@@ -57,36 +66,69 @@ export function NfcTab({ user }: NfcTabProps) {
 				description: error.message,
 			});
 		},
-		onSettled: () => setDeleteId(null),
 	});
 
-	const {
-		status: readerStatus,
-		lastUid,
-		startCapture,
-		cancelCapture,
-	} = useNfcReader();
+	// ── Modo MQTT via SSE (RC522 físico) ────────────────────────────────────────
+	const mqttReader = useMqttNfcReader({
+		controllerId: selectedControllerId,
+		onUidReceived: (uid) => {
+			registerMutation.mutate({
+				userId: user.id,
+				value: normalizeUid(uid),
+				enrolledByControllerId: selectedControllerId ?? undefined,
+			});
+		},
+	});
 
-	const isReading = readerStatus === "waiting" || readerStatus === "reading";
+	// ── Modo HID / teclado (leitor USB) ─────────────────────────────────────────
+	const hidReader = useNfcReader();
 
-	// Quando o UID é lido com sucesso, cadastra
+	// biome-ignore lint/correctness/useExhaustiveDependencies: stable refs
 	useEffect(() => {
-		if (readerStatus === "success" && lastUid) {
-			registerMutation.mutate({ userId: user.id, value: lastUid });
-			cancelCapture();
+		if (hidReader.status === "success" && hidReader.lastUid) {
+			registerMutation.mutate({
+				userId: user.id,
+				value: normalizeUid(hidReader.lastUid),
+				enrolledByControllerId: undefined,
+			});
+			hidReader.cancelCapture();
 		}
-	}, [readerStatus, lastUid, registerMutation, user.id, cancelCapture]);
+	}, [hidReader.status, hidReader.lastUid]);
 
-	const handleReadNfc = () => {
-		startCapture();
+	// ── Estado unificado ─────────────────────────────────────────────────────────
+	const useMqttMode = !!selectedControllerId;
+
+	const isReading =
+		(useMqttMode &&
+			(mqttReader.status === "connecting" || mqttReader.status === "waiting")) ||
+		(!useMqttMode &&
+			(hidReader.status === "waiting" || hidReader.status === "reading"));
+
+	const handleStartRead = () => {
+		if (useMqttMode) mqttReader.startCapture();
+		else hidReader.startCapture();
 	};
 
 	const handleCancelRead = () => {
-		cancelCapture();
+		if (useMqttMode) mqttReader.cancelCapture();
+		else hidReader.cancelCapture();
 	};
+
+	const readingLabel =
+		useMqttMode && mqttReader.status === "connecting"
+			? "Conectando ao leitor..."
+			: useMqttMode
+				? "Aguardando leitura no dispositivo físico..."
+				: "Aproxime o cartão do leitor USB...";
+
+	const idleLabel = useMqttMode
+		? "Clique em Ler Cartão e aproxime o cartão do RC522 selecionado."
+		: "Clique no botão abaixo e aproxime o cartão do leitor NFC USB.";
 
 	return (
 		<div className="flex flex-col gap-6 w-full animate-in fade-in slide-in-from-bottom-2 duration-300">
+
+			{/* ── Área de captura ────────────────────────────────────────────── */}
 			<div className="rounded-xl border bg-card p-6 flex flex-col items-center justify-center text-center gap-4">
 				<div
 					className={cn(
@@ -101,17 +143,15 @@ export function NfcTab({ user }: NfcTabProps) {
 				<div className="space-y-1">
 					<h3 className="font-medium text-lg">Cadastro de Cartão NFC</h3>
 					<p className="text-sm text-muted-foreground max-w-[250px] mx-auto">
-						{isReading
-							? "Aproxime o cartão do leitor..."
-							: "Clique no botão abaixo e aproxime o cartão do leitor NFC."}
+						{isReading ? readingLabel : idleLabel}
 					</p>
 				</div>
 				{!isReading ? (
 					<Button
 						size="lg"
-						className="w-full max-w-[200px]"
+						className="w-full max-w-50"
 						disabled={registerMutation.isPending}
-						onClick={handleReadNfc}
+						onClick={handleStartRead}
 					>
 						Ler Cartão NFC
 					</Button>
@@ -119,15 +159,16 @@ export function NfcTab({ user }: NfcTabProps) {
 					<Button
 						size="lg"
 						variant="secondary"
-						className="w-full max-w-[200px]"
+						className="w-full max-w-50"
 						onClick={handleCancelRead}
 					>
 						<Loader2 className="mr-2 h-4 w-4 animate-spin" />
-						Aguardando leitura... (Cancelar)
+						Aguardando... (Cancelar)
 					</Button>
 				)}
 			</div>
 
+			{/* ── Lista de cartões cadastrados ───────────────────────────────── */}
 			<div className="space-y-3">
 				<h4 className="text-sm font-medium flex justify-between items-center px-1">
 					<span>Cartões Cadastrados</span>
@@ -150,15 +191,13 @@ export function NfcTab({ user }: NfcTabProps) {
 								className="flex items-center justify-between p-3 rounded-lg border bg-card shadow-sm"
 							>
 								<div className="flex items-center gap-3">
-									<div className="h-8 w-8 rounded-md bg-primary/10 flex items-center justify-center">
+									<div className="h-8 w-8 rounded-md bg-primary/10 flex items-center justify-center shrink-0">
 										<Nfc className="h-4 w-4 text-primary" />
 									</div>
-									<div className="flex flex-col">
-										<span className="text-sm font-medium capitalize flex items-center gap-2">
-											Cartão NFC
-										</span>
-										<span className="text-xs text-muted-foreground font-mono">
-											UID: {tag.value}
+									<div className="flex flex-col min-w-0">
+										<span className="text-sm font-medium">Cartão NFC</span>
+										<span className="text-xs text-muted-foreground font-mono truncate">
+											UID: {formatUid(tag.value)}
 										</span>
 									</div>
 								</div>
@@ -166,16 +205,11 @@ export function NfcTab({ user }: NfcTabProps) {
 								<Button
 									variant="ghost"
 									size="icon"
-									className="h-8 w-8 text-destructive hover:bg-destructive/10 hover:text-destructive"
-									disabled={deleteId === tag.id}
+									className="h-8 w-8 shrink-0 text-destructive hover:bg-destructive/10 hover:text-destructive"
 									onClick={() => deleteMutate(tag.id)}
-									aria-label={"Remover cartão"}
+									aria-label="Remover cartão"
 								>
-									{deleteId === tag.id ? (
-										<Loader2 className="h-4 w-4 animate-spin" />
-									) : (
-										<X className="h-4 w-4" />
-									)}
+									<X className="h-4 w-4" />
 								</Button>
 							</div>
 						))}

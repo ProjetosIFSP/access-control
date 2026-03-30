@@ -43,11 +43,12 @@ import { PAGE_SIZE, usersSearchParams } from "./-types";
 
 export const Route = createFileRoute("/users/")({
 	beforeLoad: async ({ context }) => {
+		if (typeof document === "undefined") return;
 		try {
 			const me = await context.queryClient.ensureQueryData(
 				currentUserQueryOptions,
 			);
-			if (!me.isAdmin)
+			if (!me?.isAdmin)
 				throw redirect({
 					to: "/",
 					search: { q: undefined, type: undefined, state: undefined },
@@ -60,15 +61,17 @@ export const Route = createFileRoute("/users/")({
 			});
 		}
 	},
-	loader: ({ context }) =>
-		Promise.all([
+	loader: ({ context }) => {
+		if (typeof document === "undefined") return Promise.resolve();
+		return Promise.all([
 			context.queryClient.ensureQueryData(
 				usersQueryOptions({ q: undefined, profileIds: undefined, page: 1 }),
 			),
 			context.queryClient.ensureQueryData(profilesQueryOptions),
 			context.queryClient.ensureQueryData(roomsAdminQueryOptions()),
 			context.queryClient.ensureQueryData(roomTypesQueryOptions),
-		]),
+		]);
+	},
 	component: UsersProfilesPage,
 });
 

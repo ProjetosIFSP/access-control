@@ -10,6 +10,7 @@ dist/
 .claude/*
 .codex/*
 .agents/*
+.gemini/*
 
 CLAUDE.md
 CODEX.md

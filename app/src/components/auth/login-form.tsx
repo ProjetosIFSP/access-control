@@ -1,4 +1,5 @@
 import { useForm } from "@tanstack/react-form";
+import { useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { Loader2 } from "lucide-react";
 import { useId, useState } from "react";
@@ -10,6 +11,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { authClient } from "@/lib/auth-client";
+import { currentUserQueryOptions } from "@/services/users";
 
 const loginSchema = z.object({
 	email: z.string().min(1, "E-mail obrigatório").email("E-mail inválido"),
@@ -37,6 +39,7 @@ interface LoginFormProps {
 }
 
 export function LoginForm({ onSuccess }: LoginFormProps) {
+	const queryClient = useQueryClient();
 	const id = useId();
 	const [formError, setFormError] = useState<string | null>(null);
 
@@ -53,6 +56,9 @@ export function LoginForm({ onSuccess }: LoginFormProps) {
 				setFormError(translateError(error.message));
 				return;
 			}
+			await queryClient.invalidateQueries({
+				queryKey: currentUserQueryOptions.queryKey,
+			});
 			onSuccess?.();
 		},
 	});

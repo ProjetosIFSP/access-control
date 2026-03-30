@@ -243,6 +243,7 @@ export const userRoute: FastifyPluginAsyncZod = async (app) => {
 					createdAt: user.createdAt.toISOString(),
 					updatedAt: user.updatedAt.toISOString(),
 					fingerprintCount: user.fingerprintCount,
+					nfcCount: user.nfcCount,
 				})),
 				total: users.total,
 				page: users.page,
@@ -302,6 +303,7 @@ export const userRoute: FastifyPluginAsyncZod = async (app) => {
 				body: z.object({
 					finger: fingerKeySchema,
 					template: z.string().min(1),
+					enrolledByControllerId: z.string().min(1).optional(),
 				}),
 				response: {
 					201: fingerprintSummarySchema,
@@ -314,13 +316,19 @@ export const userRoute: FastifyPluginAsyncZod = async (app) => {
 				return;
 
 			const { id: userId } = request.params as { id: string };
-			const { finger, template } = request.body as {
+			const { finger, template, enrolledByControllerId } = request.body as {
 				finger: (typeof FINGER_KEYS)[number];
 				template: string;
+				enrolledByControllerId?: string;
 			};
 
 			try {
-				const record = await registerFingerprint({ userId, finger, template });
+				const record = await registerFingerprint({
+					userId,
+					finger,
+					template,
+					enrolledByControllerId,
+				});
 				return reply.status(201).send({
 					...record,
 					createdAt: record.createdAt.toISOString(),
@@ -477,6 +485,7 @@ export const userRoute: FastifyPluginAsyncZod = async (app) => {
 				params: z.object({ id: z.string().uuid() }),
 				body: z.object({
 					value: z.string().min(1),
+					enrolledByControllerId: z.string().min(1).optional(),
 				}),
 				response: {
 					201: nfcSummarySchema,
@@ -489,12 +498,20 @@ export const userRoute: FastifyPluginAsyncZod = async (app) => {
 				return;
 
 			const { id: userId } = request.params as { id: string };
-			const { value } = request.body as {
+			const { value: rawValue, enrolledByControllerId } = request.body as {
 				value: string;
+				enrolledByControllerId?: string;
 			};
 
+			// Normaliza o UID (maiúsculas e sem separadores)
+			const value = rawValue.replace(/[:\s-]/g, "").toUpperCase();
+
 			try {
-				const record = await registerNfcTag({ userId, value });
+				const record = await registerNfcTag({
+					userId,
+					value,
+					enrolledByControllerId,
+				});
 				return reply.status(201).send({
 					...record,
 					createdAt: record.createdAt.toISOString(),
@@ -588,7 +605,6 @@ export const userRoute: FastifyPluginAsyncZod = async (app) => {
 				const record = await toggleNfcTag(userId, credentialId, isActive);
 				return reply.status(200).send({
 					...record,
-					value: record.value as (typeof FINGER_KEYS)[number],
 					createdAt: record.createdAt.toISOString(),
 				});
 			} catch (err) {

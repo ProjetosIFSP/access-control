@@ -39,6 +39,7 @@ export * from './getIotDevicesControllerIdCommands200CommandsItemType';
 export * from './getIotDevicesControllerIdCommandsParams';
 export * from './getLogs200';
 export * from './getLogs200ItemsItem';
+export * from './getLogs200ItemsItemCredentialType';
 export * from './getLogs200ItemsItemStatus';
 export * from './getLogsParams';
 export * from './getLogsStatus';

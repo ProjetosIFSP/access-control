@@ -29,6 +29,20 @@
       "when": 1773236455017,
       "tag": "0003_typical_titania",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1774371070356,
+      "tag": "0004_young_quentin_quire",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1774809641227,
+      "tag": "0005_add_nfc_write_command",
+      "breakpoints": true
     }
   ]
 }
