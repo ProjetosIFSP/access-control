@@ -1,5 +1,6 @@
 import { eq, isNull, gte, and } from "drizzle-orm";
 import { db } from "@/db";
+import { sseBus } from "@/lib/sse-bus";
 import { doorController } from "@/db/schema/door";
 import { doorStateEnum, sensorProtocolEnum } from "@/db/schema/enums";
 import { room } from "@/db/schema/room";
@@ -66,9 +67,16 @@ export async function registerDoorController(
 			lastSeenAt: doorController.lastSeenAt,
 		});
 
-	return {
-		controller,
-	};
+	sseBus.publishControllerStatus({
+		controllerId: controller.id,
+		roomId: controller.roomId,
+		isOnline: true,
+		lastSeenAt: controller.lastSeenAt.toISOString(),
+		sensorProtocol: controller.sensorProtocol,
+		sensorModel: controller.sensorModel,
+		firmwareVersion: controller.firmwareVersion,
+	});
+	return { controller };
 }
 
 interface RecordDoorHeartbeatInput {
@@ -96,6 +104,17 @@ export async function recordDoorHeartbeat(input: RecordDoorHeartbeatInput) {
 			lastSeenAt: doorController.lastSeenAt,
 		});
 
+	if (controller) {
+		sseBus.publishControllerStatus({
+			controllerId: controller.id,
+			roomId: controller.roomId,
+			isOnline: true,
+			lastSeenAt: controller.lastSeenAt.toISOString(),
+			sensorProtocol: controller.sensorProtocol,
+			sensorModel: controller.sensorModel,
+			firmwareVersion: controller.firmwareVersion,
+		});
+	}
 	return controller ?? null;
 }
 
@@ -185,8 +204,8 @@ export async function getPairingControllers() {
 		.where(
 			and(
 				isNull(doorController.roomId),
-				gte(doorController.lastSeenAt, oneMinuteAgo)
-			)
+				gte(doorController.lastSeenAt, oneMinuteAgo),
+			),
 		);
 
 	return controllers;

@@ -918,4 +918,35 @@ export const iotRoute: FastifyPluginAsyncZod = async (app) => {
 			});
 		},
 	);
+
+	app.get(
+		"/controllers/stream",
+		{
+			schema: {
+				tags: ["iot"],
+				summary: "SSE Stream para atualizacao de controladores",
+			} satisfies SchemaWithExamples,
+		},
+		async (request, reply) => {
+			reply.raw.setHeader("Content-Type", "text/event-stream");
+			reply.raw.setHeader("Cache-Control", "no-cache");
+			reply.raw.setHeader("Connection", "keep-alive");
+			reply.raw.setHeader("Access-Control-Allow-Origin", "*");
+
+			reply.hijack();
+			reply.raw.write('data: {"type":"connected"}\n\n');
+
+			const unsubscribe = sseBus.subscribeControllerStatus((event) => {
+				try {
+					reply.raw.write(
+						`data: ${JSON.stringify({ type: "controller_status", data: event })}\n\n`,
+					);
+				} catch {}
+			});
+
+			request.raw.on("close", () => {
+				unsubscribe();
+			});
+		},
+	);
 };

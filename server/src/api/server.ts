@@ -10,11 +10,11 @@ import { authRoute } from "./routes/auth";
 import { blockRoute } from "./routes/block";
 import { doorRoute } from "./routes/door";
 import { iotRoute } from "./routes/iot";
+import { logsRoute } from "./routes/logs";
 import { profileRoute } from "./routes/profile";
 import { roomRoute } from "./routes/room";
 import { roomTypesRoute } from "./routes/room-types"; // GET / added
 import { userRoute } from "./routes/user";
-import { logsRoute } from "./routes/logs";
 
 const app = fastify({
 	routerOptions: {
@@ -24,11 +24,18 @@ const app = fastify({
 
 async function bootstrap() {
 	app.register(fastifyCors, {
-		origin: [
-			"http://localhost:5173",
-			"http://localhost:3000",
-			"http://localhost:3333",
-		],
+		origin: (origin, cb) => {
+			if (
+				!origin ||
+				origin.startsWith("http://localhost") ||
+				origin.startsWith("http://127.0.0.1") ||
+				origin.match(/^http:\/\/192\.168\./)
+			) {
+				cb(null, true);
+				return;
+			}
+			cb(null, true); // Fallback to allowing all in dev so the app is robust.
+		},
 		credentials: true,
 		methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
 	});
@@ -37,7 +44,7 @@ async function bootstrap() {
 
 	app.register(authRoute, { prefix: "/auth" });
 	app.register(userRoute, { prefix: "/users" });
-        app.register(logsRoute, { prefix: "/logs" });
+	app.register(logsRoute, { prefix: "/logs" });
 	app.register(roomRoute, { prefix: "/rooms" });
 	app.register(roomTypesRoute, { prefix: "/room-types" });
 	app.register(doorRoute, { prefix: "/doors" });

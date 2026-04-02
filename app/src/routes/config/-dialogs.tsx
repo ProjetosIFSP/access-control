@@ -38,7 +38,7 @@ export function ConfigDialogs({
 						No seu celular ou notebook, vá até as redes Wi-Fi e conecte-se à
 						rede:{" "}
 						<strong className="text-foreground">
-							Controlador-NFC-Setup
+							access-control-setup
 						</strong>{" "}
 					</li>
 					<li>

@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, redirect } from "@tanstack/react-router";
 import { useQueryStates } from "nuqs";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useControllerStream } from "@/hooks/use-controller-stream";
 import { toast } from "sonner";
 
 import { SplitView, SplitViewMain } from "@/components/ui/split-view";
@@ -127,6 +128,12 @@ function RoomsManagePage() {
 	);
 
 	// ── Panel state ─────────────────────────────────────────────────────────────
+	const [nowTick, setNowTick] = useState(() => Date.now());
+	useEffect(() => {
+		const timer = setInterval(() => setNowTick(Date.now()), 15000);
+		return () => clearInterval(timer);
+	}, []);
+
 	const [panelMode, setPanelMode] = useState<PanelMode>({ kind: "none" });
 	const panelVisible = panelMode.kind !== "none";
 
@@ -231,6 +238,7 @@ function RoomsManagePage() {
 		error: roomTypesErrorObj,
 	} = useQuery(roomTypesQueryOptions);
 
+	const liveControllers = useControllerStream();
 	const { data: controllerTargetsData } = useQuery(
 		controllerTargetsQueryOptions,
 	);
@@ -297,13 +305,25 @@ function RoomsManagePage() {
 	);
 
 	const controllerOptions = useMemo(() => {
-		const pairing = (controllerTargetsData?.pairingControllers ?? []).map(
-			(controller) => ({
+		const isOnline = (controllerId: string, lastSeenAt: string) => {
+			// Check if live event came
+			if (liveControllers[controllerId]?.lastSeenAt) {
+				return (
+					nowTick -
+						new Date(liveControllers[controllerId].lastSeenAt).getTime() <
+					45000
+				);
+			}
+			return nowTick - new Date(lastSeenAt).getTime() < 45000;
+		};
+
+		const pairing = (controllerTargetsData?.pairingControllers ?? [])
+			.filter((c) => isOnline(c.controllerId, c.lastSeenAt))
+			.map((controller) => ({
 				controllerId: controller.controllerId,
 				label: `${controller.controllerId} (pareamento)`,
 				group: "pairing" as const,
-			}),
-		);
+			}));
 
 		const roomAssigned = (controllerTargetsData?.roomControllers ?? [])
 			.filter((controller) => {
@@ -312,12 +332,16 @@ function RoomsManagePage() {
 			})
 			.map((controller) => ({
 				controllerId: controller.controllerId,
-				label: `${controller.controllerId} (${controller.roomName})`,
+				label:
+					`${controller.controllerId} (${controller.roomName})` +
+					(isOnline(controller.controllerId, controller.lastSeenAt)
+						? " - Online"
+						: " - Offline"),
 				group: "room" as const,
 			}));
 
 		return [...pairing, ...roomAssigned];
-	}, [controllerTargetsData, panelMode]);
+	}, [controllerTargetsData, panelMode, liveControllers, nowTick]);
 
 	// ── Panel labels (memoized) ──────────────────────────────────────────────────
 	const panelTitle = useMemo(() => {

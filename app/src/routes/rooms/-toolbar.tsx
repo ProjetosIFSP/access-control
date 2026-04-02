@@ -92,7 +92,7 @@ export function RoomsToolbar({
 					)}
 			</div>
 
-			<div className="flex-shrink-0">
+			<div className="shrink-0">
 				{activeTab === "rooms" ? (
 					<Button
 						size={panelVisible ? "icon" : "sm"}

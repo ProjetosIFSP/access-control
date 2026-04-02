@@ -62,9 +62,9 @@ function DoorStateBadge({ state }: { state: string }) {
 	if (normalized === "OPEN" || normalized === "OPENED") {
 		colorClass = "bg-primary";
 		title = "Aberta";
-	} else if (normalized === "CLOSED") {
+	} else if (normalized === "CLOSED" || normalized === "LOCKED") {
 		colorClass = "bg-zinc-400 dark:bg-zinc-600";
-		title = "Fechada";
+		title = normalized === "LOCKED" ? "Trancada" : "Fechada";
 	} else if (!state || normalized === "UNKNOWN") {
 		colorClass = "bg-zinc-300 dark:bg-zinc-700";
 		title = "Desconhecido";

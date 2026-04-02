@@ -37,13 +37,15 @@ export async function getOnlineDoorControllersForEnrollment(): Promise<
 
 	const now = Date.now();
 
-	return controllers.filter(c => c.roomId !== null).map((c) => ({
-		id: c.id,
-		roomId: c.roomId as string,
-		sensorProtocol: c.sensorProtocol as "R30X" | "BOLAND" | null,
-		sensorModel: c.sensorModel,
-		firmwareVersion: c.firmwareVersion,
-		lastSeenAt: c.lastSeenAt,
-		isOnline: now - c.lastSeenAt.getTime() < ONLINE_THRESHOLD_MS,
-	}));
+	return controllers
+		.filter((c) => c.roomId !== null)
+		.map((c) => ({
+			id: c.id,
+			roomId: c.roomId as string,
+			sensorProtocol: c.sensorProtocol as "R30X" | "BOLAND" | null,
+			sensorModel: c.sensorModel,
+			firmwareVersion: c.firmwareVersion,
+			lastSeenAt: c.lastSeenAt,
+			isOnline: now - c.lastSeenAt.getTime() < ONLINE_THRESHOLD_MS,
+		}));
 }

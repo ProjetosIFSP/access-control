@@ -24,7 +24,7 @@ async function generateOpenApiSpec() {
 
 	app.register(authRoute, { prefix: "/auth" });
 	app.register(userRoute, { prefix: "/users" });
-        app.register(logsRoute, { prefix: "/logs" });
+	app.register(logsRoute, { prefix: "/logs" });
 	app.register(roomRoute, { prefix: "/rooms" });
 	app.register(doorRoute, { prefix: "/doors" });
 	app.register(iotRoute, { prefix: "/iot" });

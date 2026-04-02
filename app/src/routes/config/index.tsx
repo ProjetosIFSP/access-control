@@ -1,7 +1,8 @@
 import { useSuspenseQuery } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
 import { useQueryStates } from "nuqs";
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { useControllerStream } from "@/hooks/use-controller-stream";
 import { SplitView, SplitViewMain } from "@/components/ui/split-view";
 import { controllersQueryOptions } from "@/services/iot";
 import { configSearchParams } from "./-types";
@@ -35,11 +36,37 @@ function ConfigManagePage() {
 	const [searchQuery, setSearchQuery] = useState("");
 	const [isAddControllerOpen, setIsAddControllerOpen] = useState(false);
 
-	const filteredControllers = (data?.controllers ?? []).filter(
-		(c) =>
-			c.id.toLowerCase().includes(searchQuery.toLowerCase()) ||
-			(c.roomId?.toLowerCase() ?? "").includes(searchQuery.toLowerCase()),
-	);
+	const liveControllers = useControllerStream();
+	const [nowTick, setNowTick] = useState(Date.now());
+	useEffect(() => {
+		const timer = setInterval(() => setNowTick(Date.now()), 15000);
+		return () => clearInterval(timer);
+	}, []);
+
+	const filteredControllers = (data?.controllers ?? [])
+		.map((c) => {
+			const live = liveControllers[c.id];
+			if (live) {
+				return {
+					...c,
+					isOnline: true,
+					lastSeenAt: live.lastSeenAt,
+					roomId: live.roomId ?? c.roomId,
+					sensorProtocol: live.sensorProtocol ?? c.sensorProtocol,
+				};
+			}
+			return c;
+		})
+		.map((c) => {
+			const isActuallyOnline =
+				nowTick - new Date(c.lastSeenAt).getTime() < 45000;
+			return { ...c, isOnline: isActuallyOnline };
+		})
+		.filter(
+			(c) =>
+				c.id.toLowerCase().includes(searchQuery.toLowerCase()) ||
+				(c.roomId?.toLowerCase() ?? "").includes(searchQuery.toLowerCase()),
+		);
 
 	return (
 		<>

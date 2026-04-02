@@ -6,9 +6,9 @@ export type GuardReply = {
 
 type Session = Awaited<ReturnType<typeof auth.api.getSession>>;
 
-export async function resolveSession(
-	request: { headers: Record<string, unknown> },
-): Promise<Session> {
+export async function resolveSession(request: {
+	headers: Record<string, unknown>;
+}): Promise<Session> {
 	return auth.api
 		.getSession({
 			headers: new Headers(request.headers as Record<string, string>),

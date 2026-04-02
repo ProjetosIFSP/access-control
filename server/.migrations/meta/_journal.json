@@ -43,6 +43,13 @@
       "when": 1774809641227,
       "tag": "0005_add_nfc_write_command",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1775158575717,
+      "tag": "0006_sad_human_torch",
+      "breakpoints": true
     }
   ]
 }

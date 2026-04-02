@@ -36,7 +36,6 @@
 char MQTT_SERVER[40]   = "192.168.0.121";
 char MQTT_PORT[6]      = "1883";
 char DEVICE_SECRET[40] = "Zx9kPq2mRn7vWj4tYb8cLe";
-char ROOM_ID[40]       = "";
 
 // Flag para saber se devemos salvar configs
 bool shouldSaveConfig = false;
@@ -73,6 +72,12 @@ String topicAccessResult;
 enum State { IDLE, WAITING_RESULT };
 State currentState = IDLE;
 
+// Door State Emulation
+enum DoorState { OPEN, LOCKED, UNKNOWN };
+DoorState currentDoorState = UNKNOWN;
+
+String topicStatus;
+
 unsigned long lastHeartbeat   = 0;
 unsigned long waitingResultAt = 0;
 
@@ -108,7 +113,6 @@ void connectWifi() {
           strcpy(MQTT_SERVER, doc["mqtt_server"] | "192.168.0.121");
           strcpy(MQTT_PORT, doc["mqtt_port"] | "1883");
           strcpy(DEVICE_SECRET, doc["device_secret"] | "Zx9kPq2mRn7vWj4tYb8cLe");
-          strcpy(ROOM_ID, doc["room_id"] | "");
         }
       }
     }
@@ -117,7 +121,6 @@ void connectWifi() {
   WiFiManagerParameter custom_mqtt_server("server", "IP MQTT", MQTT_SERVER, 40);
   WiFiManagerParameter custom_mqtt_port("port", "Porta MQTT", MQTT_PORT, 6);
   WiFiManagerParameter custom_device_secret("secret", "Secret Device", DEVICE_SECRET, 40);
-  WiFiManagerParameter custom_room_id("room", "Room ID (Vazio=Pareamento)", ROOM_ID, 40);
 
   WiFiManager wifiManager;
   wifiManager.setSaveConfigCallback(saveConfigCallback);
@@ -125,9 +128,8 @@ void connectWifi() {
   wifiManager.addParameter(&custom_mqtt_server);
   wifiManager.addParameter(&custom_mqtt_port);
   wifiManager.addParameter(&custom_device_secret);
-  wifiManager.addParameter(&custom_room_id);
 
-  if (!wifiManager.autoConnect("Controlador-NFC-Setup", "admin123")) {
+  if (!wifiManager.autoConnect("access-control-setup", "admin123")) {
     Serial.println("[Wi-Fi] Falha ao conectar, reiniciando...");
     delay(3000);
     ESP.restart();
@@ -136,14 +138,12 @@ void connectWifi() {
   strcpy(MQTT_SERVER, custom_mqtt_server.getValue());
   strcpy(MQTT_PORT, custom_mqtt_port.getValue());
   strcpy(DEVICE_SECRET, custom_device_secret.getValue());
-  strcpy(ROOM_ID, custom_room_id.getValue());
 
   if (shouldSaveConfig) {
     StaticJsonDocument<200> doc;
     doc["mqtt_server"] = MQTT_SERVER;
     doc["mqtt_port"] = MQTT_PORT;
     doc["device_secret"] = DEVICE_SECRET;
-    doc["room_id"] = ROOM_ID;
 
     File configFile = LittleFS.open("/config.json", "w");
     if (configFile) {
@@ -182,8 +182,7 @@ void publishRegister() {
   doc["controllerId"]    = controllerId;
   doc["firmwareVersion"] = "3.0.0-uid-only";
   doc["sensorModel"]     = "RC522";
-  doc["pairingMode"]     = (ROOM_ID[0] == '\0');
-  if (ROOM_ID[0] != '\0') doc["roomId"] = ROOM_ID;
+  
   String p; serializeJson(doc, p);
   String t = String("door/") + controllerId + "/register";
   mqtt.publish(t.c_str(), p.c_str(), true);
@@ -197,6 +196,15 @@ void sendHeartbeat() {
 }
 
 // Publica access-attempt com UID + deviceSecret
+void publishDoorStatus() {
+  StaticJsonDocument<128> doc;
+  doc["doorState"] = (currentDoorState == OPEN) ? "OPEN" : ((currentDoorState == LOCKED) ? "LOCKED" : "UNKNOWN");
+  doc["isLocked"]  = (currentDoorState == LOCKED);
+  
+  String p; serializeJson(doc, p);
+  mqtt.publish(topicStatus.c_str(), p.c_str());
+}
+
 void publishAccessAttempt(const String& uid) {
   StaticJsonDocument<256> doc;
   doc["credentialType"]  = "NFC_TAG";
@@ -267,12 +275,13 @@ void setup() {
 
 #ifdef DEBUG
   Serial.print(F("Controller ID: ")); Serial.println(controllerId);
-  Serial.print(F("Modo: ")); Serial.println(ROOM_ID[0] ? "ACESSO" : "PAREAMENTO");
+  Serial.println(F("Inicializando..."));
 #endif
 
   topicHeartbeat     = String("door/") + controllerId + "/heartbeat";
   topicAccessAttempt = String("door/") + controllerId + "/access-attempt";
   topicAccessResult  = String("door/") + controllerId + "/access-result";
+  topicStatus        = String("door/") + controllerId + "/status";
 
   SPI.begin();
   rfid.PCD_Init();
@@ -374,8 +383,19 @@ void loop() {
       bool granted = (resultStatus == "GRANTED");
 
       if (granted) {
-        // Modo ACESSO: abre a porta
-        // Modo PAREAMENTO: sinaliza que o vínculo foi concluído (GRANTED retornado pelo servidor)
+        // Toggle door state
+        if (currentDoorState == OPEN) {
+          currentDoorState = LOCKED;
+        } else {
+          currentDoorState = OPEN;
+        }
+        
+#ifdef DEBUG
+        Serial.print(F("[Porta] Novo estado: ")); Serial.println(currentDoorState == OPEN ? F("ABERTO") : F("FECHADO"));
+#endif
+
+        publishDoorStatus();
+
         ledOn(); delay(1500); ledOff();
       } else {
         ledBlink(4, 60);

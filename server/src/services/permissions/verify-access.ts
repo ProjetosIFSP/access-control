@@ -82,7 +82,6 @@ export const verifyAccess = async (payload: {
 		} as const;
 	}
 
-
 	if (!cred.credential.isActive) {
 		return {
 			granted: false,

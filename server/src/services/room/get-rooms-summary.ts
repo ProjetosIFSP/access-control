@@ -29,7 +29,7 @@ function mapDoorState(doorState: string, isLocked: boolean | null): RoomState {
 	if (doorState === "OPEN") {
 		return isLocked ? "alerta" : "aberta";
 	}
-	if (doorState === "CLOSED") {
+	if (doorState === "CLOSED" || doorState === "LOCKED") {
 		return "fechada";
 	}
 	// UNKNOWN

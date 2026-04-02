@@ -1,3 +1,4 @@
+import { PassThrough } from "node:stream";
 import { and, eq, inArray } from "drizzle-orm";
 import type { FastifyPluginAsyncZod } from "fastify-type-provider-zod";
 import { v7 as uuidv7 } from "uuid";
@@ -214,14 +215,16 @@ export const roomRoute: FastifyPluginAsyncZod = async (app) => {
 			},
 		},
 		async (request, reply) => {
-			reply.raw.setHeader("Content-Type", "text/event-stream");
-			reply.raw.setHeader("Cache-Control", "no-cache");
-			reply.raw.setHeader("Connection", "keep-alive");
-			reply.raw.setHeader("X-Accel-Buffering", "no");
-			reply.raw.flushHeaders();
+			reply.header("Content-Type", "text/event-stream");
+			reply.header("Cache-Control", "no-cache");
+			reply.header("Connection", "keep-alive");
+			reply.header("X-Accel-Buffering", "no");
+
+			const stream = new PassThrough();
+			reply.send(stream);
 
 			const send = (event: string, data: unknown) => {
-				reply.raw.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
+				stream.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
 			};
 
 			send("connected", { ok: true });
@@ -231,13 +234,13 @@ export const roomRoute: FastifyPluginAsyncZod = async (app) => {
 			});
 
 			const keepAlive = setInterval(() => {
-				reply.raw.write(": ping\n\n");
+				stream.write(": ping\n\n");
 			}, 25000);
 
 			const cleanup = () => {
 				clearInterval(keepAlive);
 				unsubscribe();
-				reply.raw.end();
+				stream.end();
 			};
 
 			request.raw.on("close", cleanup);

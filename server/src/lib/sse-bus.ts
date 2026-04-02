@@ -1,6 +1,15 @@
 import { EventEmitter } from "node:events";
 
-// ── Types ─────────────────────────────────────────────────────────────────────
+// ── Types ──
+export type ControllerStatusEvent = {
+	controllerId: string;
+	roomId: string | null;
+	isOnline: boolean;
+	lastSeenAt: string;
+	sensorProtocol: string | null;
+	sensorModel: string | null;
+	firmwareVersion: string | null;
+};
 
 export type RoomStatusEvent = {
 	roomId: string;
@@ -24,7 +33,18 @@ emitter.setMaxListeners(0);
 const ROOM_STATUS_EVENT = "room:status";
 const DEVICE_ACCESS_ATTEMPT_EVENT = "device:access_attempt";
 
+const CONTROLLER_STATUS_EVENT = "controller:status";
+
 export const sseBus = {
+	publishControllerStatus(event: ControllerStatusEvent) {
+		emitter.emit(CONTROLLER_STATUS_EVENT, event);
+	},
+
+	subscribeControllerStatus(handler: (event: ControllerStatusEvent) => void) {
+		emitter.on(CONTROLLER_STATUS_EVENT, handler);
+		return () => emitter.off(CONTROLLER_STATUS_EVENT, handler);
+	},
+
 	publishRoomStatus(event: RoomStatusEvent) {
 		emitter.emit(ROOM_STATUS_EVENT, event);
 	},
@@ -38,7 +58,9 @@ export const sseBus = {
 		emitter.emit(DEVICE_ACCESS_ATTEMPT_EVENT, event);
 	},
 
-	subscribeDeviceAccessAttempt(handler: (event: DeviceAccessAttemptEvent) => void) {
+	subscribeDeviceAccessAttempt(
+		handler: (event: DeviceAccessAttemptEvent) => void,
+	) {
 		emitter.on(DEVICE_ACCESS_ATTEMPT_EVENT, handler);
 		return () => emitter.off(DEVICE_ACCESS_ATTEMPT_EVENT, handler);
 	},

@@ -1,6 +1,5 @@
 import { Plus, Search } from "lucide-react";
 import { FillableButton } from "#/components/ui/fillable-button";
-import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import type { ConfigActiveTab } from "./-types";
 

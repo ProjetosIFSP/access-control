@@ -47,9 +47,14 @@ const COMMAND_POLL_INTERVAL = parseInt(
 	10,
 );
 
-const doorStateValues = ["OPEN", "CLOSED", "UNKNOWN"] as const;
+const doorStateValues = ["OPEN", "CLOSED", "LOCKED", "UNKNOWN"] as const;
 const credentialTypeValues = ["FINGERPRINT", "NFC_TAG"] as const;
-const commandTypeValues = ["UNLOCK", "LOCK", "SYNC_STATE", "NFC_WRITE"] as const;
+const commandTypeValues = [
+	"UNLOCK",
+	"LOCK",
+	"SYNC_STATE",
+	"NFC_WRITE",
+] as const;
 const commandAckStatusValues = ["COMPLETED", "FAILED"] as const;
 
 type DoorState = (typeof doorStateValues)[number];

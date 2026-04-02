@@ -33,6 +33,9 @@ export function useRoomEvents() {
 			esRef.current = es;
 
 			es.addEventListener("room-status", () => {
+				console.log(
+					"[useRoomEvents] Recebeu evento room-status! Atualizando Interface...",
+				);
 				queryClient.invalidateQueries({ queryKey: roomsQueryKeys.all });
 				reconnectDelayRef.current = RECONNECT_DELAY_MS;
 			});

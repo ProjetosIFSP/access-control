@@ -1,7 +1,16 @@
 import dayjs from "dayjs";
 import relativeTime from "dayjs/plugin/relativeTime";
 import "dayjs/locale/pt-br";
-import { UserRound } from "lucide-react";
+import { Icon } from "@iconify/react";
+import {
+	CircleUser,
+	CircleUserIcon,
+	CircleUserRound,
+	CircleUserRoundIcon,
+	User,
+	User2,
+	UserRound,
+} from "lucide-react";
 import { useMemo } from "react";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
@@ -37,16 +46,16 @@ const STATE_CONFIG: Record<
 	{ indicatorClass: string; label: string }
 > = {
 	aberta: {
-		indicatorClass: "bg-primary",
-		label: "Livre",
+		indicatorClass: "bg-zinc-400 dark:bg-zinc-500",
+		label: "Em uso",
 	},
 	alerta: {
 		indicatorClass: "bg-red-700 dark:bg-red-600",
 		label: "Alerta",
 	},
 	fechada: {
-		indicatorClass: "bg-zinc-400 dark:bg-zinc-500",
-		label: "Em uso",
+		indicatorClass: "bg-primary",
+		label: "Livre",
 	},
 };
 
@@ -55,8 +64,7 @@ const STATE_CONFIG: Record<
 export function RoomCard({ room, authenticated, onClick }: RoomCardProps) {
 	const { indicatorClass } = STATE_CONFIG[room.state];
 
-	const displayUser =
-		room.state === "fechada" ? room.currentUser : room.lastUser;
+	const displayUser = room.state === "aberta" ? room.currentUser : null;
 
 	const { formattedTime, fullDateTime } = useMemo(() => {
 		if (!room.lastStatusUpdateAt)
@@ -107,9 +115,12 @@ export function RoomCard({ room, authenticated, onClick }: RoomCardProps) {
 
 				{/* Current / last user */}
 				{authenticated && displayUser && (
-					<div className="flex items-center gap-1 text-xs text-zinc-500 truncate">
-						<UserRound className="size-3 shrink-0 text-zinc-400" />
-						<span className="truncate">{displayUser.name}</span>
+					<div className="flex items-center gap-0.5 text-xs text-zinc-400 truncate">
+						<Icon
+							icon="solar:user-bold"
+							className="size-4 shrink-0 text-zinc-400"
+						/>
+						<span className="truncate italic">{displayUser.name}</span>
 					</div>
 				)}
 
