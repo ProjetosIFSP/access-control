@@ -37,7 +37,7 @@ export async function getControllerAccessLogs(
 		})
 		.from(accessLog)
 		.leftJoin(user, eq(user.id, accessLog.userId))
-		.where(eq(accessLog.roomId, controller.roomId))
+		.where(controller.roomId ? eq(accessLog.roomId, controller.roomId) : undefined)
 		.orderBy(desc(accessLog.timestamp))
 		.limit(limit);
 

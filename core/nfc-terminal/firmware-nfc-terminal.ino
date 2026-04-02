@@ -23,24 +23,29 @@
 // =============================================================================
 
 #include <ESP8266WiFi.h>
+#include <DNSServer.h>
+#include <ESP8266WebServer.h>
+#include <WiFiManager.h>
 #include <PubSubClient.h>
 #include <SPI.h>
 #include <MFRC522.h>
 #include <ArduinoJson.h>
+#include <LittleFS.h>
 
-// ── CONFIGURAR ANTES DE USAR ──────────────────────────────────────────────────
+// ── CONFIGURAÇÕES PADRÃO (Podem ser alteradas via WiFiManager) ────────────────
+char MQTT_SERVER[40]   = "192.168.0.121";
+char MQTT_PORT[6]      = "1883";
+char DEVICE_SECRET[40] = "Zx9kPq2mRn7vWj4tYb8cLe";
+char ROOM_ID[40]       = "";
 
-const char* WIFI_SSID     = "Miguel";
-const char* WIFI_PASSWORD = "Mmh020516";
-const char* MQTT_SERVER   = "192.168.0.121";
-const int   MQTT_PORT     = 1883;
+// Flag para saber se devemos salvar configs
+bool shouldSaveConfig = false;
 
-// ── SEGURANÇA ─────────────────────────────────────────────────────────────────
-// Deve corresponder a IOT_DEVICE_SECRET no .env do servidor.
-const char* DEVICE_SECRET = "Zx9kPq2mRn7vWj4tYb8cLe";
-
-// Se ROOM_ID estiver vazio → modo pareamento (enrollment). Preencha para modo acesso.
-const char* ROOM_ID = "";
+// Callback que notifica que precisamos salvar a configuração
+void saveConfigCallback () {
+  Serial.println("[Wi-Fi] Configuração alterada, salvando...");
+  shouldSaveConfig = true;
+}
 
 // Ativar logs no Serial Monitor (comentar em produção)
 #define DEBUG
@@ -90,23 +95,66 @@ MFRC522      rfid(PIN_RFID_SS, PIN_RFID_RST);
 // =============================================================================
 
 void connectWifi() {
-  WiFi.mode(WIFI_STA);
-  WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
-  int a = 0;
-  while (WiFi.status() != WL_CONNECTED && a++ < WIFI_MAX_ATTEMPTS) {
-    delay(500);
-#ifdef DEBUG
-    Serial.print(F("."));
-#endif
+  if (LittleFS.begin()) {
+    if (LittleFS.exists("/config.json")) {
+      File configFile = LittleFS.open("/config.json", "r");
+      if (configFile) {
+        size_t size = configFile.size();
+        std::unique_ptr<char[]> buf(new char[size]);
+        configFile.readBytes(buf.get(), size);
+        StaticJsonDocument<200> doc;
+        auto error = deserializeJson(doc, buf.get());
+        if (!error) {
+          strcpy(MQTT_SERVER, doc["mqtt_server"] | "192.168.0.121");
+          strcpy(MQTT_PORT, doc["mqtt_port"] | "1883");
+          strcpy(DEVICE_SECRET, doc["device_secret"] | "Zx9kPq2mRn7vWj4tYb8cLe");
+          strcpy(ROOM_ID, doc["room_id"] | "");
+        }
+      }
+    }
   }
-#ifdef DEBUG
+
+  WiFiManagerParameter custom_mqtt_server("server", "IP MQTT", MQTT_SERVER, 40);
+  WiFiManagerParameter custom_mqtt_port("port", "Porta MQTT", MQTT_PORT, 6);
+  WiFiManagerParameter custom_device_secret("secret", "Secret Device", DEVICE_SECRET, 40);
+  WiFiManagerParameter custom_room_id("room", "Room ID (Vazio=Pareamento)", ROOM_ID, 40);
+
+  WiFiManager wifiManager;
+  wifiManager.setSaveConfigCallback(saveConfigCallback);
+  
+  wifiManager.addParameter(&custom_mqtt_server);
+  wifiManager.addParameter(&custom_mqtt_port);
+  wifiManager.addParameter(&custom_device_secret);
+  wifiManager.addParameter(&custom_room_id);
+
+  if (!wifiManager.autoConnect("Controlador-NFC-Setup", "admin123")) {
+    Serial.println("[Wi-Fi] Falha ao conectar, reiniciando...");
+    delay(3000);
+    ESP.restart();
+  }
+
+  strcpy(MQTT_SERVER, custom_mqtt_server.getValue());
+  strcpy(MQTT_PORT, custom_mqtt_port.getValue());
+  strcpy(DEVICE_SECRET, custom_device_secret.getValue());
+  strcpy(ROOM_ID, custom_room_id.getValue());
+
+  if (shouldSaveConfig) {
+    StaticJsonDocument<200> doc;
+    doc["mqtt_server"] = MQTT_SERVER;
+    doc["mqtt_port"] = MQTT_PORT;
+    doc["device_secret"] = DEVICE_SECRET;
+    doc["room_id"] = ROOM_ID;
+
+    File configFile = LittleFS.open("/config.json", "w");
+    if (configFile) {
+      serializeJson(doc, configFile);
+      configFile.close();
+    }
+  }
+
   Serial.println();
-  if (WiFi.status() == WL_CONNECTED) {
-    Serial.print(F("[WiFi] IP: ")); Serial.println(WiFi.localIP());
-  } else {
-    Serial.println(F("[WiFi] Falha ao conectar."));
-  }
-#endif
+  Serial.print(F("[WiFi] Conectado IP: "));
+  Serial.println(WiFi.localIP());
 }
 
 void connectMqtt() {
@@ -209,9 +257,7 @@ void setup() {
   pinMode(PIN_LED, OUTPUT);
   ledOff();
 
-  WiFi.mode(WIFI_STA);
-  WiFi.begin(WIFI_SSID, WIFI_PASSWORD);  // inicia cedo para ganhar tempo
-  delay(100);
+
 
   // Controller ID baseado no MAC
   String mac = WiFi.macAddress();
@@ -238,7 +284,7 @@ void setup() {
   if (v == 0x00 || v == 0xFF) Serial.println(F("[RFID] ALERTA: RC522 sem resposta!"));
 #endif
 
-  mqtt.setServer(MQTT_SERVER, MQTT_PORT);
+  mqtt.setServer(MQTT_SERVER, atoi(MQTT_PORT));
   mqtt.setCallback(onMqttMessage);
   mqtt.setBufferSize(512);
 

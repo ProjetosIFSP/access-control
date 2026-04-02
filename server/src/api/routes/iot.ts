@@ -1,6 +1,6 @@
 import type { FastifyPluginAsyncZod } from "fastify-type-provider-zod";
-import { env } from "@/env";
 import type { SchemaWithExamples } from "@/api/openapi";
+import { db } from "@/db";
 import {
 	accessStatusEnum,
 	credentialTypeEnum,
@@ -9,6 +9,8 @@ import {
 	doorStateEnum,
 	fingerKeyEnum,
 } from "@/db/schema/enums";
+import { doorController } from "@/db/schema/room";
+import { env } from "@/env";
 import { sseBus } from "@/lib/sse-bus";
 import { z } from "@/lib/zod";
 import { processAccessAttempt } from "@/services/iot/access";
@@ -18,10 +20,10 @@ import {
 	updateDoorCommandStatus,
 } from "@/services/iot/commands";
 import {
+	getPairingControllers,
 	recordDoorHeartbeat,
 	registerDoorController,
 	updateDoorStatus,
-	getPairingControllers,
 } from "@/services/iot/door-controller";
 import {
 	FingerprintConflictError,
@@ -78,6 +80,20 @@ const controllerSummarySchema = z.object({
 	sensorProtocol: sensorProtocolSchema,
 	sensorModel: z.string().nullable(),
 	lastSeenAt: z.string().datetime(),
+});
+
+const getControllersResponseSchema = z.object({
+	controllers: z.array(
+		z.object({
+			id: z.string(),
+			roomId: z.string().nullable(),
+			sensorProtocol: z.string().nullable(),
+			sensorModel: z.string().nullable(),
+			firmwareVersion: z.string().nullable(),
+			lastSeenAt: z.string(),
+			isOnline: z.boolean(),
+		}),
+	),
 });
 
 const registerControllerResponseSchema = z.object({
@@ -467,7 +483,11 @@ export const iotRoute: FastifyPluginAsyncZod = async (app) => {
 					"Avalia uma credencial apresentada ao controlador e retorna a decisão (permitido ou negado).",
 				response: {
 					200: accessDecisionSchema,
-					401: z.object({ status: z.literal("DENIED"), reason: z.string(), requestId: z.string().optional() }),
+					401: z.object({
+						status: z.literal("DENIED"),
+						reason: z.string(),
+						requestId: z.string().optional(),
+					}),
 				},
 				paramsExample: {
 					controllerId: sampleControllerId,
@@ -498,7 +518,11 @@ export const iotRoute: FastifyPluginAsyncZod = async (app) => {
 					{ controllerId, hasSecret: !!deviceSecret },
 					"Access attempt rejected: invalid or missing deviceSecret",
 				);
-				return reply.status(401).send({ status: "DENIED", reason: "INVALID_DEVICE_SECRET", requestId });
+				return reply.status(401).send({
+					status: "DENIED",
+					reason: "INVALID_DEVICE_SECRET",
+					requestId,
+				});
 			}
 
 			const normalizedValue =
@@ -798,7 +822,7 @@ export const iotRoute: FastifyPluginAsyncZod = async (app) => {
 								sensorModel: z.string().nullable(),
 								firmwareVersion: z.string().nullable(),
 								lastSeenAt: z.string().datetime(),
-							})
+							}),
 						),
 					}),
 				},
@@ -815,7 +839,7 @@ export const iotRoute: FastifyPluginAsyncZod = async (app) => {
 					lastSeenAt: c.lastSeenAt.toISOString(),
 				})),
 			});
-		}
+		},
 	);
 
 	app.get(
@@ -857,6 +881,41 @@ export const iotRoute: FastifyPluginAsyncZod = async (app) => {
 			request.raw.on("close", () => {
 				unsubscribe();
 			});
-		}
+		},
+	);
+
+	app.get(
+		"/controllers",
+		{
+			schema: {
+				tags: ["iot"],
+				summary: "Lista todos os controladores",
+				response: {
+					200: getControllersResponseSchema,
+				},
+			} satisfies SchemaWithExamples,
+		},
+		async (request, reply) => {
+			const controllers = await db.select().from(doorController);
+
+			const now = new Date();
+
+			return reply.send({
+				controllers: controllers.map((c: any) => {
+					const timeout = 60000; // 60 segundos
+					const isOnline =
+						now.getTime() - new Date(c.lastSeenAt).getTime() < timeout;
+					return {
+						id: c.id,
+						roomId: c.roomId,
+						sensorProtocol: c.sensorProtocol,
+						sensorModel: c.sensorModel,
+						firmwareVersion: c.firmwareVersion,
+						lastSeenAt: c.lastSeenAt.toISOString(),
+						isOnline,
+					};
+				}),
+			});
+		},
 	);
 };

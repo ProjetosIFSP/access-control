@@ -12,12 +12,12 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as ResetPasswordRouteImport } from './routes/reset-password'
 import { Route as McpRouteImport } from './routes/mcp'
 import { Route as ForgotPasswordRouteImport } from './routes/forgot-password'
-import { Route as AboutRouteImport } from './routes/about'
 import { Route as DocsRouteRouteImport } from './routes/docs/route'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as UsersIndexRouteImport } from './routes/users/index'
 import { Route as RoomsIndexRouteImport } from './routes/rooms/index'
 import { Route as LogsIndexRouteImport } from './routes/logs/index'
+import { Route as ConfigIndexRouteImport } from './routes/config/index'
 import { Route as DocsSplatRouteImport } from './routes/docs/$'
 import { Route as ApiSearchRouteImport } from './routes/api/search'
 import { Route as ApiAuthSplatRouteImport } from './routes/api/auth/$'
@@ -35,11 +35,6 @@ const McpRoute = McpRouteImport.update({
 const ForgotPasswordRoute = ForgotPasswordRouteImport.update({
   id: '/forgot-password',
   path: '/forgot-password',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const AboutRoute = AboutRouteImport.update({
-  id: '/about',
-  path: '/about',
   getParentRoute: () => rootRouteImport,
 } as any)
 const DocsRouteRoute = DocsRouteRouteImport.update({
@@ -67,6 +62,11 @@ const LogsIndexRoute = LogsIndexRouteImport.update({
   path: '/logs/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ConfigIndexRoute = ConfigIndexRouteImport.update({
+  id: '/config/',
+  path: '/config/',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const DocsSplatRoute = DocsSplatRouteImport.update({
   id: '/$',
   path: '/$',
@@ -86,12 +86,12 @@ const ApiAuthSplatRoute = ApiAuthSplatRouteImport.update({
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/docs': typeof DocsRouteRouteWithChildren
-  '/about': typeof AboutRoute
   '/forgot-password': typeof ForgotPasswordRoute
   '/mcp': typeof McpRoute
   '/reset-password': typeof ResetPasswordRoute
   '/api/search': typeof ApiSearchRoute
   '/docs/$': typeof DocsSplatRoute
+  '/config/': typeof ConfigIndexRoute
   '/logs/': typeof LogsIndexRoute
   '/rooms/': typeof RoomsIndexRoute
   '/users/': typeof UsersIndexRoute
@@ -100,12 +100,12 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/docs': typeof DocsRouteRouteWithChildren
-  '/about': typeof AboutRoute
   '/forgot-password': typeof ForgotPasswordRoute
   '/mcp': typeof McpRoute
   '/reset-password': typeof ResetPasswordRoute
   '/api/search': typeof ApiSearchRoute
   '/docs/$': typeof DocsSplatRoute
+  '/config': typeof ConfigIndexRoute
   '/logs': typeof LogsIndexRoute
   '/rooms': typeof RoomsIndexRoute
   '/users': typeof UsersIndexRoute
@@ -115,12 +115,12 @@ export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/docs': typeof DocsRouteRouteWithChildren
-  '/about': typeof AboutRoute
   '/forgot-password': typeof ForgotPasswordRoute
   '/mcp': typeof McpRoute
   '/reset-password': typeof ResetPasswordRoute
   '/api/search': typeof ApiSearchRoute
   '/docs/$': typeof DocsSplatRoute
+  '/config/': typeof ConfigIndexRoute
   '/logs/': typeof LogsIndexRoute
   '/rooms/': typeof RoomsIndexRoute
   '/users/': typeof UsersIndexRoute
@@ -131,12 +131,12 @@ export interface FileRouteTypes {
   fullPaths:
     | '/'
     | '/docs'
-    | '/about'
     | '/forgot-password'
     | '/mcp'
     | '/reset-password'
     | '/api/search'
     | '/docs/$'
+    | '/config/'
     | '/logs/'
     | '/rooms/'
     | '/users/'
@@ -145,12 +145,12 @@ export interface FileRouteTypes {
   to:
     | '/'
     | '/docs'
-    | '/about'
     | '/forgot-password'
     | '/mcp'
     | '/reset-password'
     | '/api/search'
     | '/docs/$'
+    | '/config'
     | '/logs'
     | '/rooms'
     | '/users'
@@ -159,12 +159,12 @@ export interface FileRouteTypes {
     | '__root__'
     | '/'
     | '/docs'
-    | '/about'
     | '/forgot-password'
     | '/mcp'
     | '/reset-password'
     | '/api/search'
     | '/docs/$'
+    | '/config/'
     | '/logs/'
     | '/rooms/'
     | '/users/'
@@ -174,11 +174,11 @@ export interface FileRouteTypes {
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   DocsRouteRoute: typeof DocsRouteRouteWithChildren
-  AboutRoute: typeof AboutRoute
   ForgotPasswordRoute: typeof ForgotPasswordRoute
   McpRoute: typeof McpRoute
   ResetPasswordRoute: typeof ResetPasswordRoute
   ApiSearchRoute: typeof ApiSearchRoute
+  ConfigIndexRoute: typeof ConfigIndexRoute
   LogsIndexRoute: typeof LogsIndexRoute
   RoomsIndexRoute: typeof RoomsIndexRoute
   UsersIndexRoute: typeof UsersIndexRoute
@@ -206,13 +206,6 @@ declare module '@tanstack/react-router' {
       path: '/forgot-password'
       fullPath: '/forgot-password'
       preLoaderRoute: typeof ForgotPasswordRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/about': {
-      id: '/about'
-      path: '/about'
-      fullPath: '/about'
-      preLoaderRoute: typeof AboutRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/docs': {
@@ -248,6 +241,13 @@ declare module '@tanstack/react-router' {
       path: '/logs'
       fullPath: '/logs/'
       preLoaderRoute: typeof LogsIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/config/': {
+      id: '/config/'
+      path: '/config'
+      fullPath: '/config/'
+      preLoaderRoute: typeof ConfigIndexRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/docs/$': {
@@ -289,11 +289,11 @@ const DocsRouteRouteWithChildren = DocsRouteRoute._addFileChildren(
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   DocsRouteRoute: DocsRouteRouteWithChildren,
-  AboutRoute: AboutRoute,
   ForgotPasswordRoute: ForgotPasswordRoute,
   McpRoute: McpRoute,
   ResetPasswordRoute: ResetPasswordRoute,
   ApiSearchRoute: ApiSearchRoute,
+  ConfigIndexRoute: ConfigIndexRoute,
   LogsIndexRoute: LogsIndexRoute,
   RoomsIndexRoute: RoomsIndexRoute,
   UsersIndexRoute: UsersIndexRoute,

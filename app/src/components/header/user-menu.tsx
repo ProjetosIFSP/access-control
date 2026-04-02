@@ -1,5 +1,5 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useRouter } from "@tanstack/react-router";
+import { Link, useRouter } from "@tanstack/react-router";
 import gsap from "gsap";
 import { Bell, ChevronDown, LogOut, Settings, User } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -261,7 +261,9 @@ export function UserMenu() {
 							size="icon"
 							className="rounded-full max-md:size-6"
 						>
-							<Bell className="size-4" />
+							<Link to="/config">
+								<Settings className="size-4" />
+							</Link>
 						</Button>
 					)}
 

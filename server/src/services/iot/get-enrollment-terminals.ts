@@ -37,9 +37,9 @@ export async function getOnlineDoorControllersForEnrollment(): Promise<
 
 	const now = Date.now();
 
-	return controllers.map((c) => ({
+	return controllers.filter(c => c.roomId !== null).map((c) => ({
 		id: c.id,
-		roomId: c.roomId,
+		roomId: c.roomId as string,
 		sensorProtocol: c.sensorProtocol as "R30X" | "BOLAND" | null,
 		sensorModel: c.sensorModel,
 		firmwareVersion: c.firmwareVersion,
