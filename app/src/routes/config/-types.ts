@@ -1,4 +1,4 @@
-import { parseAsStringEnum } from "nuqs";
+import { parseAsInteger, parseAsString, parseAsStringEnum } from "nuqs";
 
 export type ConfigActiveTab = "controllers" | "credentials";
 
@@ -7,6 +7,8 @@ export const configSearchParams = {
 		"controllers",
 		"credentials",
 	]).withDefault("controllers"),
+	q: parseAsString,
+	page: parseAsInteger.withDefault(1),
 };
 
 export type IotController = {

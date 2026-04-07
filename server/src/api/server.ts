@@ -8,6 +8,7 @@ import {
 import { registerDocs } from "./docs";
 import { authRoute } from "./routes/auth";
 import { blockRoute } from "./routes/block";
+import { credentialsRoute } from "./routes/credentials";
 import { doorRoute } from "./routes/door";
 import { iotRoute } from "./routes/iot";
 import { logsRoute } from "./routes/logs";
@@ -48,6 +49,7 @@ async function bootstrap() {
 	app.register(roomRoute, { prefix: "/rooms" });
 	app.register(roomTypesRoute, { prefix: "/room-types" });
 	app.register(doorRoute, { prefix: "/doors" });
+	app.register(credentialsRoute, { prefix: "/credentials" });
 	app.register(iotRoute, { prefix: "/iot" });
 	app.register(blockRoute, { prefix: "/blocks" });
 	app.register(profileRoute, { prefix: "/profiles" });

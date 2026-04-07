@@ -247,16 +247,31 @@ void ledBlink(int times, unsigned long ms) {
 }
 
 void setupFingerprint() {
-  // O sensor normalmente usa 57600 baud rate por padrão
-  finger.begin(57600);
-  delay(100);
-  if (finger.verifyPassword()) {
+  // Alguns sensores vêm de fábrica com baud rates diferentes.
+  // Vamos tentar as velocidades mais comuns: 57600, 9600 e 115200.
+  
+  int baudRates[] = {57600, 9600, 115200, 19200};
+  bool found = false;
+
+  for (int i = 0; i < 4; i++) {
+    finger.begin(baudRates[i]);
+    delay(100);
+    if (finger.verifyPassword()) {
 #ifdef DEBUG
-    Serial.println("[BIO] Sensor biométrico encontrado!");
+      Serial.print("[BIO] Sensor biométrico encontrado a ");
+      Serial.print(baudRates[i]);
+      Serial.println(" baud!");
 #endif
-  } else {
+      found = true;
+      break;
+    }
+  }
+
+  if (!found) {
 #ifdef DEBUG
-    Serial.println("[BIO] Não foi possível encontrar o sensor biométrico.");
+    Serial.println("[BIO] Erro: Não foi possível encontrar o sensor biométrico.");
+    Serial.println("      Verifique se o TX do sensor está no D1 e o RX no D2.");
+    Serial.println("      Verifique também a alimentação (3.3V) e o cabo.");
 #endif
   }
 }
