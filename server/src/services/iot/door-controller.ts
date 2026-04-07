@@ -210,3 +210,12 @@ export async function getPairingControllers() {
 
 	return controllers;
 }
+
+export async function deleteDoorController(controllerId: string): Promise<boolean> {
+const [result] = await db
+.delete(doorController)
+.where(eq(doorController.id, controllerId))
+.returning({ id: doorController.id });
+
+return !!result;
+}

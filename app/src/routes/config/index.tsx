@@ -1,20 +1,37 @@
-import { useQuery, useSuspenseQuery } from "@tanstack/react-query";
+import {
+	useMutation,
+	useQuery,
+	useQueryClient,
+	useSuspenseQuery,
+} from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
 import { useQueryStates } from "nuqs";
 import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
-import { SplitView, SplitViewMain } from "@/components/ui/split-view";
+import {
+	SplitView,
+	SplitViewMain,
+	SplitViewPanel,
+} from "@/components/ui/split-view";
 import { useControllerStream } from "@/hooks/use-controller-stream";
 import { useDebounce } from "@/hooks/use-debounce";
 import { useMqttNfcReader } from "@/hooks/use-mqtt-nfc-reader";
+import { nfcCredentialsQueryOptions } from "@/services/credentials";
 import { controllerTargetsQueryOptions } from "@/services/doors";
-import { controllersQueryOptions } from "@/services/iot";
+import {
+	configQueryKeys,
+	controllersQueryOptions,
+	deleteController,
+	putController,
+} from "@/services/iot";
 import { ConfigDialogs } from "./-dialogs";
+import { ConfigControllerForm } from "./-form";
 import { ConfigHeader } from "./-header";
 import { TabControllers } from "./-tab-controllers";
 import { TabCredentials } from "./-tab-credentials";
 import { ConfigTabs } from "./-tabs";
 import { ConfigToolbar } from "./-toolbar";
+import type { IotController } from "./-types";
 import { configSearchParams } from "./-types";
 
 export const Route = createFileRoute("/config/")({
@@ -96,6 +113,11 @@ function ConfigManagePage() {
 		useState<string>("none");
 	const [pairedTag, setPairedTag] = useState<string | null>(null);
 
+	const { data: nfcData } = useQuery(
+		nfcCredentialsQueryOptions({ q: params.q, page: params.page }),
+	);
+	const credentialsCount = nfcData?.total ?? 0;
+
 	const {
 		status: nfcStatus,
 		startCapture,
@@ -117,10 +139,40 @@ function ConfigManagePage() {
 		startCapture();
 	};
 
+	const [editTarget, setEditTarget] = useState<IotController | null>(null);
+	const [deleteTarget, setDeleteTarget] = useState<IotController | null>(null);
+	const queryClient = useQueryClient();
+
+	const putMut = useMutation({
+		mutationFn: putController,
+		onSuccess: () => {
+			toast.success("Controlador atualizado com sucesso!");
+			queryClient.invalidateQueries({ queryKey: configQueryKeys.controllers });
+		},
+		onError: () => toast.error("Erro ao atualizar o controlador."),
+	});
+
+	const delMut = useMutation({
+		mutationFn: async () => {
+			if (deleteTarget) {
+				await deleteController(deleteTarget.id);
+			}
+		},
+		onSuccess: () => {
+			toast.success("Controlador deletado com sucesso!");
+			setDeleteTarget(null);
+			queryClient.invalidateQueries({ queryKey: configQueryKeys.controllers });
+		},
+		onError: () => toast.error("Erro ao deletar o controlador."),
+	});
+
 	return (
 		<>
 			<main className="flex w-full flex-1 flex-col overflow-hidden px-4 sm:px-8 md:px-16 lg:px-32 transition-all py-8">
-				<SplitView open={false} onOpenChange={() => {}}>
+				<SplitView
+					open={editTarget !== null}
+					onOpenChange={(open) => !open && setEditTarget(null)}
+				>
 					<SplitViewMain>
 						<div className="flex flex-col gap-6">
 							<ConfigHeader />
@@ -134,6 +186,7 @@ function ConfigManagePage() {
 									setParams({ tab, q: null, page: 1 });
 								}}
 								controllersCount={data?.controllers?.length ?? 0}
+								credentialsCount={credentialsCount}
 							/>
 
 							<ConfigToolbar
@@ -151,7 +204,11 @@ function ConfigManagePage() {
 
 							<div className="flex-1 overflow-auto rounded-lg">
 								{activeTab === "controllers" && (
-									<TabControllers controllers={filteredControllers} />
+									<TabControllers
+										controllers={filteredControllers}
+										onEdit={setEditTarget}
+										onDelete={setDeleteTarget}
+									/>
 								)}
 								{activeTab === "credentials" && (
 									<TabCredentials
@@ -162,12 +219,27 @@ function ConfigManagePage() {
 							</div>
 						</div>
 					</SplitViewMain>
+					<SplitViewPanel>
+						<div className="flex h-full flex-col p-6 overflow-auto">
+							<h2 className="text-xl font-bold mb-4">Editar Controlador</h2>
+							<ConfigControllerForm
+								controller={editTarget}
+								mutation={putMut}
+								onSuccess={() => setEditTarget(null)}
+								onCancel={() => setEditTarget(null)}
+							/>
+						</div>
+					</SplitViewPanel>
 				</SplitView>
 			</main>
 
 			<ConfigDialogs
 				isAddControllerOpen={isAddControllerOpen}
 				onAddControllerChange={setIsAddControllerOpen}
+				deleteTarget={deleteTarget}
+				onDeleteOpenChange={(open) => !open && setDeleteTarget(null)}
+				isDeleting={delMut.isPending}
+				onConfirmDelete={() => delMut.mutate()}
 			/>
 		</>
 	);

@@ -127,13 +127,12 @@ export function TabCredentials({
 										{cred.user ? (
 											<Link
 												to={`/users`}
-												search={{
-													q: cred.user.name,
-													profileIds: [],
+												search={(prev) => ({
+													...prev,
+													q: cred.user?.name ?? "",
 													tab: "users",
-													page: 1,
-												}}
-												className="hover:underline text-blue-600 dark:text-blue-400"
+												})}
+												className="hover:underline font-medium text-sm text-blue-600 dark:text-blue-400"
 											>
 												{cred.user.name}
 											</Link>

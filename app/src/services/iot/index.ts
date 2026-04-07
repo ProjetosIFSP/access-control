@@ -23,3 +23,25 @@ if (!res.ok) throw new Error("Failed to fetch controllers");
 return res.json();
 },
 });
+
+export async function deleteController(controllerId: string): Promise<void> {
+    const res = await fetch(`${API_BASE_URL}/iot/devices/${controllerId}`, {
+        method: "DELETE",
+        credentials: "include",
+    });
+    if (!res.ok) {
+        throw new Error("Failed to delete controller");
+    }
+}
+
+export async function putController({ controllerId, data }: { controllerId: string; data: Record<string, string | undefined> }): Promise<void> {
+    const res = await fetch(`${API_BASE_URL}/iot/devices/${controllerId}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify(data),
+    });
+    if (!res.ok) {
+        throw new Error("Failed to update controller");
+    }
+}

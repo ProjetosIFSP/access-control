@@ -308,6 +308,44 @@ export const iotRoute: FastifyPluginAsyncZod = async (app) => {
 		},
 	);
 
+	app.delete(
+		"/devices/:controllerId",
+		{
+			schema: {
+				params: z.object({
+					controllerId: z.string().min(1),
+				}),
+				tags: ["iot"],
+				summary: "Excluir controlador",
+				description: "Remove um controlador do sistema.",
+				response: {
+					204: z.object({}),
+					404: z.object({
+						error: z.literal("Controller not found"),
+						code: z.literal("CONTROLLER_NOT_FOUND"),
+					}),
+				},
+			},
+		},
+		async (request, reply) => {
+			const { controllerId } = request.params;
+			const { deleteDoorController } = await import(
+				"@/services/iot/door-controller"
+			);
+
+			const deleted = await deleteDoorController(controllerId);
+
+			if (!deleted) {
+				return reply.status(404).send({
+					error: "Controller not found",
+					code: "CONTROLLER_NOT_FOUND",
+				});
+			}
+
+			return reply.status(204).send({});
+		},
+	);
+
 	app.patch(
 		"/devices/:controllerId/heartbeat",
 		{
