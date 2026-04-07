@@ -1,16 +1,6 @@
 import dayjs from "dayjs";
 import relativeTime from "dayjs/plugin/relativeTime";
 import "dayjs/locale/pt-br";
-import { Icon } from "@iconify/react";
-import {
-	CircleUser,
-	CircleUserIcon,
-	CircleUserRound,
-	CircleUserRoundIcon,
-	User,
-	User2,
-	UserRound,
-} from "lucide-react";
 import { useMemo } from "react";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
@@ -116,10 +106,6 @@ export function RoomCard({ room, authenticated, onClick }: RoomCardProps) {
 				{/* Current / last user */}
 				{authenticated && displayUser && (
 					<div className="flex items-center gap-0.5 text-xs text-zinc-400 truncate">
-						<Icon
-							icon="solar:user-bold"
-							className="size-4 shrink-0 text-zinc-400"
-						/>
 						<span className="truncate italic">{displayUser.name}</span>
 					</div>
 				)}

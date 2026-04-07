@@ -1,25 +1,27 @@
 {
-  "name": "access-control-monorepo",
-  "private": true,
-  "workspaces": [
-    "app",
-    "server",
-    "iot"
-  ],
-  "scripts": {
-    "dev:app": "npm run dev --workspace app",
-    "dev:server": "npm run dev --workspace server",
-    "dev:iot": "npm run dev --workspace iot-broker",
-    "db:seed": "npm run db:seed --workspace server",
-    "build": "npm run build --workspaces",
-    "build:app": "npm run build --workspace app",
-    "build:server": "npm run build --workspace server",
-    "build:iot": "npm run build --workspace iot-broker"
-  },
-  "devDependencies": {
-    "@playwright/test": "^1.40.0",
-    "orval": "^8.4.2",
-    "usb": "^2.17.0",
-    "yaml": "^2.8.2"
-  }
+	"name": "access-control-monorepo",
+	"private": true,
+	"workspaces": [
+		"app",
+		"server",
+		"iot"
+	],
+	"scripts": {
+		"dev": "concurrently -n \"APP,SERVER,IOT\" -c \"cyan,magenta,yellow\" \"npm run dev:app\" \"npm run dev:server\" \"npm run dev:iot\"",
+		"dev:app": "npm run dev --workspace app",
+		"dev:server": "npm run dev --workspace server",
+		"dev:iot": "npm run dev --workspace iot-broker",
+		"db:seed": "npm run db:seed --workspace server",
+		"build": "npm run build --workspaces",
+		"build:app": "npm run build --workspace app",
+		"build:server": "npm run build --workspace server",
+		"build:iot": "npm run build --workspace iot-broker"
+	},
+	"devDependencies": {
+		"@playwright/test": "^1.40.0",
+		"concurrently": "^9.2.1",
+		"orval": "^8.4.2",
+		"usb": "^2.17.0",
+		"yaml": "^2.8.2"
+	}
 }

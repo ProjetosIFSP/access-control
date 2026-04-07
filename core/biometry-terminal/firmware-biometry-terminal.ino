@@ -1,25 +1,20 @@
 // =============================================================================
-// firmware-nfc-terminal.ino  — v3.0 (uid-only)
-// Terminal de Leitura RFID — NodeMCU v3 (ESP8266) + RC522 via SPI
+// firmware-biometry-terminal.ino  — v1.0
+// Terminal de Leitura Biométrica — NodeMCU v3 (ESP8266) + Sensor ZW-111 (UART)
 //
-// Fluxo de acesso (modo normal):
-//   1. Cartão aproximado → firmware lê o UID (número de série)
-//   2. Publica access-attempt com UID + deviceSecret
-//   3. Recebe access-result → abre a porta (GRANTED) ou nega
+// Fluxo de acesso:
+//   1. TouchOut detecta dedo -> "Acorda" para leitura biométrica
+//   2. Sensor captura impressão digital e busca ID (ou extrai template)
+//   3. Publica access-attempt via MQTT
+//   4. Recebe access-result → sinaliza conclusão (LED do anel e LED_BUILTIN)
 //
-// Fluxo de pareamento (modo pareamento):
-//   1. Cartão aproximado → firmware lê o UID
-//   2. Publica access-attempt com UID + deviceSecret
-//   3. Servidor vincula a tag ao usuário usando o UID como chave
-//   4. Recebe access-result → sinaliza conclusão (LED)
-//
-// O vínculo tag ↔ usuário é feito exclusivamente pelo número de série (UID)
-// da tag ou cartão, sem escrita de dados nos blocos MIFARE. (Verificar depois )
-//
-// Pinout RC522 (NodeMCU v3):
-//   SDA (SS) → D8 (GPIO15)   SCK → D5 (GPIO14)
-//   MOSI     → D7 (GPIO13)   MISO → D6 (GPIO12)
-//   RST      → D3 (GPIO0)    VCC → 3V3   GND → GND
+// Pinout ZW-111 (Interface 6pin 1.0mm) -> NodeMCU v3:
+//   PIN1: V_Touch (3.3V) -> 3V3
+//   PIN2: TouchOut      -> D5 (GPIO14)  [Mudado de D4 para evitar erro de boot]
+//   PIN3: VCC (3.3V)    -> 3V3
+//   PIN4: TX            -> D1 (GPIO5)   [RX do SoftwareSerial]
+//   PIN5: RX            -> D2 (GPIO4)   [TX do SoftwareSerial]
+//   PIN6: GND           -> GND
 // =============================================================================
 
 #include <ESP8266WiFi.h>
@@ -27,10 +22,10 @@
 #include <ESP8266WebServer.h>
 #include <WiFiManager.h>
 #include <PubSubClient.h>
-#include <SPI.h>
-#include <MFRC522.h>
+#include <SoftwareSerial.h>
 #include <ArduinoJson.h>
 #include <LittleFS.h>
+#include <Adafruit_Fingerprint.h> // Recomendado para sensores genéricos UART (AS608, ZW-111 etc.)
 
 // ── CONFIGURAÇÕES PADRÃO ────────────────
 char WIFI_SSID[32]     = "Miguel";
@@ -39,29 +34,25 @@ char MQTT_SERVER[40]   = "192.168.0.121";
 char MQTT_PORT[6]      = "1883";
 char DEVICE_SECRET[40] = "Zx9kPq2mRn7vWj4tYb8cLe";
 
-// Flag para saber se devemos salvar configs
 bool shouldSaveConfig = false;
 
-// Callback que notifica que precisamos salvar a configuração
 void saveConfigCallback () {
   Serial.println("[Wi-Fi] Configuração alterada, salvando...");
   shouldSaveConfig = true;
 }
 
-// Ativar logs no Serial Monitor (comentar em produção)
 #define DEBUG
 
 // ── Pinos e constantes ────────────────────────────────────────────────────────
 
-#define PIN_RFID_SS  15   // D8
-#define PIN_RFID_RST 0    // D3
-#define PIN_LED      LED_BUILTIN
+#define PIN_FINGER_RX 5  // D1 -> TX do sensor
+#define PIN_FINGER_TX 4  // D2 -> RX do sensor
+#define PIN_TOUCHOUT  14 // D5 (GPIO14) -> Interrupção/Detecção de toque 
+#define PIN_LED       LED_BUILTIN
 
 const unsigned long HEARTBEAT_INTERVAL_MS = 30000;
-const unsigned long ACCESS_RESULT_TIMEOUT = 5000;   // espera result do servidor
-const unsigned long TAG_DEBOUNCE_MS       = 3000;   // ignora mesma tag por 3s
-const int WIFI_MAX_ATTEMPTS = 20;
-const int MQTT_MAX_ATTEMPTS = 5;
+const unsigned long ACCESS_RESULT_TIMEOUT = 5000;
+const unsigned long FINGER_DEBOUNCE_MS    = 3000;
 
 // ── Variáveis de estado ───────────────────────────────────────────────────────
 
@@ -70,40 +61,37 @@ char controllerId[48];
 String topicHeartbeat;
 String topicAccessAttempt;
 String topicAccessResult;
+String topicStatus;
 
 enum State { IDLE, WAITING_RESULT };
 State currentState = IDLE;
 
-// Door State Emulation
 enum DoorState { OPEN, LOCKED, UNKNOWN };
 DoorState currentDoorState = UNKNOWN;
 
-String topicStatus;
-
 unsigned long lastHeartbeat   = 0;
 unsigned long waitingResultAt = 0;
-
-String lastTagUid  = "";
-unsigned long lastTagTime = 0;
-
-String pendingTagUid = "";
+unsigned long lastFingerTime  = 0;
 
 bool   resultReceived = false;
 String resultStatus   = "";
 
 // ── Instâncias ────────────────────────────────────────────────────────────────
 
-WiFiClient   espClient;
+WiFiClient espClient;
 PubSubClient mqtt(espClient);
-MFRC522      rfid(PIN_RFID_SS, PIN_RFID_RST);
+SoftwareSerial fingerSerial(PIN_FINGER_RX, PIN_FINGER_TX);
+Adafruit_Fingerprint finger = Adafruit_Fingerprint(&fingerSerial);
 
 // =============================================================================
-//  CONECTIVIDADE
+//  SETUP & REDE
 // =============================================================================
 
 void connectWifi() {
   if (!LittleFS.begin()) {
+#ifdef DEBUG
     Serial.println("[LittleFS] Falha ao montar, formatando...");
+#endif
     LittleFS.format();
     LittleFS.begin();
   }
@@ -130,18 +118,17 @@ void connectWifi() {
 
   WiFiManager wifiManager;
   wifiManager.setSaveConfigCallback(saveConfigCallback);
-  wifiManager.setConfigPortalTimeout(180); // Timeout de 3 minutos para não bloquear para sempre
+  wifiManager.setConfigPortalTimeout(180);
   
   wifiManager.addParameter(&custom_mqtt_server);
   wifiManager.addParameter(&custom_mqtt_port);
   wifiManager.addParameter(&custom_device_secret);
 
-  // Tenta conectar na rede padrão caso não haja nenhuma rede salva
   if (WiFi.SSID() == "") {
     WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
   }
 
-  if (!wifiManager.autoConnect("access-control-setup", "admin123")) {
+  if (!wifiManager.autoConnect("access-control-setup-bio", "admin123")) {
     Serial.println("[Wi-Fi] Falha ao conectar, reiniciando...");
     delay(3000);
     ESP.restart();
@@ -163,29 +150,27 @@ void connectWifi() {
       configFile.close();
     }
     shouldSaveConfig = false;
-    
-    // Atualiza o objeto do mqtt depois de salvar para garantir que usará o novo IP
     mqtt.setServer(MQTT_SERVER, atoi(MQTT_PORT));
   }
 
-  Serial.println();
+#ifdef DEBUG
   Serial.print(F("[WiFi] Conectado IP: "));
   Serial.println(WiFi.localIP());
+#endif
 }
 
 unsigned long lastMqttAttempt = 0;
 
 void connectMqtt() {
   if (WiFi.status() != WL_CONNECTED) return;
-  if (millis() - lastMqttAttempt < 5000) return; // Tenta a cada 5 segundos sem bloquear
+  if (millis() - lastMqttAttempt < 5000) return;
   lastMqttAttempt = millis();
   
-  String clientId = String("nfc-") + controllerId;
+  String clientId = String("bio-") + controllerId;
   
   if (mqtt.connect(clientId.c_str())) {
     mqtt.subscribe(topicAccessResult.c_str());
     publishRegister();
-    // Força o envio imediato do heartbeat na conexão conectada!
     lastHeartbeat = millis() - HEARTBEAT_INTERVAL_MS;
 #ifdef DEBUG
     Serial.println(F("[MQTT] Conectado e configurado."));
@@ -200,8 +185,8 @@ void connectMqtt() {
 void publishRegister() {
   StaticJsonDocument<192> doc;
   doc["controllerId"]    = controllerId;
-  doc["firmwareVersion"] = "3.0.0-uid-only";
-  doc["sensorModel"]     = "RC522";
+  doc["firmwareVersion"] = "1.0.0-bio";
+  doc["sensorModel"]     = "ZW-111";
   
   String p; serializeJson(doc, p);
   String t = String("door/") + controllerId + "/register";
@@ -215,27 +200,17 @@ void sendHeartbeat() {
   mqtt.publish(topicHeartbeat.c_str(), p.c_str());
 }
 
-// Publica access-attempt com UID + deviceSecret
-void publishDoorStatus() {
-  StaticJsonDocument<128> doc;
-  doc["doorState"] = (currentDoorState == OPEN) ? "OPEN" : ((currentDoorState == LOCKED) ? "LOCKED" : "UNKNOWN");
-  doc["isLocked"]  = (currentDoorState == LOCKED);
-  
-  String p; serializeJson(doc, p);
-  mqtt.publish(topicStatus.c_str(), p.c_str());
-}
-
-void publishAccessAttempt(const String& uid) {
+void publishAccessAttempt(int fingerID) {
   StaticJsonDocument<256> doc;
-  doc["credentialType"]  = "NFC_TAG";
-  doc["credentialValue"] = uid;
+  doc["credentialType"]  = "BIOMETRICS";
+  doc["credentialValue"] = String(fingerID);
   doc["deviceSecret"]    = DEVICE_SECRET;
 
   String p; serializeJson(doc, p);
   mqtt.publish(topicAccessAttempt.c_str(), p.c_str());
 
 #ifdef DEBUG
-  Serial.print(F("[RFID] Access-attempt → UID: ")); Serial.println(uid);
+  Serial.print(F("[BIO] Access-attempt -> ID: ")); Serial.println(fingerID);
 #endif
 }
 
@@ -261,7 +236,7 @@ void onMqttMessage(char* topic, byte* payload, unsigned int length) {
 }
 
 // =============================================================================
-//  FEEDBACK VISUAL
+//  HARDWARE & FEEDBACK
 // =============================================================================
 
 void ledOn()  { digitalWrite(PIN_LED, LOW); }
@@ -269,6 +244,36 @@ void ledOff() { digitalWrite(PIN_LED, HIGH); }
 
 void ledBlink(int times, unsigned long ms) {
   for (int i = 0; i < times; i++) { ledOn(); delay(ms); ledOff(); delay(ms); }
+}
+
+void setupFingerprint() {
+  // O sensor normalmente usa 57600 baud rate por padrão
+  finger.begin(57600);
+  delay(100);
+  if (finger.verifyPassword()) {
+#ifdef DEBUG
+    Serial.println("[BIO] Sensor biométrico encontrado!");
+#endif
+  } else {
+#ifdef DEBUG
+    Serial.println("[BIO] Não foi possível encontrar o sensor biométrico.");
+#endif
+  }
+}
+
+// Tenta realizar uma leitura (modo simples)
+int getFingerprintID() {
+  uint8_t p = finger.getImage();
+  if (p != FINGERPRINT_OK)  return -1;
+
+  p = finger.image2Tz();
+  if (p != FINGERPRINT_OK)  return -1;
+
+  p = finger.fingerFastSearch();
+  if (p != FINGERPRINT_OK)  return -1;
+
+  // Retorna ID se deu match
+  return finger.fingerID;
 }
 
 // =============================================================================
@@ -279,52 +284,33 @@ void setup() {
 #ifdef DEBUG
   Serial.begin(115200);
   delay(100);
-  Serial.println(F("\n=== Terminal RFID IFSP-PEP v3.0 (uid-only) ==="));
+  Serial.println(F("\n=== Terminal Biométrico IFSP-PEP v1.0 ==="));
 #endif
 
   pinMode(PIN_LED, OUTPUT);
+  pinMode(PIN_TOUCHOUT, INPUT);
   ledOff();
 
-
-
-  // Controller ID baseado no MAC
   String mac = WiFi.macAddress();
   mac.replace(":", "");
   mac.toUpperCase();
-  snprintf(controllerId, sizeof(controllerId), "esp8266-%s", mac.c_str());
-
-#ifdef DEBUG
-  Serial.print(F("Controller ID: ")); Serial.println(controllerId);
-  Serial.println(F("Inicializando..."));
-#endif
+  snprintf(controllerId, sizeof(controllerId), "esp8266-bio-%s", mac.c_str());
 
   topicHeartbeat     = String("door/") + controllerId + "/heartbeat";
   topicAccessAttempt = String("door/") + controllerId + "/access-attempt";
   topicAccessResult  = String("door/") + controllerId + "/access-result";
   topicStatus        = String("door/") + controllerId + "/status";
 
-  SPI.begin();
-  rfid.PCD_Init();
-  delay(4);
-
 #ifdef DEBUG
-  byte v = rfid.PCD_ReadRegister(rfid.VersionReg);
-  Serial.print(F("[RFID] RC522 v")); Serial.println(v, HEX);
-  if (v == 0x00 || v == 0xFF) Serial.println(F("[RFID] ALERTA: RC522 sem resposta!"));
+  Serial.print(F("Controller ID: ")); Serial.println(controllerId);
+  Serial.println(F("Inicializando..."));
 #endif
-
-  mqtt.setCallback(onMqttMessage);
-  mqtt.setBufferSize(512);
 
   connectWifi();
-  
   mqtt.setServer(MQTT_SERVER, atoi(MQTT_PORT));
-  connectMqtt();
-  ledBlink(2, 150);
-
-#ifdef DEBUG
-  Serial.println(F("[Sistema] Pronto."));
-#endif
+  mqtt.setCallback(onMqttMessage);
+  
+  setupFingerprint();
 }
 
 // =============================================================================
@@ -332,9 +318,6 @@ void setup() {
 // =============================================================================
 
 void loop() {
-  unsigned long now = millis();
-
-  // Reconexão não bloqueante
   if (WiFi.status() == WL_CONNECTED) {
     if (!mqtt.connected()) {
       connectMqtt();
@@ -343,97 +326,49 @@ void loop() {
     }
   }
 
-  // Heartbeat apensa se logado
-  if (mqtt.connected() && (now - lastHeartbeat >= HEARTBEAT_INTERVAL_MS)) {
+  if (mqtt.connected() && (millis() - lastHeartbeat >= HEARTBEAT_INTERVAL_MS)) {
     sendHeartbeat();
-    lastHeartbeat = now;
+    lastHeartbeat = millis();
   }
 
-  switch (currentState) {
-
-    // ── IDLE: aguarda tag ──────────────────────────────────────────────────────
-    case IDLE: {
-      if (!rfid.PICC_IsNewCardPresent()) break;
-      if (!rfid.PICC_ReadCardSerial())   break;
-
-      // Montar UID como string hex "AA:BB:CC:DD"
-      String uid = "";
-      for (byte i = 0; i < rfid.uid.size; i++) {
-        if (i) uid += ":";
-        if (rfid.uid.uidByte[i] < 0x10) uid += "0";
-        uid += String(rfid.uid.uidByte[i], HEX);
+  // --- Lógica de pareamento / Leitura ---
+  
+  // Exemplo de uso com PIN_TOUCHOUT (pino em HIGH quando o dedo é encostado):
+  // Aqui você pode melhorar para acionar a leitura apenas quando PIN_TOUCHOUT == HIGH.
+  bool touched = digitalRead(PIN_TOUCHOUT) == HIGH;
+  
+  // Por ora, vamos apenas checar IDLE state
+  if (currentState == IDLE && touched) {
+    if (millis() - lastFingerTime > FINGER_DEBOUNCE_MS) {
+      int id = getFingerprintID();
+      if (id >= 0) {
+        publishAccessAttempt(id);
+        currentState = WAITING_RESULT;
+        waitingResultAt = millis();
+        lastFingerTime = millis();
       }
-      uid.toUpperCase();
-
-      // Debounce: ignora a mesma tag por TAG_DEBOUNCE_MS
-      if (uid == lastTagUid && (now - lastTagTime) < TAG_DEBOUNCE_MS) {
-        rfid.PICC_HaltA();
-        rfid.PCD_StopCrypto1();
-        break;
-      }
-
-#ifdef DEBUG
-      Serial.print(F("[RFID] Tag: ")); Serial.println(uid);
-#endif
-      lastTagUid  = uid;
-      lastTagTime = now;
-      pendingTagUid = uid;
-
-      rfid.PICC_HaltA();
-      rfid.PCD_StopCrypto1();
-
-      ledBlink(1, 80);
-
-      publishAccessAttempt(uid);
-      resultReceived = false;
-      resultStatus   = "";
-      waitingResultAt = now;
-      currentState    = WAITING_RESULT;
-      break;
     }
+  }
 
-    // ── WAITING_RESULT: aguarda access-result do servidor ─────────────────────
-    case WAITING_RESULT: {
-      if (!resultReceived) {
-        if (now - waitingResultAt >= ACCESS_RESULT_TIMEOUT) {
+  if (currentState == WAITING_RESULT) {
+    // Timeout
+    if (millis() - waitingResultAt > ACCESS_RESULT_TIMEOUT) {
 #ifdef DEBUG
-          Serial.println(F("[Acesso] Timeout — sem resposta."));
+      Serial.println(F("[BIO] Timeout aguardando access-result"));
 #endif
-          ledBlink(3, 200);
-          currentState = IDLE;
-        }
-        break;
-      }
-
-      bool granted = (resultStatus == "GRANTED");
-
-      if (granted) {
-        // Toggle door state
-        if (currentDoorState == OPEN) {
-          currentDoorState = LOCKED;
-        } else {
-          currentDoorState = OPEN;
-        }
-        
-#ifdef DEBUG
-        Serial.print(F("[Porta] Novo estado: ")); Serial.println(currentDoorState == OPEN ? F("ABERTO") : F("FECHADO"));
-#endif
-
-        publishDoorStatus();
-
-        ledOn(); delay(1500); ledOff();
+      ledBlink(3, 100);
+      currentState = IDLE;
+      resultReceived = false;
+    } 
+    // Recebeu retorno
+    else if (resultReceived) {
+      if (resultStatus == "GRANTED") {
+        ledBlink(1, 1000); // Exemplo de acesso permitido
       } else {
-        ledBlink(4, 60);
+        ledBlink(5, 50); // Exemplo de acesso negado
       }
-
-#ifdef DEBUG
-      Serial.print(F("[Acesso] ")); Serial.print(pendingTagUid);
-      Serial.print(F(" → ")); Serial.println(granted ? F("LIBERADO") : F("NEGADO"));
-#endif
-
-      pendingTagUid = "";
-      currentState  = IDLE;
-      break;
+      currentState = IDLE;
+      resultReceived = false;
     }
   }
 }

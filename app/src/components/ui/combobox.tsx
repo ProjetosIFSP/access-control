@@ -95,9 +95,9 @@ function ComboboxContent({
 					data-slot="combobox-popup"
 					className={cn(
 						"bg-popover text-popover-foreground",
-						"min-w-[8rem] rounded-md border shadow-md",
-						"data-[ending-style]:animate-out data-[ending-style]:fade-out-0 data-[ending-style]:zoom-out-95",
-						"data-[starting-style]:animate-in data-[starting-style]:fade-in-0 data-[starting-style]:zoom-in-95",
+						"min-w-32 rounded-md border shadow-md",
+						"data-ending-style:animate-out data-ending-style:fade-out-0 data-ending-style:zoom-out-95",
+						"data-starting-style:animate-in data-starting-style:fade-in-0 data-starting-style:zoom-in-95",
 						"origin-(--transform-origin) transition-[transform,scale,opacity] duration-100",
 						"overflow-hidden p-1",
 						className,
@@ -161,8 +161,8 @@ function ComboboxItem({
 			data-slot="combobox-item"
 			className={cn(
 				"relative flex w-full cursor-default select-none items-center gap-2 rounded-sm py-1.5 pr-8 pl-2 text-sm outline-none",
-				"data-[highlighted]:bg-accent data-[highlighted]:text-accent-foreground",
-				"data-[disabled]:pointer-events-none data-[disabled]:opacity-50",
+				"data-highlighted:bg-accent data-highlighted:text-accent-foreground",
+				"data-disabled:pointer-events-none data-disabled:opacity-50",
 				"[&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
 				className,
 			)}
