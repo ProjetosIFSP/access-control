@@ -260,6 +260,7 @@ export function UserMenu() {
 							variant="ghost"
 							size="icon"
 							className="rounded-full max-md:size-6"
+							asChild
 						>
 							<Link to="/config">
 								<Settings className="size-4" />
@@ -267,9 +268,9 @@ export function UserMenu() {
 						</Button>
 					)}
 
-					<button
-						type="button"
-						className="flex items-center md:gap-2 hover:bg-muted py-2 px-2 rounded-full cursor-pointer select-none"
+					<Button
+						variant="ghost"
+						className="rounded-full pl-1 my-1.5 pr-0 mr-1.5"
 						onClick={toggle}
 						disabled={isPending}
 					>
@@ -288,7 +289,7 @@ export function UserMenu() {
 						<span ref={chevronRef} className="flex">
 							<ChevronDown className="size-4" />
 						</span>
-					</button>
+					</Button>
 				</div>
 
 				{/* Expandable content */}
@@ -308,21 +309,14 @@ export function UserMenu() {
 									{user?.email}
 								</p>
 							</div>
-							<Separator className="mb-1 dark:bg-zinc-700" />
-							<button
+							<Link
+								to="/profile"
 								type="button"
 								className="user-menu-item flex items-center gap-3 px-3 py-2 rounded-lg text-sm text-zinc-700 dark:text-zinc-300 hover:bg-muted dark:hover:bg-zinc-600 transition-colors w-full text-left"
 							>
 								<User className="size-4" />
 								Meu perfil
-							</button>
-							<button
-								type="button"
-								className="user-menu-item flex items-center gap-3 px-3 py-2 rounded-lg text-sm text-zinc-700 dark:text-zinc-300 hover:bg-muted dark:hover:bg-zinc-600 transition-colors w-full text-left"
-							>
-								<Settings className="size-4" />
-								Preferências
-							</button>
+							</Link>
 							<Separator className="my-1 dark:bg-zinc-700" />
 							<button
 								type="button"

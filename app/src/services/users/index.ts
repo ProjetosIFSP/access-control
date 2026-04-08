@@ -41,6 +41,7 @@ export async function fetchCurrentUser(): Promise<{
 	email: string;
 	image: string | null;
 	isAdmin: boolean;
+	hasPassword: boolean;
 } | null> {
 	const res = await fetch(`${API_BASE_URL}/users/me`, {
 		credentials: "include",

@@ -1,8 +1,11 @@
+import fs from "node:fs";
+import path from "node:path";
 import { eq } from "drizzle-orm";
 import type { FastifyPluginAsyncZod } from "fastify-type-provider-zod";
 import type { SchemaWithExamples } from "@/api/openapi";
 import { db } from "@/db";
 import { userRoomPermission, userRoomTypePermission } from "@/db/schema/access";
+import { account } from "@/db/schema/auth";
 import { profile, userProfile } from "@/db/schema/profile";
 import { room, roomType } from "@/db/schema/room";
 import {
@@ -161,6 +164,7 @@ export const userRoute: FastifyPluginAsyncZod = async (app) => {
 						email: z.string().email(),
 						image: z.string().nullable(),
 						isAdmin: z.boolean(),
+						hasPassword: z.boolean(),
 					}),
 				},
 			},
@@ -172,6 +176,14 @@ export const userRoute: FastifyPluginAsyncZod = async (app) => {
 					.status(401)
 					.send({ message: "Autenticação necessária." });
 			}
+			const dbAccounts = await db
+				.select()
+				.from(account)
+				.where(eq(account.userId, session.user.id));
+			const hasPassword = dbAccounts.some(
+				(a) => a.password !== null && a.password !== undefined,
+			);
+
 			const u = session.user as Record<string, unknown>;
 			return reply.status(200).send({
 				id: u.id as string,
@@ -179,6 +191,7 @@ export const userRoute: FastifyPluginAsyncZod = async (app) => {
 				email: u.email as string,
 				image: (u.image as string) ?? null,
 				isAdmin: !!u.isAdmin,
+				hasPassword,
 			});
 		},
 	);
@@ -835,6 +848,87 @@ export const userRoute: FastifyPluginAsyncZod = async (app) => {
 			const { id } = request.params as { id: string };
 			await deleteUser(id);
 			return reply.status(204).send();
+		},
+	);
+
+	// POST /users/me/avatar
+	app.post(
+		"/me/avatar",
+		{
+			schema: {
+				tags: ["users"],
+				summary: "Atualizar foto de perfil",
+				security: [{ sessionCookie: [] }],
+				body: z.object({
+					image: z
+						.string()
+						.describe(
+							"Base64 encoded image string (e.g. data:image/png;base64,...)",
+						),
+				}),
+				response: {
+					200: z.object({ url: z.string() }),
+					400: z.object({ error: z.string() }),
+					401: z.object({ error: z.string() }),
+				},
+			},
+		},
+		async (request, reply) => {
+			const session = await resolveSession(
+				request,
+				reply as unknown as GuardReply,
+			);
+			if (!session) return reply.status(401).send({ error: "Unauthorized" });
+
+			const { image } = request.body as { image: string };
+
+			// Extract base64 part
+			const matches = image.match(/^data:([A-Za-z-+/]+);base64,(.+)$/);
+			if (!matches || matches.length !== 3) {
+				return reply.status(400).send({ error: "Invalid base64 format" });
+			}
+
+			const extMap: Record<string, string> = {
+				"image/png": ".png",
+				"image/jpeg": ".jpg",
+				"image/jpg": ".jpg",
+				"image/webp": ".webp",
+				"image/gif": ".gif",
+			};
+
+			const ext = extMap[matches[1]] || ".png";
+			const buffer = Buffer.from(matches[2], "base64");
+
+			const fileName = `avatar-${session.user.id}${ext}`;
+			const uploadDir = path.join(__dirname, "../../../public/uploads");
+
+			try {
+				if (!fs.existsSync(uploadDir)) {
+					fs.mkdirSync(uploadDir, { recursive: true });
+				}
+			} catch (_) {}
+
+			// To save space, we can remove old avatars with the same id but different extension
+			const possibleExts = [".png", ".jpg", ".jpeg", ".webp", ".gif"];
+			for (const targetExt of possibleExts) {
+				const oldFile = path.join(
+					uploadDir,
+					`avatar-${session.user.id}${targetExt}`,
+				);
+				if (fs.existsSync(oldFile)) {
+					try {
+						fs.unlinkSync(oldFile);
+					} catch (_) {}
+				}
+			}
+
+			const filePath = path.join(uploadDir, fileName);
+			fs.writeFileSync(filePath, buffer);
+
+			// update the user using the db
+			const url = `/public/uploads/${fileName}?t=${Date.now()}`;
+
+			return reply.status(200).send({ url });
 		},
 	);
 };

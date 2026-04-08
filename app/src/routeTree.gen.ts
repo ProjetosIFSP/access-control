@@ -16,6 +16,7 @@ import { Route as DocsRouteRouteImport } from './routes/docs/route'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as UsersIndexRouteImport } from './routes/users/index'
 import { Route as RoomsIndexRouteImport } from './routes/rooms/index'
+import { Route as ProfileIndexRouteImport } from './routes/profile/index'
 import { Route as LogsIndexRouteImport } from './routes/logs/index'
 import { Route as ConfigIndexRouteImport } from './routes/config/index'
 import { Route as DocsSplatRouteImport } from './routes/docs/$'
@@ -57,6 +58,11 @@ const RoomsIndexRoute = RoomsIndexRouteImport.update({
   path: '/rooms/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ProfileIndexRoute = ProfileIndexRouteImport.update({
+  id: '/profile/',
+  path: '/profile/',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const LogsIndexRoute = LogsIndexRouteImport.update({
   id: '/logs/',
   path: '/logs/',
@@ -93,6 +99,7 @@ export interface FileRoutesByFullPath {
   '/docs/$': typeof DocsSplatRoute
   '/config/': typeof ConfigIndexRoute
   '/logs/': typeof LogsIndexRoute
+  '/profile/': typeof ProfileIndexRoute
   '/rooms/': typeof RoomsIndexRoute
   '/users/': typeof UsersIndexRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
@@ -107,6 +114,7 @@ export interface FileRoutesByTo {
   '/docs/$': typeof DocsSplatRoute
   '/config': typeof ConfigIndexRoute
   '/logs': typeof LogsIndexRoute
+  '/profile': typeof ProfileIndexRoute
   '/rooms': typeof RoomsIndexRoute
   '/users': typeof UsersIndexRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
@@ -122,6 +130,7 @@ export interface FileRoutesById {
   '/docs/$': typeof DocsSplatRoute
   '/config/': typeof ConfigIndexRoute
   '/logs/': typeof LogsIndexRoute
+  '/profile/': typeof ProfileIndexRoute
   '/rooms/': typeof RoomsIndexRoute
   '/users/': typeof UsersIndexRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
@@ -138,6 +147,7 @@ export interface FileRouteTypes {
     | '/docs/$'
     | '/config/'
     | '/logs/'
+    | '/profile/'
     | '/rooms/'
     | '/users/'
     | '/api/auth/$'
@@ -152,6 +162,7 @@ export interface FileRouteTypes {
     | '/docs/$'
     | '/config'
     | '/logs'
+    | '/profile'
     | '/rooms'
     | '/users'
     | '/api/auth/$'
@@ -166,6 +177,7 @@ export interface FileRouteTypes {
     | '/docs/$'
     | '/config/'
     | '/logs/'
+    | '/profile/'
     | '/rooms/'
     | '/users/'
     | '/api/auth/$'
@@ -180,6 +192,7 @@ export interface RootRouteChildren {
   ApiSearchRoute: typeof ApiSearchRoute
   ConfigIndexRoute: typeof ConfigIndexRoute
   LogsIndexRoute: typeof LogsIndexRoute
+  ProfileIndexRoute: typeof ProfileIndexRoute
   RoomsIndexRoute: typeof RoomsIndexRoute
   UsersIndexRoute: typeof UsersIndexRoute
   ApiAuthSplatRoute: typeof ApiAuthSplatRoute
@@ -234,6 +247,13 @@ declare module '@tanstack/react-router' {
       path: '/rooms'
       fullPath: '/rooms/'
       preLoaderRoute: typeof RoomsIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/profile/': {
+      id: '/profile/'
+      path: '/profile'
+      fullPath: '/profile/'
+      preLoaderRoute: typeof ProfileIndexRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/logs/': {
@@ -295,6 +315,7 @@ const rootRouteChildren: RootRouteChildren = {
   ApiSearchRoute: ApiSearchRoute,
   ConfigIndexRoute: ConfigIndexRoute,
   LogsIndexRoute: LogsIndexRoute,
+  ProfileIndexRoute: ProfileIndexRoute,
   RoomsIndexRoute: RoomsIndexRoute,
   UsersIndexRoute: UsersIndexRoute,
   ApiAuthSplatRoute: ApiAuthSplatRoute,
