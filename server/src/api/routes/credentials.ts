@@ -48,7 +48,7 @@ totalPages: z.number(),
 },
 },
 async (request, reply) => {
-await requireAdmin(request, reply);
+await requireAdmin(request, reply as unknown as import("@/lib/require-admin").GuardReply);
 const { q, page, pageSize } = request.query;
 const offset = (page - 1) * pageSize;
 
@@ -128,7 +128,7 @@ response: {
 },
 },
 async (request, reply) => {
-await requireAdmin(request, reply);
+await requireAdmin(request, reply as unknown as import("@/lib/require-admin").GuardReply);
 const { id } = request.params;
 
 const [cred] = await db

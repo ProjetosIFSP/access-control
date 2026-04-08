@@ -115,8 +115,8 @@ function ProfilePage() {
 					{
 						method: "POST",
 						headers: { "Content-Type": "application/json" },
-						body: JSON.stringify({ image: avatarPreview }),
 						credentials: "include",
+						body: JSON.stringify({ image: avatarPreview }),
 					},
 				);
 				if (uploadRes.ok) {
@@ -147,23 +147,22 @@ function ProfilePage() {
 		setIsLoadingPassword(true);
 
 		try {
-			if (!hasPassword) {
-				// Set new password directly if the user never had one. Better-Auth might not expose `authClient.setPassword` directly without an extension, but changePassword usually assumes empty strings aren't valid unless you skip it or we call setPassword endpoint if available.
-				// However, if standard better-auth changePassword errors, we may need a backend method.
-				// But let's assume `authClient.changePassword` with empty or ignored currentPassword works if there's no password in the DB for that account. Or we can just use default.
-				const { error } = await authClient.changePassword({
-					newPassword,
-					currentPassword: currentPassword || "",
-					revokeOtherSessions: false,
-				});
-				if (error) throw new Error(error.message);
-			} else {
-				const { error } = await authClient.changePassword({
-					newPassword,
-					currentPassword,
-					revokeOtherSessions: false,
-				});
-				if (error) throw new Error(error.message);
+			const res = await fetch(
+				`${import.meta.env.VITE_API_URL || "http://localhost:3333"}/users/me/password`,
+				{
+					method: "POST",
+					headers: { "Content-Type": "application/json" },
+					body: JSON.stringify({
+						currentPassword: currentPassword || undefined,
+						newPassword,
+					}),
+					credentials: "include",
+				},
+			);
+
+			if (!res.ok) {
+				const data = await res.json().catch(() => ({}));
+				throw new Error(data.message || "Falha ao atualizar a senha");
 			}
 			toast.success("Senha atualizada com sucesso!");
 			setCurrentPassword("");
@@ -267,7 +266,7 @@ function ProfilePage() {
 										<Input
 											value={name}
 											onChange={(e) => setName(e.target.value)}
-											className="h-9 sm:h-10 text-base font-semibold"
+											className="h-9 sm:h-10 text-base font-semibold dark:text-foreground"
 											autoFocus
 											placeholder="Seu nome"
 											disabled={isLoadingInfo}
@@ -298,7 +297,7 @@ function ProfilePage() {
 									</div>
 								) : (
 									<div className="flex items-center gap-2 group">
-										<h2 className="text-xl sm:text-2xl font-semibold text-zinc-900 truncate">
+										<h2 className="text-xl sm:text-2xl font-semibold text-zinc-900 dark:text-zinc-300 truncate">
 											{name}
 										</h2>
 										<button
@@ -331,7 +330,7 @@ function ProfilePage() {
 						<div className="grid grid-cols-1 md:grid-cols-2 gap-8 md:gap-16">
 							{/* Password Settings */}
 							<div className="flex flex-col gap-4">
-								<div className="flex items-center gap-2 text-zinc-800">
+								<div className="flex items-center gap-2 text-zinc-800 dark:text-zinc-300">
 									<Key className="w-5 h-5" />
 									<h3 className="text-lg font-semibold">
 										{hasPassword ? "Alterar Senha" : "Cadastrar Senha"}
@@ -343,6 +342,7 @@ function ProfilePage() {
 										<Input
 											type="password"
 											placeholder="Senha atual"
+											className="bg-white dark:bg-zinc-900"
 											value={currentPassword}
 											onChange={(e) => setCurrentPassword(e.target.value)}
 											disabled={isLoadingPassword}
@@ -378,7 +378,7 @@ function ProfilePage() {
 
 							{/* Social Linking */}
 							<div className="flex flex-col flex-1 gap-4">
-								<div className="flex items-center gap-2 text-zinc-800">
+								<div className="flex items-center gap-2 text-zinc-800 dark:text-zinc-300">
 									<Link className="w-5 h-5" />
 									<h3 className="text-lg font-semibold">
 										Acesso por redes sociais

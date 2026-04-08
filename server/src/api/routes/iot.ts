@@ -329,9 +329,7 @@ export const iotRoute: FastifyPluginAsyncZod = async (app) => {
 		},
 		async (request, reply) => {
 			const { controllerId } = request.params;
-			const { deleteDoorController } = await import(
-				"@/services/iot/door-controller"
-			);
+			
 
 			const deleted = await deleteDoorController(controllerId);
 
