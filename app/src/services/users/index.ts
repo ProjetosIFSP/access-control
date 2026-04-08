@@ -125,7 +125,10 @@ export async function fetchUserRelations(id: string): Promise<UserRelations> {
 	const res = await fetch(`${API_BASE_URL}/users/${id}/relations`, {
 		credentials: "include",
 	});
-	if (!res.ok) throw new Error("Falha ao carregar vínculos do usuário");
+	if (!res.ok) {
+		if (res.status === 403) return { profiles: [], groups: [], rooms: [] };
+		throw new Error("Falha ao carregar vínculos do usuário");
+	}
 	return res.json();
 }
 

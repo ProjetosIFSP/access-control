@@ -67,8 +67,60 @@ function ProfilePage() {
 
 	if (isSessionPending)
 		return (
-			<div className="p-8 pb-32 flex justify-center">
-				<Loader2 className="animate-spin text-zinc-400" />
+			<div className="flex flex-col w-full min-h-[calc(100vh-64px)] pb-24 items-center">
+				<main className="flex w-full flex-col gap-6 pt-8">
+					<PageTitle
+						title="Meu Perfil"
+						subtitle="Edite seus dados e preferências"
+					/>
+
+					<div className="flex flex-col gap-10 px-4 sm:px-8 md:px-16 lg:px-32 transition-all">
+						<div className="w-full flex flex-col gap-10 animate-pulse">
+							{/* Avatar and Info Section Skeleton */}
+							<div className="flex items-center gap-4">
+								<div className="size-20 md:size-24 rounded-full bg-zinc-200 dark:bg-zinc-800 shrink-0" />
+								<div className="flex flex-col w-full justify-center gap-2">
+									<div className="h-7 w-48 sm:w-64 bg-zinc-200 dark:bg-zinc-800 rounded-md" />
+									<div className="h-5 w-32 sm:w-48 bg-zinc-200 dark:bg-zinc-800 rounded-md" />
+									<div className="pt-2 flex flex-wrap gap-2">
+										<div className="h-5 w-24 bg-zinc-200 dark:bg-zinc-800 rounded-full" />
+										<div className="h-5 w-20 bg-zinc-200 dark:bg-zinc-800 rounded-full" />
+									</div>
+								</div>
+							</div>
+
+							<div className="grid grid-cols-1 md:grid-cols-2 gap-8 md:gap-16">
+								{/* Password Settings Skeleton */}
+								<div className="flex flex-col gap-4">
+									<div className="flex items-center gap-2">
+										<div className="w-5 h-5 rounded-md bg-zinc-200 dark:bg-zinc-800" />
+										<div className="h-6 w-36 bg-zinc-200 dark:bg-zinc-800 rounded-md" />
+									</div>
+									<div className="flex flex-col gap-3">
+										<div className="h-10 w-full bg-zinc-200 dark:bg-zinc-800 rounded-md" />
+										<div className="h-10 w-full bg-zinc-200 dark:bg-zinc-800 rounded-md" />
+										<div className="h-10 w-full bg-zinc-200 dark:bg-zinc-800 rounded-md" />
+									</div>
+								</div>
+
+								{/* Social Linking Skeleton */}
+								<div className="flex flex-col flex-1 gap-4">
+									<div className="flex items-center gap-2">
+										<div className="w-5 h-5 rounded-md bg-zinc-200 dark:bg-zinc-800" />
+										<div className="h-6 w-48 bg-zinc-200 dark:bg-zinc-800 rounded-md" />
+									</div>
+									<div className="flex items-center justify-between p-4 border rounded-xl">
+										<div className="flex items-center gap-3">
+											<div className="w-6 h-6 rounded-md bg-zinc-200 dark:bg-zinc-800" />
+											<div className="h-5 w-20 bg-zinc-200 dark:bg-zinc-800 rounded-md" />
+										</div>
+										<div className="h-9 w-28 bg-zinc-200 dark:bg-zinc-800 rounded-md" />
+									</div>
+								</div>
+							</div>
+						</div>
+					</div>
+				</main>
 			</div>
 		);
 
@@ -83,58 +135,80 @@ function ProfilePage() {
 	const isGoogleLinked = accounts.some((a) => a.providerId === "google");
 	const canUnlinkGoogle = isGoogleLinked && hasPassword;
 
-	const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+	const handleImageChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
 		const file = e.target.files?.[0];
 		if (file) {
 			const reader = new FileReader();
-			reader.onloadend = () => {
-				setAvatarPreview(reader.result as string);
+			reader.onloadend = async () => {
+				const result = reader.result as string;
+				setAvatarPreview(result);
 				setRemovedImage(false);
+
+				// Upload immediately
+				try {
+					const uploadRes = await fetch(
+						`${import.meta.env.VITE_API_URL || "http://localhost:3333"}/users/me/avatar`,
+						{
+							method: "POST",
+							headers: { "Content-Type": "application/json" },
+							credentials: "include",
+							body: JSON.stringify({ image: result }),
+						},
+					);
+					if (uploadRes.ok) {
+						const { url } = await uploadRes.json();
+						const fullUrl = `${import.meta.env.VITE_API_URL || "http://localhost:3333"}${url}`;
+
+						await authClient.updateUser({
+							image: fullUrl,
+						});
+						toast.success("Foto de perfil atualizada!");
+						refetchUser();
+					} else {
+						throw new Error("Upload failed");
+					}
+				} catch (e) {
+					console.error(e);
+					toast.error("Erro ao atualizar foto de perfil");
+				}
 			};
 			reader.readAsDataURL(file);
 		}
 	};
 
-	const handleRemoveImage = () => {
+	const handleRemoveImage = async () => {
 		setAvatarPreview(null);
 		setRemovedImage(true);
 		if (fileInputRef.current) fileInputRef.current.value = "";
+
+		try {
+			await authClient.updateUser({
+				image: undefined, // this will remove/empty it depending on your backend
+			});
+
+			// Also notify the avatar API if needed, depending on implementation
+			// Some implementations allow updating image to null via API
+
+			toast.success("Foto de perfil removida!");
+			refetchUser();
+		} catch (e) {
+			console.error(e);
+			toast.error("Erro ao remover foto de perfil");
+		}
 	};
 
 	const handleUpdateInfo = async () => {
 		setIsLoadingInfo(true);
 		try {
-			let imageUrl = session.user.image;
-
-			if (removedImage) {
-				imageUrl = null;
-			} else if (avatarPreview?.startsWith("data:image")) {
-				// We use credentials so cookie is sent for API upload
-				const uploadRes = await fetch(
-					`${import.meta.env.VITE_API_URL || "http://localhost:3333"}/users/me/avatar`,
-					{
-						method: "POST",
-						headers: { "Content-Type": "application/json" },
-						credentials: "include",
-						body: JSON.stringify({ image: avatarPreview }),
-					},
-				);
-				if (uploadRes.ok) {
-					const { url } = await uploadRes.json();
-					imageUrl = `${import.meta.env.VITE_API_URL || "http://localhost:3333"}${url}`;
-				}
-			}
-
 			await authClient.updateUser({
 				name,
-				image: imageUrl ?? undefined,
 			});
 			setIsEditingName(false);
-			toast.success("Informações atualizadas com sucesso!");
+			toast.success("Nome atualizado com sucesso!");
 			refetchUser(); // Ensure user fetch catches new info if needed
 		} catch (e) {
 			console.error(e);
-			toast.error("Erro ao atualizar informações");
+			toast.error("Erro ao atualizar nome");
 		}
 		setIsLoadingInfo(false);
 	};
@@ -168,8 +242,8 @@ function ProfilePage() {
 			setCurrentPassword("");
 			setNewPassword("");
 			refetchUser(); // Refresh hasPassword if needed
-		} catch (error: any) {
-			toast.error(`Erro: ${error.message || "Falha."}`);
+		} catch (error) {
+			toast.error(`Erro: ${error instanceof Error ? error.message : "Falha."}`);
 		}
 		setIsLoadingPassword(false);
 	};
