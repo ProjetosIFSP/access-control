@@ -198,11 +198,11 @@ In terms of architecture, it was designed to be modular and scalable, using tech
 
 A gestão dos espaços físicos de uma instituição de ensino como o Instituto Federal de Educação, Ciência e Tecnologia de São Paulo (IFSP), apresenta desafios relacionados à segurança e à otimização do uso de recursos. O controle de acesso a laboratórios, salas de aula e outros ambiente restritos é utilizado de maneira tradicional, como chaves físicas, que podem ser perdidas ou copiadas facilmente, ou com fechaduras eletrônicas caras e sem comunicação com um servidor. Neste cenário, pode ser gerado vulnerabilidades e perigos à segurança do patrimônio da instituição.
 
-Dado isso, a Internet das Coisas (IoT) surge como uma solução à problemas enfrentados no IFSP \- Campus de Presidente Epitácio (IFSP-PEP), permitindo a conexão de objetos físicos à internet para a troca de dados e automação dos processos.  Neste caso, o gerenciamento eficiente do acesso às salas de aula e laboratórios é essencial para garantir o uso adequado dos espaços.
+Dado isso, a Internet das Coisas (IoT) surge como uma solução à problemas enfrentados no IFSP - Campus de Presidente Epitácio (IFSP-PEP), permitindo a conexão de objetos físicos à internet para a troca de dados e automação dos processos.  Neste caso, o gerenciamento eficiente do acesso às salas de aula e laboratórios é essencial para garantir o uso adequado dos espaços.
 
-Segundo Pinheiro (2008), a biometria por impressão digital surge como uma alternativa mais segura, pois utiliza de características únicas e imutáveis do usuário, consideradas o tipo biométrico mais seguro para determinar a identidade depois do teste de DNA. Destarte, ao utilizar a biometria em conjunto com RFID, que possibilita uma identificação rápidarápida e sem contato, é instaurado um sistema híbrido que combina a facilidade de uso e segurança da informação e, por conseguinte, dos ambientes.
+Segundo Pinheiro (2008), a biometria por impressão digital surge como uma alternativa mais segura, pois utiliza de características únicas e imutáveis do usuário, consideradas o tipo biométrico mais seguro para determinar a identidade depois do teste de DNA. Destarte, ao utilizar a biometria em conjunto com RFID, que possibilita uma identificação rápida e sem contato, é instaurado um sistema híbrido que combina a facilidade de uso e segurança da informação e, por conseguinte, dos ambientes.
 
-Este trabalho, por sua vez, propõe o desenvolvimento de uma solução de baixo custo para o controle de acesso a salas e laboratórios no IFSP-PEP. O sistema utiliza uma fechadura eletrônica inteligente baseada em um microcontrolador ESP8266, a qual integra um sensor biométrico para autenticação dos utilizadores ou RFID. A lógica de controle envolve um *broker* MQTT (Transporte de Telemetria para Enfileiramento de Mensagens) que liga o hardware (microcontrolador e sensores) com um servidor *backend*. Ademais, um portal *web* centraliza o gerenciamento, permitindo que os usuários monitorem o estado das portas e administradores mantenham as credenciais de utilizadores.
+Este trabalho, por sua vez, propõe o desenvolvimento de uma solução de baixo custo para o controle de acesso a salas e laboratórios no IFSP-PEP. O sistema utiliza uma fechadura eletrônica inteligente baseada em um microcontrolador ESP32, a qual integra um sensor biométrico para autenticação dos utilizadores ou RFID. A lógica de controle envolve um *broker* MQTT (Transporte de Telemetria para Enfileiramento de Mensagens) que liga o hardware (microcontrolador e sensores) com um servidor *backend*. Ademais, um portal *web* centraliza o gerenciamento, permitindo que os usuários monitorem o estado das portas e administradores mantenham as credenciais de utilizadores.
 
 Este trabalho tem por objetivo desenvolver um sistema completo de controle de acesso e gerenciamento de salas no IFSP-PEP, baseado em tecnologias IoT e autenticação biométrica. São objetivos específicos deste trabalho:
 
@@ -214,13 +214,15 @@ Este trabalho tem por objetivo desenvolver um sistema completo de controle de ac
 
 * Desenvolver uma API RESTful para a autenticação de usuários, gerenciamento de salas/portas, manutenção de credenciais e registro de eventos.
 
-* Construir um portal *web* (*frontend*) em React que exiba o status em tempo real das portas, bem como consuma e disponibilize meios de integrar os *endpoints* da API () desenvolvida.
+* Construir um portal *web* (*frontend*) em React que exiba o status em tempo real das portas, bem como consuma e disponibilize meios de integrar os *endpoints* da API (Interface de Programação de Aplicações) desenvolvida.
 
 * Garantir a interoperabilidade e confiabilidade no monitoramento do estado das portas e na operação tolerante à falhas.
 
 Diante disso, este trabalho justifica-se pela necessidade de desenvolver e implementar um sistema de controle de acesso que utilize biometria e RFID e tenha baixo custo para o campus. A proposta visa não apenas aumentar a segurança, mas também automatizar os processos de cadastramento de digitais vigentes no campus, fornecer uma maneira de visualização de dados em tempo real e garantir a flexibilidade de gerenciamento remoto e escalabilidade.
 
-A metodologia deste trabalho inicia-se com uma revisão bibliográfica sobre conceitos de dispositivos de Internet das Coisas e protocolos de comunicação, visando identificar estudos relevantes no meio acadêmico, a fim de validar a integridade tecnológica do projeto. Serão analisadas e comparadas as técnicas na literatura e propostas de fechaduras eletrônicas inteligentes, estabelecendo assim uma base teórica robusta o qual o projeto deve fundamentar as soluções de seus problemas. Com base nessa revisão, serão selecionadas técnicas para experimentação inicial, desenvolvendo-se um protótipo preliminar para avaliar a comunicação entre os dispositivos. Após essa etapa, proceder-se-á com o refinamento do protótipo final. Por fim, serão realizados testes funcionais para validar o desempenho e a eficácia arquitetural do sistema.
+A metodologia deste trabalho inicia-se com uma revisão bibliográfica sobre conceitos de dispositivos de Internet das Coisas e protocolos de comunicação, visando identificar estudos relevantes no meio acadêmico, a fim de validar a integridade tecnológica do projeto.
+
+Serão analisadas e comparadas as técnicas na literatura e propostas de fechaduras eletrônicas inteligentes, estabelecendo assim uma base teórica robusta o qual o projeto deve fundamentar as soluções de seus problemas. Com base nessa revisão, serão selecionadas técnicas para experimentação inicial, desenvolvendo-se um protótipo preliminar para avaliar a comunicação entre os dispositivos. Após essa etapa, proceder-se-á com o refinamento do protótipo final. Por fim, serão realizados testes funcionais para validar o desempenho e a eficácia arquitetural do sistema.
 
 A estrutura deste trabalho consiste em capítulos que abordam os principais conceitos, tecnologias e implementações necessárias para o desenvolvimento de um sistema de controle de acesso baseado em IoT com identificação por biometria de impressão digital ou RFID. A seguir, segue um resumo da estrutura do documento:
 
@@ -238,7 +240,7 @@ A estrutura deste trabalho consiste em capítulos que abordam os principais conc
 
 2. # **TRABALHOS RELACIONADOS** {#trabalhos-relacionados}
 
-Este capítulo apresenta alguns trabalhos relacionados tanto ao controle de acesso por reconhecimento por biometria por digital/RFID, quanto à comunicação de dispositivos IoT com servidores para controle das informações. Ademais, também apresenta soluções disponíveis no mercado.
+Este capítulo apresenta alguns trabalhos relacionados tanto ao controle de acesso por reconhecimento por biometria por digital e RFID, quanto à comunicação de dispositivos IoT com servidores para controle das informações. Ademais, também apresenta soluções disponíveis no mercado.
 
 A seleção dos trabalhos foi realizada por meio de plataformas de busca acadêmica, a fim de garantir uma maior correlação com este projeto. Para os produtos disponíveis, foram utilizadas motores de busca na internet. Os itens selecionados apresentam diferentes implementações e utilizações, contribuindo para uma compreensão geral sobre o controle de acesso e comunicação IoT.
 
@@ -258,7 +260,7 @@ Fonte: Aniru et al., 2024
 
 Este diagrama ilustra a integração e as relações funcionais entre esses elementos cruciais, fornecendo uma visão geral abrangente da arquitetura do sistema.
 
-O trabalho de Aniru et al. (2024) é relevante por utilizar o mesmo microcontrolador (ESP8266) e a trava solenoide, validando a viabilidade desses componentes para o controle de acesso, também se justifica pela crítica aos sistemas tradicionais de fechaduras, classificados como “lentos, inseguros e com alta vulnerabilidade” segundo os autores, estes exigem intervenção humana direta para travar e destravar portas. A solução proposta visa oferecer aos usuários um nível de controle e acessibilidade sobre pontos de entrada de suas casas. Os objetivos específicos do estudo dos autores, conforme listados, eram:
+O trabalho de Aniru et al. (2024) é relevante por utilizar um microcontrolador parecido (ESP8266) e a trava solenoide, validando a viabilidade desses componentes para o controle de acesso, também se justifica pela crítica aos sistemas tradicionais de fechaduras, classificados como “lentos, inseguros e com alta vulnerabilidade” segundo os autores, estes exigem intervenção humana direta para travar e destravar portas. A solução proposta visa oferecer aos usuários um nível de controle e acessibilidade sobre pontos de entrada de suas casas. Os objetivos específicos do estudo dos autores, conforme listados, eram:
 
 * Projetar uma fechadura inteligente baseada em IoT que possa ser controlada remotamente;  
 * Implementar uma interface de usuário amigável para a interação com o sistema;  
@@ -328,7 +330,8 @@ O trabalho de Aniru et al. (2024) é de notória relevância para este TCC, uma 
 Contudo, as semelhanças entre os projetos se resumem apenas à camada de *hardware* básica. A análise da arquitetura de Aniru et al. (2024) revela limitações significativas considerando o arcabouço institucional exigido. Tais limitações configuram os principais problemas funcionais que este trabalho se propõe a solucionar.
 
 O sistema de Aniru et al. (2024) possui dependência completa a uma plataforma de terceiros (Blynk), ou seja, a gestão da *Internet of Things* não é auto-hospedada. Para implementações públicas de alta complexidade como as do IFSP, isso resulta num risco conceitual de privacidade e segurança de dados.
-	Ademais, o sistema é inteiramente *online*, atrelado organicamente aos componentes e serviços prestados pela *startup* desenvolvedora. E, uma vez que o serviço da plataforma ou o plano gratuito que os autores utilizaram forem descontinuados, a solução proposta torna-se inoperável.
+
+Ademais, o sistema é inteiramente *online*, atrelado organicamente aos componentes e serviços prestados pela *startup* desenvolvedora. E, uma vez que o serviço da plataforma ou o plano gratuito que os autores utilizaram forem descontinuados, a solução proposta torna-se inoperável.
 
 Nesse cenário, essa modelagem corrobora e valoriza a proposição deste projeto por um servidor de mensagens *MQTT* auto-hospedado configurado via Aedes e a separação operacional pelo *backend* autoral. Isso confere independência dos fluxos de autorização para o IFSP e permite comunicação *offline* intrarede, isolando instabilidades sistêmicas ou dependência corporativa da *internet* banda larga das operadoras.
 
