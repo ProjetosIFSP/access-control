@@ -13,7 +13,8 @@ import { doorController } from "@/db/schema/room";
 import { env } from "@/env";
 import { sseBus } from "@/lib/sse-bus";
 import { z } from "@/lib/zod";
-import { processAccessAttempt } from "@/services/iot/access";
+import { processAccessAttempt, processLocalMatch } from "@/services/iot/access";
+import { getAuthorizedFingerprintsForController } from "@/services/iot/fingerprint-sync";
 import {
 	createDoorCommand,
 	pullPendingCommands,
@@ -115,6 +116,7 @@ const roomStateResponseSchema = z.object({
 const accessDecisionSchema = z.object({
 	status: accessStatusSchema,
 	reason: z.string().nullable(),
+	credentialId: z.string().uuid().optional(),
 	user: z
 		.object({
 			id: z.string().uuid(),
@@ -586,11 +588,96 @@ export const iotRoute: FastifyPluginAsyncZod = async (app) => {
 			const payload: z.infer<typeof accessDecisionSchema> = {
 				status: decision.status,
 				reason: decision.reason,
+				credentialId: decision.credentialId,
 				room: decision.room,
 				user: decision.user,
 				requestId: decision.requestId,
 			};
 			return reply.status(200).send(payload);
+		},
+	);
+
+	// POST /iot/devices/:controllerId/local-match
+	// Verifica permissão de acesso por credentialId (match local biométrico)
+	app.post(
+		"/devices/:controllerId/local-match",
+		{
+			schema: {
+				params: z.object({ controllerId: z.string().min(1) }),
+				body: z.object({
+					credentialId: z.string().min(1),
+					confidence: z.number().optional(),
+					deviceSecret: z.string().optional(),
+				}),
+				tags: ["iot"],
+				summary: "Verificar acesso por match biométrico local",
+				description: "Recebe o credentialId de um match local no sensor e verifica permissão da sala.",
+				response: { 200: accessDecisionSchema },
+			} satisfies SchemaWithExamples,
+		},
+		async (request, reply) => {
+			const { controllerId } = request.params;
+			const { credentialId, confidence, deviceSecret } = request.body;
+
+			if (env.IOT_DEVICE_SECRET && deviceSecret !== env.IOT_DEVICE_SECRET) {
+				return reply.status(200).send({
+					status: "DENIED",
+					reason: "INVALID_DEVICE_SECRET",
+				});
+			}
+
+			const decision = await processLocalMatch({
+				controllerId,
+				credentialId,
+			});
+
+			request.log.info(
+				{ controllerId, credentialId, confidence, status: decision.status },
+				"Local biometric match processed",
+			);
+
+			return reply.status(200).send({
+				status: decision.status,
+				reason: decision.reason,
+				credentialId: decision.credentialId,
+				room: decision.room,
+				user: decision.user,
+			});
+		},
+	);
+
+	// GET /iot/devices/:controllerId/fingerprint-sync
+	// Returns authorized fingerprint templates for the controller's room
+	app.get(
+		"/devices/:controllerId/fingerprint-sync",
+		{
+			schema: {
+				params: z.object({ controllerId: z.string().min(1) }),
+				tags: ["iot"],
+				summary: "Obter fingerprints autorizadas para sync com o sensor",
+				description:
+					"Retorna todas as credenciais de impressão digital de usuários autorizados para a sala vinculada ao controlador.",
+				response: {
+					200: z.object({
+						credentials: z.array(
+							z.object({
+								credentialId: z.string(),
+								template: z.string(),
+							}),
+						),
+					}),
+				},
+			} satisfies SchemaWithExamples,
+		},
+		async (request, reply) => {
+			const { controllerId } = request.params;
+			const credentials =
+				await getAuthorizedFingerprintsForController(controllerId);
+			request.log.info(
+				{ controllerId, count: credentials.length },
+				"Fingerprint sync requested",
+			);
+			return reply.status(200).send({ credentials });
 		},
 	);
 

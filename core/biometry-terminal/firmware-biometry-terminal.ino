@@ -51,7 +51,7 @@ void saveConfigCallback () {
 #define PIN_LED       LED_BUILTIN
 
 const unsigned long HEARTBEAT_INTERVAL_MS = 30000;
-const unsigned long ACCESS_RESULT_TIMEOUT = 5000;
+const unsigned long ACCESS_RESULT_TIMEOUT = 20000;
 const unsigned long FINGER_DEBOUNCE_MS    = 3000;
 const unsigned long ENROLLMENT_TIMEOUT_MS = 120000;
 
@@ -66,6 +66,8 @@ String topicStatus;
 String topicEnterEnrollment;
 String topicEnrollmentResult;
 String topicEnrollmentProgress;
+String topicLocalMatch;
+String topicSyncTemplate;
 
 enum State { IDLE, WAITING_RESULT, ENROLLMENT_MODE };
 State currentState = IDLE;
@@ -95,6 +97,8 @@ unsigned long lastFingerTime  = 0;
 
 bool   resultReceived = false;
 String resultStatus   = "";
+String resultCredentialId = "";
+bool   pendingCacheStore  = false;
 
 // Forward declarations for globals defined later in the sketch.
 extern WiFiClient espClient;
@@ -103,6 +107,106 @@ extern SoftwareSerial fingerSerial;
 extern Adafruit_Fingerprint finger;
 extern String topicEnrollmentResult;
 extern String topicEnrollmentProgress;
+
+// ── Slot table (maps sensor flash slots to credential IDs) ──────────────
+// Reserve slot (capacity-1) for scratch during enrollment.
+// Remaining slots are used for caching authorized fingerprints.
+
+#define MAX_CACHE_SLOTS 49
+
+struct SlotEntry {
+  bool occupied;
+  char credentialId[38]; // UUID (36) + null + pad
+  uint32_t lastUsed;     // Unix timestamp (seconds)
+};
+
+SlotEntry slotTable[MAX_CACHE_SLOTS];
+
+void loadSlotTable() {
+  memset(slotTable, 0, sizeof(slotTable));
+  if (!LittleFS.exists("/slots.dat")) return;
+  File f = LittleFS.open("/slots.dat", "r");
+  if (!f) return;
+  for (int i = 0; i < MAX_CACHE_SLOTS && f.available(); i++) {
+    String line = f.readStringUntil('\n');
+    if (line.length() < 3) continue;
+    int sep1 = line.indexOf(':');
+    int sep2 = line.indexOf(':', sep1 + 1);
+    if (sep1 < 0 || sep2 < 0) continue;
+    int slot = line.substring(0, sep1).toInt();
+    String cid = line.substring(sep1 + 1, sep2);
+    uint32_t lu = strtoul(line.substring(sep2 + 1).c_str(), NULL, 10);
+    if (slot >= 0 && slot < MAX_CACHE_SLOTS) {
+      slotTable[slot].occupied = true;
+      strncpy(slotTable[slot].credentialId, cid.c_str(), 37);
+      slotTable[slot].credentialId[37] = '\0';
+      slotTable[slot].lastUsed = lu;
+    }
+  }
+  f.close();
+#ifdef DEBUG
+  int count = 0;
+  for (int i = 0; i < MAX_CACHE_SLOTS; i++) if (slotTable[i].occupied) count++;
+  Serial.print(F("[SLOT] Carregados: ")); Serial.println(count);
+#endif
+}
+
+void saveSlotTable() {
+  File f = LittleFS.open("/slots.dat", "w");
+  if (!f) return;
+  for (int i = 0; i < MAX_CACHE_SLOTS; i++) {
+    if (slotTable[i].occupied) {
+      f.print(i); f.print(':');
+      f.print(slotTable[i].credentialId); f.print(':');
+      f.println(slotTable[i].lastUsed);
+    }
+  }
+  f.close();
+}
+
+int findFreeSlot() {
+  for (int i = 0; i < MAX_CACHE_SLOTS; i++) {
+    if (!slotTable[i].occupied) return i;
+  }
+  return -1; // full
+}
+
+int findLruSlot() {
+  int oldest = -1;
+  uint32_t oldestTime = UINT32_MAX;
+  for (int i = 0; i < MAX_CACHE_SLOTS; i++) {
+    if (slotTable[i].occupied && slotTable[i].lastUsed < oldestTime) {
+      oldestTime = slotTable[i].lastUsed;
+      oldest = i;
+    }
+  }
+  return oldest;
+}
+
+void cacheCurrentTemplate(const String &credId) {
+  // Find a free slot or evict LRU.
+  int slot = findFreeSlot();
+  if (slot < 0) {
+    slot = findLruSlot();
+    if (slot < 0) return; // shouldn't happen
+    finger.deleteModel(slot);
+#ifdef DEBUG
+    Serial.print(F("[SLOT] LRU evict slot ")); Serial.println(slot);
+#endif
+  }
+  if (finger.storeModel(slot) == FINGERPRINT_OK) {
+    slotTable[slot].occupied = true;
+    strncpy(slotTable[slot].credentialId, credId.c_str(), 37);
+    slotTable[slot].credentialId[37] = '\0';
+    slotTable[slot].lastUsed = millis() / 1000;
+    saveSlotTable();
+#ifdef DEBUG
+    Serial.print(F("[SLOT] Cached cred ")); Serial.print(credId);
+    Serial.print(F(" -> slot ")); Serial.println(slot);
+#endif
+  }
+}
+
 
 constexpr uint8_t TEMPLATE_EMPTY_CODE = 35;
 constexpr size_t MAX_TEMPLATE_HEX_CHARS = 16384;
@@ -399,6 +503,146 @@ bool captureAccessTemplateHex(String &templateHex) {
   return captureTemplateHexFromSensor(templateHex);
 }
 
+// ── PS_DownChar: download template from host to sensor ───────────────────────
+
+uint8_t hexNibble(char c) {
+  if (c >= '0' && c <= '9') return c - '0';
+  if (c >= 'a' && c <= 'f') return 10 + c - 'a';
+  if (c >= 'A' && c <= 'F') return 10 + c - 'A';
+  return 0;
+}
+
+// Sends a hex-encoded template to the sensor's character buffer via PS_DownChar.
+// The template stays in buffer `bufferId` until storeModel() persists it.
+bool downloadTemplateToSensor(const char* hexStr, size_t hexLen, uint8_t bufferId) {
+  clearFingerprintSerialInput();
+
+  // 1. Send PS_DownChar command (0x09)
+  uint8_t cmdData[] = {0x09, bufferId};
+  Adafruit_Fingerprint_Packet cmdPkt(FINGERPRINT_COMMANDPACKET, sizeof(cmdData), cmdData);
+  finger.writeStructuredPacket(cmdPkt);
+
+  // 2. Wait for ACK
+  uint8_t respBuf[64] = {0};
+  Adafruit_Fingerprint_Packet respPkt(FINGERPRINT_ACKPACKET, 0, respBuf);
+  if (finger.getStructuredPacket(&respPkt, 2000) != FINGERPRINT_OK || respPkt.data[0] != FINGERPRINT_OK) {
+#ifdef DEBUG
+    Serial.println(F("[SYNC] PS_DownChar ACK falhou"));
+#endif
+    return false;
+  }
+
+  // 3. Stream data packets (128 bytes each)
+  const size_t CHUNK = 128;
+  size_t binaryLen = hexLen / 2;
+  size_t sent = 0;
+
+  while (sent < binaryLen) {
+    size_t remain = binaryLen - sent;
+    size_t chunkLen = (remain > CHUNK) ? CHUNK : remain;
+    bool isLast = (sent + chunkLen >= binaryLen);
+
+    uint8_t buf[128];
+    for (size_t i = 0; i < chunkLen; i++) {
+      size_t hi = (sent + i) * 2;
+      buf[i] = (hexNibble(hexStr[hi]) << 4) | hexNibble(hexStr[hi + 1]);
+    }
+
+    uint8_t ptype = isLast ? FINGERPRINT_ENDDATAPACKET : FINGERPRINT_DATAPACKET;
+    Adafruit_Fingerprint_Packet dataPkt(ptype, chunkLen, buf);
+    finger.writeStructuredPacket(dataPkt);
+    delay(5);
+
+    sent += chunkLen;
+  }
+
+  delay(100);
+  return true;
+}
+
+// ── Sync template handler (receives template from server, stores in sensor) ──
+
+int findStrInBuf(const byte* buf, unsigned int bufLen, const char* needle) {
+  size_t nLen = strlen(needle);
+  if (nLen > bufLen) return -1;
+  for (unsigned int i = 0; i <= bufLen - nLen; i++) {
+    if (memcmp(buf + i, needle, nLen) == 0) return (int)i;
+  }
+  return -1;
+}
+
+void handleSyncTemplate(byte* payload, unsigned int length) {
+  // Parse credentialId from raw payload (avoid large ArduinoJson alloc)
+  int cidPos = findStrInBuf(payload, length, "\"credentialId\":\"");
+  if (cidPos < 0) return;
+  cidPos += 16; // skip key
+  int cidEnd = -1;
+  for (unsigned int i = cidPos; i < length; i++) {
+    if (payload[i] == '"') { cidEnd = i; break; }
+  }
+  if (cidEnd < 0 || (cidEnd - cidPos) > 37) return;
+
+  char credId[38];
+  memcpy(credId, payload + cidPos, cidEnd - cidPos);
+  credId[cidEnd - cidPos] = '\0';
+
+  // Skip if already cached
+  for (int i = 0; i < MAX_CACHE_SLOTS; i++) {
+    if (slotTable[i].occupied && strcmp(slotTable[i].credentialId, credId) == 0) {
+#ifdef DEBUG
+      Serial.print(F("[SYNC] Já em cache: ")); Serial.println(credId);
+#endif
+      return;
+    }
+  }
+
+  // Find template hex string
+  int tplPos = findStrInBuf(payload, length, "\"template\":\"");
+  if (tplPos < 0) return;
+  tplPos += 12; // skip key
+  int tplEnd = -1;
+  for (unsigned int i = tplPos; i < length; i++) {
+    if (payload[i] == '"') { tplEnd = i; break; }
+  }
+  if (tplEnd < 0) return;
+
+  size_t hexLen = tplEnd - tplPos;
+  if (hexLen < 512 || hexLen > MAX_TEMPLATE_HEX_CHARS) return;
+
+  const char* hexStr = (const char*)(payload + tplPos);
+
+  // Download to sensor buffer 1
+  if (!downloadTemplateToSensor(hexStr, hexLen, 1)) {
+#ifdef DEBUG
+    Serial.println(F("[SYNC] Download para sensor falhou"));
+#endif
+    return;
+  }
+
+  // Store in free/LRU slot
+  int slot = findFreeSlot();
+  if (slot < 0) {
+    slot = findLruSlot();
+    if (slot < 0) return;
+    finger.deleteModel(slot);
+#ifdef DEBUG
+    Serial.print(F("[SYNC] LRU evict slot ")); Serial.println(slot);
+#endif
+  }
+
+  if (finger.storeModel(slot) == FINGERPRINT_OK) {
+    slotTable[slot].occupied = true;
+    strncpy(slotTable[slot].credentialId, credId, 37);
+    slotTable[slot].credentialId[37] = '\0';
+    slotTable[slot].lastUsed = millis() / 1000;
+    saveSlotTable();
+#ifdef DEBUG
+    Serial.print(F("[SYNC] Synced ")); Serial.print(credId);
+    Serial.print(F(" -> slot ")); Serial.println(slot);
+#endif
+  }
+}
+
 // ── Enrollment progress ──────────────────────────────────────────────────────
 
 void publishEnrollmentProgress(const String &step) {
@@ -592,6 +836,7 @@ void connectMqtt() {
   if (mqtt.connect(clientId.c_str())) {
     mqtt.subscribe(topicAccessResult.c_str());
     mqtt.subscribe(topicEnterEnrollment.c_str());
+    mqtt.subscribe(topicSyncTemplate.c_str());
     publishRegister();
     lastHeartbeat = millis() - HEARTBEAT_INTERVAL_MS;
 #ifdef DEBUG
@@ -624,11 +869,12 @@ void sendHeartbeat() {
 
 void publishAccessAttempt(const String& templateHex) {
   // Streaming MQTT publish — evita duplicar o template na heap.
-  size_t payloadLen = 2; // {}
-  payloadLen += 24 + 11;                            // "credentialType":"FINGERPRINT"
-  payloadLen += 20 + templateHex.length();           // "credentialValue":"..."
-  payloadLen += 18 + strlen(DEVICE_SECRET);          // "deviceSecret":"..."
-  payloadLen += 6;                                   // separadores
+  // Tamanhos EXATOS:
+  // "{\"credentialType\":\"FINGERPRINT\",\"credentialValue\":\"" = 51 bytes
+  // "\",\"deviceSecret\":\"" = 18 bytes
+  // "\"}" = 2 bytes
+  // Fixo = 71 bytes
+  size_t payloadLen = 71 + templateHex.length() + strlen(DEVICE_SECRET);
 
   if (mqtt.beginPublish(topicAccessAttempt.c_str(), payloadLen, false)) {
     mqtt.print(F("{\"credentialType\":\"FINGERPRINT\",\"credentialValue\":\""));
@@ -645,6 +891,148 @@ void publishAccessAttempt(const String& templateHex) {
 #endif
 }
 
+// Stream access-attempt diretamente do sensor para MQTT, sem buffer grande.
+// Usa ~300 bytes de stack em vez de 16KB+ de heap.
+bool streamAccessAttemptToMqtt() {
+  // O hardware chinês é implacável. Mesmo fazendo createModel(), ele
+  // se recusa a exportar o Buffer 1 pelo UpChar direto (retorna 0x23).
+  // A solução que realmente engana o ZW-101/111 é a operação de Store/Load!
+  uint16_t scratchSlot = (finger.capacity > 1) ? (finger.capacity - 1) : 0;
+  if (finger.storeModel(scratchSlot) == FINGERPRINT_OK) {
+    if (finger.loadModel(scratchSlot) == FINGERPRINT_OK) {
+      // Tudo ok, o modelo está no Buffer de leitura sem flag de erro
+    }
+    finger.deleteModel(scratchSlot);
+  }
+
+  requestTemplateUpload(1);
+
+  // Ler todos os pacotes e acumular em um buffer menor
+  // Mas descartar trailing 0xFF padding
+  const size_t MAX_BINARY = 2560; // 2.5KB is enough for actual template info without memory error
+  size_t totalBinary = 0;
+
+  // Fase 1: ler todos os pacotes em chunks e enviar hex direto ao MQTT
+  // Precisamos saber o tamanho antes de beginPublish.
+  // Solução: ler tudo em buffer, mas usar malloc + free (1 alocação).
+  uint8_t* templateBuf = (uint8_t*)malloc(MAX_BINARY);
+  if (!templateBuf) {
+#ifdef DEBUG
+    Serial.println(F("[BIO] Sem memória para buffer de template"));
+#endif
+    return false;
+  }
+
+  // Ler stream do sensor
+  uint8_t packetData[256];
+  uint8_t packetType;
+  uint16_t packetLength, packetDataLength;
+  bool streamOk = true;
+
+  while (true) {
+    if (!readRawFingerprintPacket(packetType, packetLength, packetDataLength, packetData, 5000)) {
+      streamOk = false;
+      break;
+    }
+
+    if (packetType == FINGERPRINT_ACKPACKET) {
+      if (packetDataLength < 1 || packetData[0] != FINGERPRINT_OK) {
+#ifdef DEBUG
+        Serial.print(F("[BIO] Stream ACK erro: 0x"));
+        if (packetDataLength >= 1) Serial.println(packetData[0], HEX);
+        else Serial.println(F("sem payload"));
+#endif
+        // Tentar buffer 2
+        requestTemplateUpload(2);
+        continue;
+      }
+      continue;
+    }
+
+    if (packetType != FINGERPRINT_DATAPACKET &&
+        packetType != FINGERPRINT_ENDDATAPACKET) {
+      streamOk = false;
+      break;
+    }
+
+    size_t copyLen = packetDataLength;
+    if (totalBinary + copyLen > MAX_BINARY) {
+      // Ignorar pacotes restantes que estouram o limite se for apenas padding.
+      // Truncar silently se totalBinary já atingiu a capacidade MAX_BINARY útil.
+      copyLen = MAX_BINARY - totalBinary;
+    }
+    if (copyLen > 0) {
+      memcpy(templateBuf + totalBinary, packetData, copyLen);
+      totalBinary += copyLen;
+    }
+
+    if (packetType == FINGERPRINT_ENDDATAPACKET) break;
+  }
+
+  if (!streamOk || totalBinary == 0) {
+    free(templateBuf);
+    return false;
+  }
+
+  // Trim trailing 0xFF padding
+  while (totalBinary > 0 && templateBuf[totalBinary - 1] == 0xFF) {
+    totalBinary--;
+  }
+
+  // Publicar via streaming MQTT
+  size_t hexLen = totalBinary * 2;
+  size_t secretLen = strlen(DEVICE_SECRET);
+  // Tamanho EXATO das strings fixas:
+  // "{\"credentialType\":\"FINGERPRINT\",\"credentialValue\":\""    -> 51 bytes
+  // "\",\"deviceSecret\":\""                                        -> 18 bytes
+  // "\"}"                                                           -> 2 bytes
+  // Total string fixas = 71 bytes
+  size_t expectedLen = 51 + hexLen + 18 + secretLen + 2;
+
+  if (mqtt.beginPublish(topicAccessAttempt.c_str(), expectedLen, false)) {
+    mqtt.print(F("{\"credentialType\":\"FINGERPRINT\",\"credentialValue\":\""));
+    // Converter e enviar em chunks de 128 bytes (256 hex chars)
+    char hexChunk[257];
+    for (size_t i = 0; i < totalBinary; i += 128) {
+      size_t chunkLen = (totalBinary - i > 128) ? 128 : (totalBinary - i);
+      for (size_t j = 0; j < chunkLen; j++) {
+        uint8_t b = templateBuf[i + j];
+        hexChunk[j * 2] = "0123456789abcdef"[b >> 4];
+        hexChunk[j * 2 + 1] = "0123456789abcdef"[b & 0x0F];
+      }
+      hexChunk[chunkLen * 2] = '\0';
+      mqtt.print(hexChunk);
+    }
+    mqtt.print(F("\",\"deviceSecret\":\""));
+    mqtt.print(DEVICE_SECRET);
+    mqtt.print(F("\"}"));
+    mqtt.endPublish();
+  }
+
+#ifdef DEBUG
+  Serial.print(F("[BIO] Stream access-attempt -> "));
+  Serial.print(totalBinary);
+  Serial.println(F(" bytes (trimmed)"));
+#endif
+
+  free(templateBuf);
+  return true;
+}
+
+void publishLocalMatch(int slotId, const char* credentialId, uint16_t confidence) {
+  StaticJsonDocument<256> doc;
+  doc["credentialId"] = credentialId;
+  doc["confidence"]   = confidence;
+  doc["slotId"]       = slotId;
+  doc["deviceSecret"] = DEVICE_SECRET;
+  String p; serializeJson(doc, p);
+  mqtt.publish(topicLocalMatch.c_str(), p.c_str());
+#ifdef DEBUG
+  Serial.print(F("[BIO] Local match slot ")); Serial.print(slotId);
+  Serial.print(F(" conf=")); Serial.println(confidence);
+#endif
+}
+
 // =============================================================================
 //  CALLBACK MQTT
 // =============================================================================
@@ -654,14 +1042,26 @@ void onMqttMessage(char* topic, byte* payload, unsigned int length) {
 
   // access-result
   if (t == topicAccessResult) {
-    StaticJsonDocument<256> doc;
+    StaticJsonDocument<384> doc;
     if (deserializeJson(doc, payload, length)) return;
     const char* status = doc["status"];
     if (!status) return;
     resultStatus   = String(status);
     resultReceived = true;
+    // Parse credentialId for caching on GRANTED
+    const char* credId = doc["credentialId"] | "";
+    if (resultStatus == "GRANTED" && strlen(credId) > 0) {
+      resultCredentialId = String(credId);
+      pendingCacheStore = true;
+    } else {
+      resultCredentialId = "";
+      pendingCacheStore = false;
+    }
 #ifdef DEBUG
     Serial.print(F("[MQTT] Result: ")); Serial.println(resultStatus);
+    if (pendingCacheStore) {
+      Serial.print(F("[MQTT] credentialId for cache: ")); Serial.println(resultCredentialId);
+    }
 #endif
     return;
   }
@@ -693,6 +1093,12 @@ void onMqttMessage(char* topic, byte* payload, unsigned int length) {
     enrollmentStepAt = millis();
     currentState = ENROLLMENT_MODE;
     publishEnrollmentProgress("WAITING_FIRST");
+    return;
+  }
+
+  // sync-template (server pushes templates for local caching)
+  if (t == topicSyncTemplate) {
+    handleSyncTemplate(payload, length);
     return;
   }
 }
@@ -876,6 +1282,8 @@ void setup() {
   topicEnterEnrollment = String("door/") + controllerId + "/enter-enrollment-mode";
   topicEnrollmentResult = String("door/") + controllerId + "/enrollment-result";
   topicEnrollmentProgress = String("door/") + controllerId + "/enrollment-progress";
+  topicLocalMatch = String("door/") + controllerId + "/local-match";
+  topicSyncTemplate = String("door/") + controllerId + "/sync-template";
 
 #ifdef DEBUG
   Serial.print(F("Controller ID: ")); Serial.println(controllerId);
@@ -888,6 +1296,10 @@ void setup() {
   mqtt.setCallback(onMqttMessage);
   
   setupFingerprint();
+
+  if (LittleFS.begin()) {
+    loadSlotTable();
+  }
 }
 
 // =============================================================================
@@ -916,21 +1328,56 @@ void loop() {
     return;
   }
 
-  // --- Lógica de pareamento / Leitura ---
-  
-  // Exemplo de uso com PIN_TOUCHOUT (pino em HIGH quando o dedo é encostado):
-  // Aqui você pode melhorar para acionar a leitura apenas quando PIN_TOUCHOUT == HIGH.
+  // --- Lógica de acesso biométrico (local-first) ---
   bool touched = digitalRead(PIN_TOUCHOUT) == HIGH;
-  
-  // Por ora, vamos apenas checar IDLE state
+
   if (currentState == IDLE && touched) {
     if (millis() - lastFingerTime > FINGER_DEBOUNCE_MS) {
-      String accessTemplateHex;
-      if (captureAccessTemplateHex(accessTemplateHex)) {
-        publishAccessAttempt(accessTemplateHex);
-        currentState = WAITING_RESULT;
-        waitingResultAt = millis();
-        lastFingerTime = millis();
+      if (finger.getImage() == FINGERPRINT_OK && finger.image2Tz(1) == FINGERPRINT_OK) {
+        // 1. Tenta match local (sensor flash)
+        int searchResult = finger.fingerSearch();
+        if (searchResult == FINGERPRINT_OK && finger.fingerID < MAX_CACHE_SLOTS
+            && slotTable[finger.fingerID].occupied) {
+          // Match local encontrado — confirma permissão com o servidor
+          publishLocalMatch(finger.fingerID, slotTable[finger.fingerID].credentialId, finger.confidence);
+          // Atualiza LRU
+          slotTable[finger.fingerID].lastUsed = millis() / 1000;
+          saveSlotTable();
+          currentState = WAITING_RESULT;
+          waitingResultAt = millis();
+          lastFingerTime = millis();
+#ifdef DEBUG
+          Serial.print(F("[BIO] Match local slot ")); Serial.print(finger.fingerID);
+          Serial.print(F(" conf=")); Serial.println(finger.confidence);
+#endif
+        } else {
+          // 2. Sem match local — extrai template e envia para o servidor
+#ifdef DEBUG
+          Serial.println(F("[BIO] Sem match local, extraindo template..."));
+#endif
+          // fingerSearch() corrompe estado interno do buffer no ZW101.
+          // Recaptura a imagem (dedo ainda está no sensor).
+          clearFingerprintSerialInput();
+          delay(50);
+          if (finger.getImage() == FINGERPRINT_OK) {
+            // ZW101 e similares bloqueiam o UpChar (0x08) gerando erro 0x23
+            // se o template não for um "modelo combinado" oficial.
+            // Solução: Geramos tz no buffer 1 e 2 usando a mesma imagem, e combinamos!
+            if (finger.image2Tz(1) == FINGERPRINT_OK && finger.image2Tz(2) == FINGERPRINT_OK) {
+              if (finger.createModel() == FINGERPRINT_OK) {
+                if (streamAccessAttemptToMqtt()) {
+                  currentState = WAITING_RESULT;
+                  waitingResultAt = millis();
+                  lastFingerTime = millis();
+                }
+              } else {
+#ifdef DEBUG
+                Serial.println(F("[BIO] Falha ao forçar createModel para acesso único."));
+#endif
+              }
+            }
+          }
+        }
       }
     }
   }
@@ -944,16 +1391,23 @@ void loop() {
       ledBlink(3, 100);
       currentState = IDLE;
       resultReceived = false;
-    } 
+      pendingCacheStore = false;
+    }
     // Recebeu retorno
     else if (resultReceived) {
       if (resultStatus == "GRANTED") {
-        ledBlink(1, 1000); // Exemplo de acesso permitido
+        ledBlink(1, 1000);
+        // Cache do template no sensor se veio de match remoto
+        if (pendingCacheStore && resultCredentialId.length() > 0) {
+          cacheCurrentTemplate(resultCredentialId);
+        }
       } else {
-        ledBlink(5, 50); // Exemplo de acesso negado
+        ledBlink(5, 50);
       }
       currentState = IDLE;
       resultReceived = false;
+      pendingCacheStore = false;
+      resultCredentialId = "";
     }
   }
 }

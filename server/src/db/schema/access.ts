@@ -14,8 +14,9 @@ export const accessCredential = pgTable("access_credential", {
 		.notNull()
 		.references(() => user.id, { onDelete: "cascade" }),
 	type: credentialTypeEnum("type").notNull(),
-	value: text("value").notNull().unique(), // Identificador da digital/tag
+	value: text("value").notNull().unique(), // Identificador da digital/tag (para digital, armazenar hash)
 	finger: fingerKeyEnum("finger"), // nullable — NFC credentials don't have a finger
+	template: text("template"), // The full biometric template (if applicable)
 
 	// Controlador físico (terminal de enrollment ou leitor USB) que capturou
 	// esta credencial. Nulo apenas para credenciais importadas manualmente.

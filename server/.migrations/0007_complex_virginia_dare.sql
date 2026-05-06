@@ -1,0 +1,1 @@
+ALTER TABLE "access_credential" ADD COLUMN "template" text;

@@ -2,6 +2,7 @@ import { v7 as uuidv7 } from "uuid";
 import { db } from "@/db";
 import { accessCredential } from "@/db/schema/access";
 import type { fingerKeyEnum } from "@/db/schema/enums";
+import crypto from "crypto";
 
 type FingerKey = (typeof fingerKeyEnum.enumValues)[number];
 
@@ -41,6 +42,8 @@ export async function registerFingerprint(
 	const { userId, finger, template, enrolledByControllerId } = input;
 
 	try {
+		const templateHash = crypto.createHash("sha256").update(template).digest("hex");
+
 		const [inserted] = await db
 			.insert(accessCredential)
 			.values({
@@ -48,7 +51,8 @@ export async function registerFingerprint(
 				userId,
 				type: "FINGERPRINT",
 				finger,
-				value: template,
+				value: templateHash,
+				template,
 				isActive: true,
 				...(enrolledByControllerId ? { enrolledByControllerId } : {}),
 			})

@@ -1,6 +1,6 @@
-import { createServer as createHttpServer } from "http";
-import { createServer as createNetServer } from "net";
-import { createBroker, } from "aedes";
+import { createServer as createHttpServer, } from "node:http";
+import { createRequire } from "node:module";
+import { createServer as createNetServer } from "node:net";
 import { config as loadEnv } from "dotenv";
 import pino from "pino";
 import { fetch, Headers } from "undici";
@@ -8,20 +8,34 @@ import websocketStream from "websocket-stream";
 import { WebSocketServer } from "ws";
 import z from "zod";
 loadEnv();
+const require = createRequire(import.meta.url);
+const aedesModule = require("aedes");
+const createBroker = typeof aedesModule.createBroker === "function"
+    ? aedesModule.createBroker
+    : aedesModule;
 const logger = pino({
     level: process.env.LOG_LEVEL ?? "info",
 });
-const API_BASE_URL = process.env.API_BASE_URL ?? "http://server:3000";
+const API_BASE_URL = process.env.API_BASE_URL ?? "http://server:3333";
 const MQTT_PORT = parseInt(process.env.MQTT_PORT ?? "1883", 10);
 const WS_PORT = parseInt(process.env.MQTT_WS_PORT ?? "9001", 10);
 const COMMAND_POLL_INTERVAL = parseInt(process.env.COMMAND_POLL_INTERVAL ?? "1000", 10);
-const doorStateValues = ["OPEN", "CLOSED", "UNKNOWN"];
+const doorStateValues = ["OPEN", "CLOSED", "LOCKED", "UNKNOWN"];
 const credentialTypeValues = ["FINGERPRINT", "NFC_TAG"];
-const commandTypeValues = ["UNLOCK", "LOCK", "SYNC_STATE"];
+const commandTypeValues = [
+    "UNLOCK",
+    "LOCK",
+    "SYNC_STATE",
+    "NFC_WRITE",
+];
 const commandAckStatusValues = ["COMPLETED", "FAILED"];
+const sensorProtocolValues = ["R30X", "BOLAND"];
 const registerPayloadSchema = z.object({
-    roomId: z.string().min(1),
+    roomId: z.string().min(1).optional(),
+    pairingMode: z.boolean().optional(),
     firmwareVersion: z.string().min(1).optional(),
+    sensorProtocol: z.enum(sensorProtocolValues).optional(),
+    sensorModel: z.string().min(1).optional(),
 });
 const heartbeatPayloadSchema = z
     .object({
@@ -37,11 +51,22 @@ const accessAttemptPayloadSchema = z.object({
     credentialType: z.enum(credentialTypeValues),
     credentialValue: z.string().min(1),
     requestId: z.string().min(1).optional(),
+    /** userId gravado no setor MIFARE do cartão — para dupla verificação */
+    cardUserId: z.string().optional(),
+    /** Token de autenticação do dispositivo IoT */
+    deviceSecret: z.string().optional(),
+});
+const localMatchPayloadSchema = z.object({
+    credentialId: z.string().min(1),
+    confidence: z.number(),
+    slotId: z.number(),
+    deviceSecret: z.string().optional(),
 });
 const accessDecisionSchema = z.object({
     status: z.enum(["GRANTED", "DENIED"]),
     reason: z.string().nullable(),
     requestId: z.string().optional(),
+    credentialId: z.string().optional(),
     user: z
         .object({
         id: z.string(),
@@ -75,8 +100,11 @@ const commandResponseSchema = z.object({
 const apiRegisterResponseSchema = z.object({
     controller: z.object({
         id: z.string(),
-        roomId: z.string(),
+        roomId: z.string().nullable(),
+        pairingMode: z.boolean(),
         firmwareVersion: z.string().nullable(),
+        sensorProtocol: z.string().nullable(),
+        sensorModel: z.string().nullable(),
         lastSeenAt: z.string(),
     }),
 });
@@ -89,12 +117,35 @@ const apiRoomStatusResponseSchema = z.object({
         lastStatusUpdateAt: z.string().nullable(),
     }),
 });
+const enrollmentResultPayloadSchema = z.object({
+    enrollmentId: z.string().min(1),
+    userId: z.string().min(1),
+    finger: z.string().min(1),
+    status: z.enum(["SUCCESS", "FAILED", "EXPIRED"]),
+    template: z.string().optional(),
+    quality: z.number().optional(),
+});
+const enrollmentProgressPayloadSchema = z.object({
+    enrollmentId: z.string().min(1),
+    step: z.enum([
+        "WAITING_FIRST",
+        "FIRST_CAPTURED",
+        "SECOND_CAPTURED",
+        "CREATING_MODEL",
+        "EXTRACTING",
+        "FAILED",
+        "EXPIRED",
+    ]),
+});
 const topicMatchers = {
     register: /^door\/([^/]+)\/register$/,
     heartbeat: /^door\/([^/]+)\/heartbeat$/,
     status: /^door\/([^/]+)\/status$/,
     access: /^door\/([^/]+)\/access-attempt$/,
+    localMatch: /^door\/([^/]+)\/local-match$/,
     commandResult: /^door\/([^/]+)\/command-result$/,
+    enrollmentResult: /^door\/([^/]+)\/enrollment-result$/,
+    enrollmentProgress: /^door\/([^/]+)\/enrollment-progress$/,
 };
 const commandPollers = new Map();
 const broker = createBroker();
@@ -134,7 +185,13 @@ broker.on("publish", (packet, client) => {
         return;
     if (handleTopic("access", topic, payloadString, handleAccessAttempt))
         return;
-    handleTopic("commandResult", topic, payloadString, handleCommandResult);
+    if (handleTopic("localMatch", topic, payloadString, handleLocalMatch))
+        return;
+    if (handleTopic("commandResult", topic, payloadString, handleCommandResult))
+        return;
+    if (handleTopic("enrollmentProgress", topic, payloadString, handleEnrollmentProgress))
+        return;
+    handleTopic("enrollmentResult", topic, payloadString, handleEnrollmentResult);
 });
 function handleTopic(kind, topic, payload, handler) {
     const match = topicMatchers[kind].exec(topic);
@@ -149,28 +206,33 @@ function handleTopic(kind, topic, payload, handler) {
 async function handleRegister(controllerId, payload) {
     const parsed = safeParseJson(payload);
     const data = registerPayloadSchema.parse(parsed);
-    const response = await callApi(`/iot/devices/register`, JSON.stringify({
-        controllerId,
+    const response = await callApi("PUT", `/iot/devices/${controllerId}`, JSON.stringify({
         roomId: data.roomId,
+        pairingMode: data.pairingMode,
         firmwareVersion: data.firmwareVersion,
+        sensorProtocol: data.sensorProtocol,
+        sensorModel: data.sensorModel,
     }));
     const registerResponse = apiRegisterResponseSchema.parse(response);
     logger.info({
         controllerId,
         roomId: registerResponse.controller.roomId,
+        pairingMode: registerResponse.controller.pairingMode,
+        sensorProtocol: registerResponse.controller.sensorProtocol,
+        sensorModel: registerResponse.controller.sensorModel,
     }, "Controller registered");
     ensureCommandPolling(controllerId);
 }
 async function handleHeartbeat(controllerId, payload) {
     const parsed = safeParseJson(payload);
     const data = heartbeatPayloadSchema.parse(parsed);
-    await callApi(`/iot/devices/${controllerId}/heartbeat`, JSON.stringify(data));
+    await callApi("PATCH", `/iot/devices/${controllerId}/heartbeat`, JSON.stringify(data));
     ensureCommandPolling(controllerId);
 }
 async function handleStatus(controllerId, payload) {
     const parsed = safeParseJson(payload);
     const data = statusPayloadSchema.parse(parsed);
-    const response = await callApi(`/iot/devices/${controllerId}/status`, JSON.stringify({
+    const response = await callApi("PUT", `/iot/devices/${controllerId}/status`, JSON.stringify({
         doorState: data.doorState,
         isLocked: data.isLocked,
         firmwareVersion: data.firmwareVersion,
@@ -186,12 +248,16 @@ async function handleStatus(controllerId, payload) {
 async function handleAccessAttempt(controllerId, payload) {
     const parsed = safeParseJson(payload);
     const data = accessAttemptPayloadSchema.parse(parsed);
-    const response = await callApi(`/iot/devices/${controllerId}/access-attempt`, JSON.stringify({
+    const response = await callApi("POST", `/iot/devices/${controllerId}/access-attempts`, JSON.stringify({
         credentialType: data.credentialType,
         credentialValue: data.credentialValue,
         requestId: data.requestId,
+        cardUserId: data.cardUserId,
+        deviceSecret: data.deviceSecret,
     }));
     const decision = accessDecisionSchema.parse(response);
+    // Inclui userId para que o firmware possa gravar no cartão MIFARE
+    // no mesmo toque (toque único) sem necessidade de uma 2ª aproximação.
     await publish(`door/${controllerId}/access-result`, decision);
     logger.info({
         controllerId,
@@ -204,10 +270,70 @@ async function handleAccessAttempt(controllerId, payload) {
         await enqueueUnlockCommand(controllerId);
     }
 }
+async function handleLocalMatch(controllerId, payload) {
+    const parsed = safeParseJson(payload);
+    const data = localMatchPayloadSchema.parse(parsed);
+    const response = await callApi("POST", `/iot/devices/${controllerId}/local-match`, JSON.stringify({
+        credentialId: data.credentialId,
+        confidence: data.confidence,
+        deviceSecret: data.deviceSecret,
+    }));
+    const decision = accessDecisionSchema.parse(response);
+    await publish(`door/${controllerId}/access-result`, decision);
+    logger.info({
+        controllerId,
+        status: decision.status,
+        reason: decision.reason,
+        credentialId: data.credentialId,
+        confidence: data.confidence,
+    }, "Processed local biometric match");
+    if (decision.status === "GRANTED") {
+        await enqueueUnlockCommand(controllerId);
+    }
+}
+async function handleEnrollmentResult(controllerId, payload) {
+    const parsed = safeParseJson(payload);
+    const data = enrollmentResultPayloadSchema.parse(parsed);
+    logger.info({
+        controllerId,
+        enrollmentId: data.enrollmentId,
+        userId: data.userId,
+        finger: data.finger,
+        status: data.status,
+    }, "Enrollment result received");
+    if (data.status !== "SUCCESS" || !data.template) {
+        logger.warn({ controllerId, enrollmentId: data.enrollmentId, status: data.status }, "Enrollment did not complete — skipping credential registration");
+        return;
+    }
+    // Usa a rota IoT interna que não exige cookie de sessão.
+    // O controllerId autentica a origem — apenas controladores registrados chegam aqui.
+    await callApi("POST", `/iot/devices/${controllerId}/enrollment`, JSON.stringify({
+        userId: data.userId,
+        finger: data.finger,
+        template: data.template,
+        enrollmentId: data.enrollmentId,
+    }));
+    logger.info({
+        controllerId,
+        enrollmentId: data.enrollmentId,
+        userId: data.userId,
+        finger: data.finger,
+    }, "Fingerprint credential registered via MQTT enrollment");
+}
+async function handleEnrollmentProgress(controllerId, payload) {
+    const parsed = safeParseJson(payload);
+    const data = enrollmentProgressPayloadSchema.parse(parsed);
+    logger.info({ controllerId, enrollmentId: data.enrollmentId, step: data.step }, "Enrollment progress");
+    // Forward to backend SSE
+    await callApi("POST", `/iot/devices/${controllerId}/enrollment-progress`, JSON.stringify({
+        enrollmentId: data.enrollmentId,
+        step: data.step,
+    }));
+}
 async function handleCommandResult(controllerId, payload) {
     const parsed = safeParseJson(payload);
     const data = commandAckPayloadSchema.parse(parsed);
-    await callApi(`/iot/devices/${controllerId}/commands/${data.commandId}/ack`, JSON.stringify({
+    await callApi("PATCH", `/iot/devices/${controllerId}/commands/${data.commandId}/ack`, JSON.stringify({
         status: data.status,
         resultPayload: data.resultPayload,
         errorMessage: data.errorMessage,
@@ -220,24 +346,24 @@ function safeParseJson(payload) {
     try {
         return JSON.parse(payload);
     }
-    catch (error) {
+    catch {
         logger.warn({ payload }, "Invalid JSON payload, treating as empty object");
         return {};
     }
 }
-async function callApi(path, body) {
+async function callApi(method, path, body) {
     const headers = new Headers();
-    if (body) {
+    if (body && method !== "GET") {
         headers.set("content-type", "application/json");
     }
     const response = await fetch(`${API_BASE_URL}${path}`, {
-        method: "POST",
+        method,
         headers,
-        body,
+        body: method !== "GET" ? body : undefined,
     });
     if (!response.ok) {
         const errorPayload = await response.text();
-        throw new Error(`API request failed (${response.status}): ${errorPayload || response.statusText}`);
+        throw new Error(`API request failed (${method} ${path} → ${response.status}): ${errorPayload || response.statusText}`);
     }
     if (response.headers.get("content-length") === "0") {
         return {};
@@ -249,8 +375,8 @@ async function callApi(path, body) {
     try {
         return JSON.parse(text);
     }
-    catch (error) {
-        logger.warn({ path, body, text }, "Received non-JSON response");
+    catch {
+        logger.warn({ method, path, body, text }, "Received non-JSON response");
         return {};
     }
 }
@@ -289,20 +415,41 @@ function ensureCommandPolling(controllerId) {
     commandPollers.set(controllerId, interval);
 }
 async function pollCommands(controllerId) {
-    const response = await callApi(`/iot/devices/${controllerId}/commands/pull`, JSON.stringify({ limit: 5 }));
+    const response = await callApi("GET", `/iot/devices/${controllerId}/commands?limit=5`);
     const parsed = commandResponseSchema.parse(response);
     for (const command of parsed.commands) {
-        await publish(`door/${controllerId}/command`, {
+        const commandPayload = {
             commandId: command.id,
             type: command.type,
             payload: command.payload,
             expiresAt: command.expiresAt,
-        });
+        };
+        if (command.type === "SYNC_STATE" &&
+            command.payload?.kind === "ENROLLMENT") {
+            await publish(`door/${controllerId}/enter-enrollment-mode`, {
+                enrollmentId: command.payload.enrollmentId,
+                userId: command.payload.userId,
+                finger: command.payload.finger,
+                expiresAt: command.payload.expiresAt,
+            });
+            continue;
+        }
+        // When a room is linked to a controller, sync all authorized fingerprints
+        if (command.type === "SYNC_STATE" &&
+            command.payload?.action === "link") {
+            await publish(`door/${controllerId}/command`, commandPayload);
+            // Trigger fingerprint sync in background (don't block command polling)
+            triggerFingerprintSync(controllerId).catch((err) => {
+                logger.error({ err, controllerId }, "Background fingerprint sync failed");
+            });
+            continue;
+        }
+        await publish(`door/${controllerId}/command`, commandPayload);
     }
 }
 async function enqueueUnlockCommand(controllerId) {
     try {
-        await callApi(`/iot/devices/${controllerId}/commands`, JSON.stringify({
+        await callApi("POST", `/iot/devices/${controllerId}/commands`, JSON.stringify({
             type: "UNLOCK",
             payload: {},
         }));
@@ -310,6 +457,31 @@ async function enqueueUnlockCommand(controllerId) {
     }
     catch (error) {
         logger.error({ err: error, controllerId }, "Unable to enqueue unlock command");
+    }
+}
+async function triggerFingerprintSync(controllerId) {
+    try {
+        const response = await callApi("GET", `/iot/devices/${controllerId}/fingerprint-sync`);
+        const credentials = response.credentials;
+        if (!credentials || credentials.length === 0) {
+            logger.info({ controllerId }, "No fingerprints to sync");
+            return;
+        }
+        logger.info({ controllerId, count: credentials.length }, "Starting fingerprint sync to device");
+        // Publish each template individually with a delay
+        // so the ESP8266 can process each one without memory issues
+        for (const cred of credentials) {
+            await publish(`door/${controllerId}/sync-template`, {
+                credentialId: cred.credentialId,
+                template: cred.template,
+            });
+            // Wait for the firmware to process before sending next
+            await new Promise((resolve) => setTimeout(resolve, 2000));
+        }
+        logger.info({ controllerId, synced: credentials.length }, "Fingerprint sync completed");
+    }
+    catch (error) {
+        logger.error({ err: error, controllerId }, "Fingerprint sync failed");
     }
 }
 function shutdown() {

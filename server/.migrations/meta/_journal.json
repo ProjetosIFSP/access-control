@@ -50,6 +50,13 @@
       "when": 1775158575717,
       "tag": "0006_sad_human_torch",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1778101503064,
+      "tag": "0007_complex_virginia_dare",
+      "breakpoints": true
     }
   ]
 }

@@ -91,10 +91,18 @@ const accessAttemptPayloadSchema = z.object({
 	deviceSecret: z.string().optional(),
 });
 
+const localMatchPayloadSchema = z.object({
+	credentialId: z.string().min(1),
+	confidence: z.number(),
+	slotId: z.number(),
+	deviceSecret: z.string().optional(),
+});
+
 const accessDecisionSchema = z.object({
 	status: z.enum(["GRANTED", "DENIED"] as const),
 	reason: z.string().nullable(),
 	requestId: z.string().optional(),
+	credentialId: z.string().optional(),
 	user: z
 		.object({
 			id: z.string(),
@@ -179,6 +187,7 @@ const topicMatchers = {
 	heartbeat: /^door\/([^/]+)\/heartbeat$/,
 	status: /^door\/([^/]+)\/status$/,
 	access: /^door\/([^/]+)\/access-attempt$/,
+	localMatch: /^door\/([^/]+)\/local-match$/,
 	commandResult: /^door\/([^/]+)\/command-result$/,
 	enrollmentResult: /^door\/([^/]+)\/enrollment-result$/,
 	enrollmentProgress: /^door\/([^/]+)\/enrollment-progress$/,
@@ -188,7 +197,7 @@ type TopicKind = keyof typeof topicMatchers;
 
 const commandPollers = new Map<string, NodeJS.Timeout>();
 
-const broker = createBroker();
+const broker = createBroker() as any;
 const mqttServer = createNetServer(broker.handle);
 mqttServer.listen(MQTT_PORT, () => {
 	logger.info({ port: MQTT_PORT }, "MQTT TCP server listening");
@@ -196,8 +205,8 @@ mqttServer.listen(MQTT_PORT, () => {
 
 const wsHttpServer = createHttpServer();
 const wsServer = new WebSocketServer({ server: wsHttpServer });
-wsServer.on("connection", (socket: WebSocket, request: IncomingMessage) => {
-	const stream = websocketStream(socket as unknown as WebSocket) as Duplex;
+wsServer.on("connection", (socket: WebSocket, request:IncomingMessage) => {
+	const stream = websocketStream(socket as any) as Duplex;
 	broker.handle(stream, request);
 });
 wsHttpServer.listen(WS_PORT, () => {
@@ -228,6 +237,7 @@ broker.on("publish", (packet: AedesPublishPacket, client: Client | null) => {
 	if (handleTopic("heartbeat", topic, payloadString, handleHeartbeat)) return;
 	if (handleTopic("status", topic, payloadString, handleStatus)) return;
 	if (handleTopic("access", topic, payloadString, handleAccessAttempt)) return;
+	if (handleTopic("localMatch", topic, payloadString, handleLocalMatch)) return;
 	if (handleTopic("commandResult", topic, payloadString, handleCommandResult))
 		return;
 	if (handleTopic("enrollmentProgress", topic, payloadString, handleEnrollmentProgress))
@@ -353,6 +363,38 @@ async function handleAccessAttempt(controllerId: string, payload: string) {
 			roomId: decision.room?.id,
 		},
 		"Processed access attempt",
+	);
+
+	if (decision.status === "GRANTED") {
+		await enqueueUnlockCommand(controllerId);
+	}
+}
+
+async function handleLocalMatch(controllerId: string, payload: string) {
+	const parsed = safeParseJson(payload);
+	const data = localMatchPayloadSchema.parse(parsed);
+
+	const response = await callApi(
+		"POST",
+		`/iot/devices/${controllerId}/local-match`,
+		JSON.stringify({
+			credentialId: data.credentialId,
+			confidence: data.confidence,
+			deviceSecret: data.deviceSecret,
+		}),
+	);
+
+	const decision = accessDecisionSchema.parse(response);
+	await publish(`door/${controllerId}/access-result`, decision);
+	logger.info(
+		{
+			controllerId,
+			status: decision.status,
+			reason: decision.reason,
+			credentialId: data.credentialId,
+			confidence: data.confidence,
+		},
+		"Processed local biometric match",
 	);
 
 	if (decision.status === "GRANTED") {
@@ -561,6 +603,19 @@ async function pollCommands(controllerId: string) {
 			continue;
 		}
 
+		// When a room is linked to a controller, sync all authorized fingerprints
+		if (
+			command.type === "SYNC_STATE" &&
+			command.payload?.action === "link"
+		) {
+			await publish(`door/${controllerId}/command`, commandPayload);
+			// Trigger fingerprint sync in background (don't block command polling)
+			triggerFingerprintSync(controllerId).catch((err) => {
+				logger.error({ err, controllerId }, "Background fingerprint sync failed");
+			});
+			continue;
+		}
+
 		await publish(`door/${controllerId}/command`, commandPayload);
 	}
 }
@@ -580,6 +635,47 @@ async function enqueueUnlockCommand(controllerId: string) {
 		logger.error(
 			{ err: error, controllerId },
 			"Unable to enqueue unlock command",
+		);
+	}
+}
+
+async function triggerFingerprintSync(controllerId: string) {
+	try {
+		const response = await callApi(
+			"GET",
+			`/iot/devices/${controllerId}/fingerprint-sync`,
+		);
+
+		const credentials = (response as { credentials: Array<{ credentialId: string; template: string }> }).credentials;
+		if (!credentials || credentials.length === 0) {
+			logger.info({ controllerId }, "No fingerprints to sync");
+			return;
+		}
+
+		logger.info(
+			{ controllerId, count: credentials.length },
+			"Starting fingerprint sync to device",
+		);
+
+		// Publish each template individually with a delay
+		// so the ESP8266 can process each one without memory issues
+		for (const cred of credentials) {
+			await publish(`door/${controllerId}/sync-template`, {
+				credentialId: cred.credentialId,
+				template: cred.template,
+			});
+			// Wait for the firmware to process before sending next
+			await new Promise((resolve) => setTimeout(resolve, 2000));
+		}
+
+		logger.info(
+			{ controllerId, synced: credentials.length },
+			"Fingerprint sync completed",
+		);
+	} catch (error) {
+		logger.error(
+			{ err: error, controllerId },
+			"Fingerprint sync failed",
 		);
 	}
 }
