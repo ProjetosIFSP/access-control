@@ -646,6 +646,32 @@ export const iotRoute: FastifyPluginAsyncZod = async (app) => {
 		},
 	);
 
+	// POST /iot/devices/:controllerId/request-sync
+	// Endpoint acionado pelo hardware quando o match local falha para forçar o download dos templates faltantes
+	app.post(
+		"/devices/:controllerId/request-sync",
+		{
+			schema: {
+				params: z.object({ controllerId: z.string().min(1) }),
+				body: z.object({ deviceSecret: z.string().optional() }),
+				tags: ["iot"],
+				summary: "Solicitar sincronização de templates",
+				description: "Aciona a lógica de sincronização para o controlador. Utilizado pelo hardware ao não reconhecer uma biometria.",
+			},
+		},
+		async (request, reply) => {
+			const { controllerId } = request.params;
+			const { deviceSecret } = request.body;
+
+			if (env.IOT_DEVICE_SECRET && deviceSecret !== env.IOT_DEVICE_SECRET) {
+				return reply.status(401).send();
+			}
+
+			request.log.info({ controllerId }, "Hardware requested fingerprint sync");
+			return reply.status(202).send();
+		}
+	);
+
 	// GET /iot/devices/:controllerId/fingerprint-sync
 	// Returns authorized fingerprint templates for the controller's room
 	app.get(

@@ -266,6 +266,27 @@ function handleTopic(
 	return true;
 }
 
+const requestSyncPayloadSchema = z.object({
+	deviceSecret: z.string().optional(),
+});
+
+async function handleRequestSync(controllerId: string, payload: string) {
+	const parsed = safeParseJson(payload);
+	const data = requestSyncPayloadSchema.parse(parsed);
+
+	await callApi(
+		"POST",
+		`/iot/devices/${controllerId}/request-sync`,
+		JSON.stringify({
+			deviceSecret: data.deviceSecret,
+		}),
+	);
+
+	triggerFingerprintSync(controllerId).catch((err) => {
+		logger.error({ err, controllerId }, "Hardware triggered fingerprint sync failed");
+	});
+}
+
 async function handleRegister(controllerId: string, payload: string) {
 	const parsed = safeParseJson(payload);
 	const data = registerPayloadSchema.parse(parsed);
@@ -667,6 +688,8 @@ async function triggerFingerprintSync(controllerId: string) {
 			// Wait for the firmware to process before sending next
 			await new Promise((resolve) => setTimeout(resolve, 2000));
 		}
+
+		await publish(`door/${controllerId}/sync-complete`, {});
 
 		logger.info(
 			{ controllerId, synced: credentials.length },
