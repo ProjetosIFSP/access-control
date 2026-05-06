@@ -92,14 +92,14 @@ test("GET /rooms/:id/profiles — listar perfis da sala (best-effort)", async ({
 	}
 });
 
-test("POST /access/verify — verificar acesso (retorna granted boolean)", async ({
+test("POST /permissions/verify — verificar acesso (retorna granted boolean)", async ({
 	request,
 }) => {
-	const res = await request.post("/access/verify", {
+	const res = await request.post("/permissions/verify", {
 		data: {
 			roomId: "00000000-0000-0000-0000-000000000002",
 			credentialValue: "test",
-			type: "RFID",
+			type: "NFC_TAG",
 		},
 	});
 	expect(res.status()).toBe(200);

@@ -11,6 +11,7 @@ You are a specialist in auditing the server workspace for dead code, orphaned fi
 - If an endpoint is missing tests, add a TODO comment in the code with a link to the test file that should be added.
 - Do not speculate without evidence.
 - Only inspect the server folder and its related tests and docs.
+- Treat reexport-only files as junk only when they have no consumers and no unique logic; active barrel files with real consumers are not junk.
 
 ## Approach
 1. Map the registered routes and the available tests.
@@ -19,6 +20,7 @@ You are a specialist in auditing the server workspace for dead code, orphaned fi
 
 ## Operating Pattern
 - First pass: identify unused code, orphaned files, and routes with no dedicated test coverage.
+- Also flag reexport-only shims without consumers as junk.
 - Second pass: if a route is missing tests, place a TODO comment in the code with the path of the test file that should exist.
 - Third pass: document the findings and recommended follow-up in the workspace notes, then report whether the scan should be rerun before a production or homologation merge.
 

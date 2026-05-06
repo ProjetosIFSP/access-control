@@ -57,10 +57,7 @@ const commandTypeValues = [
 ] as const;
 const commandAckStatusValues = ["COMPLETED", "FAILED"] as const;
 
-type DoorState = (typeof doorStateValues)[number];
-type CredentialType = (typeof credentialTypeValues)[number];
 type CommandType = (typeof commandTypeValues)[number];
-type CommandAckStatus = (typeof commandAckStatusValues)[number];
 
 const sensorProtocolValues = ["R30X", "BOLAND"] as const;
 
@@ -159,7 +156,7 @@ const enrollmentResultPayloadSchema = z.object({
 	enrollmentId: z.string().min(1),
 	userId: z.string().min(1),
 	finger: z.string().min(1),
-	status: z.enum(["COMPLETED", "FAILED", "TIMEOUT"] as const),
+	status: z.enum(["SUCCESS", "FAILED", "EXPIRED"] as const),
 	template: z.string().optional(),
 	quality: z.number().optional(),
 });
@@ -170,7 +167,7 @@ const topicMatchers = {
 	status: /^door\/([^/]+)\/status$/,
 	access: /^door\/([^/]+)\/access-attempt$/,
 	commandResult: /^door\/([^/]+)\/command-result$/,
-	enrollmentResult: /^enrollment\/([^/]+)\/result$/,
+	enrollmentResult: /^door\/([^/]+)\/enrollment-result$/,
 } as const;
 
 type TopicKind = keyof typeof topicMatchers;
@@ -186,7 +183,7 @@ mqttServer.listen(MQTT_PORT, () => {
 const wsHttpServer = createHttpServer();
 const wsServer = new WebSocketServer({ server: wsHttpServer });
 wsServer.on("connection", (socket: WebSocket, request: IncomingMessage) => {
-	const stream = websocketStream(socket as unknown as any) as Duplex;
+	const stream = websocketStream(socket as unknown as WebSocket) as Duplex;
 	broker.handle(stream, request);
 });
 wsHttpServer.listen(WS_PORT, () => {
@@ -222,7 +219,7 @@ broker.on("publish", (packet: AedesPublishPacket, client: Client | null) => {
 	handleTopic("enrollmentResult", topic, payloadString, handleEnrollmentResult);
 });
 
-function handleTopic<TBody>(
+function handleTopic(
 	kind: TopicKind,
 	topic: string,
 	payload: string,
@@ -362,7 +359,7 @@ async function handleEnrollmentResult(controllerId: string, payload: string) {
 		"Enrollment result received",
 	);
 
-	if (data.status !== "COMPLETED" || !data.template) {
+	if (data.status !== "SUCCESS" || !data.template) {
 		logger.warn(
 			{ controllerId, enrollmentId: data.enrollmentId, status: data.status },
 			"Enrollment did not complete — skipping credential registration",
@@ -416,7 +413,7 @@ function safeParseJson(payload: string) {
 
 	try {
 		return JSON.parse(payload);
-	} catch (error) {
+	} catch {
 		logger.warn({ payload }, "Invalid JSON payload, treating as empty object");
 		return {};
 	}
@@ -452,7 +449,7 @@ async function callApi(method: HttpMethod, path: string, body?: string) {
 
 	try {
 		return JSON.parse(text);
-	} catch (error) {
+	} catch {
 		logger.warn({ method, path, body, text }, "Received non-JSON response");
 		return {};
 	}
@@ -508,12 +505,27 @@ async function pollCommands(controllerId: string) {
 	const parsed = commandResponseSchema.parse(response);
 
 	for (const command of parsed.commands) {
-		await publish(`door/${controllerId}/command`, {
+		const commandPayload = {
 			commandId: command.id,
 			type: command.type satisfies CommandType,
 			payload: command.payload,
 			expiresAt: command.expiresAt,
-		});
+		};
+
+		if (
+			command.type === "SYNC_STATE" &&
+			command.payload?.kind === "ENROLLMENT"
+		) {
+			await publish(`door/${controllerId}/enter-enrollment-mode`, {
+				enrollmentId: command.payload.enrollmentId,
+				userId: command.payload.userId,
+				finger: command.payload.finger,
+				expiresAt: command.payload.expiresAt,
+			});
+			continue;
+		}
+
+		await publish(`door/${controllerId}/command`, commandPayload);
 	}
 }
 

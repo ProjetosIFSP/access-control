@@ -14,6 +14,8 @@ import {
 	resolveSession,
 } from "@/lib/require-admin";
 import { z } from "@/lib/zod";
+import { createDoorCommand } from "@/services/iot/commands";
+import { getDoorControllerById } from "@/services/iot/door-controller";
 import { createUser } from "@/services/user/create-user";
 import { deleteUser } from "@/services/user/delete-user";
 import {
@@ -435,6 +437,71 @@ export const userRoute: FastifyPluginAsyncZod = async (app) => {
 				}
 				throw err;
 			}
+		},
+	);
+
+	// POST /users/:id/fingerprints/enroll-request — solicita cadastro via terminal físico
+	app.post(
+		"/:id/fingerprints/enroll-request",
+		{
+			schema: {
+				tags: ["users"],
+				summary: "Solicitar cadastro biométrico via terminal",
+				description:
+					"Cria um comando de enrollment para uma fechadura física em modo de pareamento e retorna o enrollmentId para polling.",
+				security: [{ sessionCookie: [] }],
+				params: z.object({ id: z.string().uuid() }),
+				body: z.object({
+					controllerId: z.string().min(1),
+					finger: fingerKeySchema,
+				}),
+				response: {
+					201: z.object({
+						enrollmentId: z.string().min(1),
+						expiresAt: z.string().datetime(),
+					}),
+					404: z.object({ message: z.string() }),
+					409: z.object({ message: z.string() }),
+				},
+			},
+		},
+		async (request, reply) => {
+			if (!(await requireAdmin(request, reply as unknown as GuardReply)))
+				return;
+
+			const { id: userId } = request.params as { id: string };
+			const { controllerId, finger } = request.body as {
+				controllerId: string;
+				finger: (typeof FINGER_KEYS)[number];
+			};
+
+			const controller = await getDoorControllerById(controllerId);
+			if (!controller) {
+				return (reply as unknown as GuardReply)
+					.status(404)
+					.send({ message: "Controlador não encontrado." });
+			}
+
+			const enrollmentId = crypto.randomUUID();
+			const expiresAt = new Date(Date.now() + 2 * 60 * 1000);
+
+			await createDoorCommand({
+				controllerId,
+				type: "SYNC_STATE",
+				payload: {
+					kind: "ENROLLMENT",
+					enrollmentId,
+					userId,
+					finger,
+					expiresAt: expiresAt.toISOString(),
+				},
+				expiresInSeconds: 120,
+			});
+
+			return reply.status(201).send({
+				enrollmentId,
+				expiresAt: expiresAt.toISOString(),
+			});
 		},
 	);
 

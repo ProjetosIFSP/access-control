@@ -31,6 +31,7 @@ import { pairingDevicesQueryOptions } from "@/services/devices/pairing";
 import {
 	fingerprintQueryKeys,
 	registerFingerprint,
+	requestFingerprintEnrollment,
 	userFingerprintsQueryOptions,
 } from "@/services/users/fingerprints";
 import { userNfcTagsQueryOptions } from "@/services/users/nfc-tags";
@@ -60,7 +61,10 @@ interface DeviceSelectorProps {
 	onSelectDevice: (id: string | null) => void;
 }
 
-function DeviceSelector({ selectedDevice, onSelectDevice }: DeviceSelectorProps) {
+function DeviceSelector({
+	selectedDevice,
+	onSelectDevice,
+}: DeviceSelectorProps) {
 	const devicesQuery = useQuery(pairingDevicesQueryOptions);
 	const pairingDevices = devicesQuery.data ?? [];
 
@@ -198,8 +202,27 @@ export function FingerprintHandDrawer({
 			);
 		},
 	});
+	const enrollMutation = useMutation({
+		mutationFn: requestFingerprintEnrollment,
+		onSuccess: () => {
+			toast.success("Cadastro biométrico iniciado", {
+				description:
+					"Aproxime o dedo no terminal físico selecionado para concluir o cadastro.",
+			});
+		},
+		onError: (err) => {
+			setSelectedFinger(null);
+			toast.error(
+				err instanceof Error
+					? err.message
+					: "Erro ao iniciar o cadastro biométrico",
+			);
+		},
+	});
 	const registerMutate = registerMutation.mutate;
 	const registerIsPending = registerMutation.isPending;
+	const enrollMutate = enrollMutation.mutate;
+	const enrollIsPending = enrollMutation.isPending;
 
 	// ── React to reader status changes ───────────────────────────────────────────
 	useEffect(() => {
@@ -270,6 +293,16 @@ export function FingerprintHandDrawer({
 
 	const handleFingerClick = useCallback(
 		(finger: FingerKey) => {
+			if (selectedDevice) {
+				setSelectedFinger(finger);
+				enrollMutate({
+					userId,
+					controllerId: selectedDevice,
+					finger,
+				});
+				return;
+			}
+
 			const alreadyRegistered = fingerprints.some(
 				(f) => f.finger === finger && f.isActive,
 			);
@@ -294,7 +327,14 @@ export function FingerprintHandDrawer({
 			setSelectedFinger(finger);
 			reader.startCapture();
 		},
-		[fingerprints, reader, selectedFinger],
+		[
+			fingerprints,
+			reader,
+			selectedFinger,
+			selectedDevice,
+			enrollMutate,
+			userId,
+		],
 	);
 
 	const handleTabChange = useCallback(
@@ -380,7 +420,6 @@ export function FingerprintHandDrawer({
 
 							{/* ── Content ── */}
 							<div className="absolute inset-0 z-10 flex flex-col overflow-hidden">
-
 								{/* ── Fixed Header (não rola) ── */}
 								<motion.div
 									className="flex items-start justify-between gap-4 px-6 pt-8 pb-4 shrink-0"
@@ -493,7 +532,8 @@ export function FingerprintHandDrawer({
 																readerStatus={reader.status}
 																captureActive={
 																	reader.status === "waiting" ||
-																	reader.status === "reading"
+																	reader.status === "reading" ||
+																	enrollIsPending
 																}
 																countdown={reader.countdown}
 																interactive
@@ -508,7 +548,11 @@ export function FingerprintHandDrawer({
 														className="w-full text-black! dark:text-white! after:border-zinc-200! dark:after:border-zinc-800!"
 														overlayClassname="before:bg-zinc-200 dark:before:bg-zinc-800"
 														onClick={() => {
-															reader.cancelCapture();
+															if (selectedDevice) {
+																enrollMutation.reset();
+															} else {
+																reader.cancelCapture();
+															}
 															setSelectedFinger(null);
 														}}
 													>

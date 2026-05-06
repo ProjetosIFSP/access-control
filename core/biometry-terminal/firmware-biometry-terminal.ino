@@ -53,6 +53,7 @@ void saveConfigCallback () {
 const unsigned long HEARTBEAT_INTERVAL_MS = 30000;
 const unsigned long ACCESS_RESULT_TIMEOUT = 5000;
 const unsigned long FINGER_DEBOUNCE_MS    = 3000;
+const unsigned long ENROLLMENT_TIMEOUT_MS = 120000;
 
 // ── Variáveis de estado ───────────────────────────────────────────────────────
 
@@ -62,9 +63,27 @@ String topicHeartbeat;
 String topicAccessAttempt;
 String topicAccessResult;
 String topicStatus;
+String topicEnterEnrollment;
+String topicEnrollmentResult;
 
-enum State { IDLE, WAITING_RESULT };
+enum State { IDLE, WAITING_RESULT, ENROLLMENT_MODE };
 State currentState = IDLE;
+
+enum EnrollmentStep {
+  ENROLL_STEP_IDLE,
+  ENROLL_STEP_WAITING_FIRST,
+  ENROLL_STEP_WAITING_SECOND,
+  ENROLL_STEP_CREATE_MODEL
+};
+
+EnrollmentStep enrollmentStep = ENROLL_STEP_IDLE;
+String enrollmentId;
+String enrollmentUserId;
+String enrollmentFinger;
+String enrollmentTemplateHex;
+uint8_t enrollmentQuality = 0;
+unsigned long enrollmentExpiresAt = 0;
+unsigned long enrollmentStepAt = 0;
 
 enum DoorState { OPEN, LOCKED, UNKNOWN };
 DoorState currentDoorState = UNKNOWN;
@@ -75,6 +94,389 @@ unsigned long lastFingerTime  = 0;
 
 bool   resultReceived = false;
 String resultStatus   = "";
+
+// Forward declarations for globals defined later in the sketch.
+extern WiFiClient espClient;
+extern PubSubClient mqtt;
+extern SoftwareSerial fingerSerial;
+extern Adafruit_Fingerprint finger;
+extern String topicEnrollmentResult;
+
+constexpr uint8_t TEMPLATE_EMPTY_CODE = 35;
+constexpr size_t MAX_TEMPLATE_HEX_CHARS = 16384;
+
+String bytesToHex(const uint8_t* data, size_t length) {
+  String hex;
+  hex.reserve(length * 2);
+  for (size_t i = 0; i < length; i++) {
+    if (data[i] < 16) hex += '0';
+    hex += String(data[i], HEX);
+  }
+  hex.toLowerCase();
+  return hex;
+}
+
+void clearFingerprintSerialInput() {
+  while (fingerSerial.available()) {
+    fingerSerial.read();
+    delay(0);
+  }
+}
+
+uint8_t writeEncryptionLevelRaw(uint8_t level) {
+  clearFingerprintSerialInput();
+
+  uint8_t commandData[] = {FINGERPRINT_WRITE_REG, 0x07, level};
+  Adafruit_Fingerprint_Packet commandPacket(FINGERPRINT_COMMANDPACKET,
+                                            sizeof(commandData), commandData);
+  finger.writeStructuredPacket(commandPacket);
+
+  uint8_t responseData[64] = {0};
+  Adafruit_Fingerprint_Packet responsePacket(FINGERPRINT_ACKPACKET, 0,
+                                             responseData);
+  uint8_t packetResult = finger.getStructuredPacket(&responsePacket, 1500);
+  if (packetResult != FINGERPRINT_OK) {
+#ifdef DEBUG
+    Serial.print(F("[BIO] PS_WriteReg(7) falhou ao ler resposta: "));
+    Serial.println(packetResult);
+#endif
+    return packetResult;
+  }
+
+  return responsePacket.data[0];
+}
+
+uint8_t requestTemplateUpload(uint8_t bufferId) {
+  clearFingerprintSerialInput();
+
+  uint8_t commandData[] = {FINGERPRINT_UPLOAD, bufferId};
+  Adafruit_Fingerprint_Packet commandPacket(FINGERPRINT_COMMANDPACKET,
+                                            sizeof(commandData), commandData);
+  finger.writeStructuredPacket(commandPacket);
+
+  return FINGERPRINT_OK;
+}
+
+bool readRawFingerprintPacket(uint8_t &packetType,
+                              uint16_t &packetLength,
+                              uint16_t &packetDataLength,
+                              uint8_t *packetData,
+                              uint16_t timeoutMs) {
+  auto readByte = [&](uint8_t &value, uint16_t &timer) -> bool {
+    while (!fingerSerial.available()) {
+      delay(1);
+      timer++;
+      if (timer >= timeoutMs) {
+#ifdef DEBUG
+        Serial.println(F("[BIO] Timeout aguardando packet raw."));
+#endif
+        return false;
+      }
+    }
+
+    value = fingerSerial.read();
+    return true;
+  };
+
+  uint16_t timer = 0;
+  uint8_t byte = 0;
+
+  while (true) {
+    if (!readByte(byte, timer)) return false;
+    if (byte != 0xEF) continue;
+
+    if (!readByte(byte, timer)) return false;
+    if (byte == 0x01) {
+      break;
+    }
+  }
+
+  // Endereço 32-bit do sensor. No nosso firmware usamos o endereço padrão.
+  for (uint8_t i = 0; i < 4; i++) {
+    if (!readByte(byte, timer)) return false;
+  }
+
+  if (!readByte(byte, timer)) return false;
+  packetType = byte;
+
+  if (!readByte(byte, timer)) return false;
+  packetLength = static_cast<uint16_t>(byte) << 8;
+  if (!readByte(byte, timer)) return false;
+  packetLength |= byte;
+
+  if (packetLength < 2 || packetLength > 258) {
+#ifdef DEBUG
+    Serial.print(F("[BIO] Packet com length inválido: "));
+    Serial.println(packetLength);
+#endif
+    return false;
+  }
+
+  packetDataLength = packetLength - 2;
+  for (uint16_t i = 0; i < packetDataLength; i++) {
+    if (!readByte(packetData[i], timer)) return false;
+  }
+
+  // Checksum, ignorado aqui porque o objetivo é extrair o template bruto.
+  if (!readByte(byte, timer)) return false;
+  if (!readByte(byte, timer)) return false;
+
+  return true;
+}
+
+bool readTemplateStream(String &templateHex, uint16_t timeoutMs) {
+#ifdef DEBUG
+  Serial.println(F("[BIO] Lendo stream raw do template..."));
+#endif
+
+  uint8_t packetNum = 0;
+  while (true) {
+    uint8_t packetType = 0;
+    uint16_t packetLength = 0;
+    uint16_t packetDataLength = 0;
+    uint8_t packetData[256] = {0};
+
+    if (!readRawFingerprintPacket(packetType, packetLength, packetDataLength,
+                                  packetData, timeoutMs)) {
+#ifdef DEBUG
+      Serial.print(F("[BIO] Falha ao ler packet raw "));
+      Serial.println(packetNum + 1);
+#endif
+      return false;
+    }
+
+    if (packetType == FINGERPRINT_ACKPACKET) {
+      if (packetDataLength < 1) {
+#ifdef DEBUG
+        Serial.println(F("[BIO] ACK sem payload de status."));
+#endif
+        return false;
+      }
+
+      if (packetData[0] != FINGERPRINT_OK) {
+#ifdef DEBUG
+        Serial.print(F("[BIO] ACK retornou erro: 0x"));
+        Serial.println(packetData[0], HEX);
+#endif
+        return false;
+      }
+
+#ifdef DEBUG
+      Serial.println(F("[BIO] ACK OK recebido."));
+#endif
+      continue;
+    }
+
+    if (packetType != FINGERPRINT_DATAPACKET &&
+        packetType != FINGERPRINT_ENDDATAPACKET) {
+#ifdef DEBUG
+      Serial.print(F("[BIO] Packet inesperado no stream: 0x"));
+      Serial.println(packetType, HEX);
+#endif
+      return false;
+    }
+
+    if (templateHex.length() + (packetDataLength * 2) > MAX_TEMPLATE_HEX_CHARS) {
+#ifdef DEBUG
+      Serial.println(F("[BIO] ERRO: template excedeu o limite seguro do parser."));
+#endif
+      return false;
+    }
+
+    templateHex += bytesToHex(packetData, packetDataLength);
+    packetNum++;
+
+#ifdef DEBUG
+    Serial.print(F("[BIO] Packet "));
+    Serial.print(packetNum);
+    Serial.print(F(": "));
+    Serial.print(packetDataLength);
+    Serial.print(F(" bytes"));
+    if (packetType == FINGERPRINT_ENDDATAPACKET) {
+      Serial.println(F(" (END)"));
+    } else {
+      Serial.println();
+    }
+#endif
+
+    if (packetType == FINGERPRINT_ENDDATAPACKET) {
+      break;
+    }
+  }
+
+  // ZW101 templates are usually 512 bytes (1024 hex chars) or 256 bytes (512 hex chars).
+  // Some firmware variants stream larger packets; we accept any non-empty
+  // template that stays within the conservative parser cap.
+  if (templateHex.length() < 512) {
+#ifdef DEBUG
+    Serial.print(F("[BIO] Template curto demais: "));
+    Serial.print(templateHex.length() / 2);
+    Serial.println(F(" bytes"));
+#endif
+    return false;
+  }
+
+#ifdef DEBUG
+  Serial.print(F("[BIO] ✓ Template extraído! Tamanho: "));
+  Serial.print(templateHex.length() / 2);
+  Serial.println(F(" bytes"));
+#endif
+
+  return true;
+}
+
+bool captureTemplateHexFromSensor(String &templateHex) {
+  // O ZW101 frequentemente retorna 0x23 nos buffers após createModel().
+  // Estratégia principal: store → load → upload (mais confiável).
+  uint16_t scratchSlot = (finger.capacity > 1) ? (finger.capacity - 1) : 0;
+
+#ifdef DEBUG
+  Serial.print(F("[BIO] Usando slot temporário: "));
+  Serial.println(scratchSlot);
+#endif
+
+  if (finger.storeModel(scratchSlot) == FINGERPRINT_OK) {
+    delay(100);
+    if (finger.loadModel(scratchSlot) == FINGERPRINT_OK) {
+      delay(100);
+      if (captureTemplateFromBuffer(1, templateHex, 5000)) {
+        finger.deleteModel(scratchSlot);
+#ifdef DEBUG
+        Serial.println(F("[BIO] Template extraído via store/load (buf 1)."));
+#endif
+        return true;
+      }
+      if (captureTemplateFromBuffer(2, templateHex, 5000)) {
+        finger.deleteModel(scratchSlot);
+#ifdef DEBUG
+        Serial.println(F("[BIO] Template extraído via store/load (buf 2)."));
+#endif
+        return true;
+      }
+    }
+    finger.deleteModel(scratchSlot);
+  }
+
+#ifdef DEBUG
+  Serial.println(F("[BIO] Store/load falhou, tentando upload direto dos buffers..."));
+#endif
+
+  // Fallback: upload direto dos buffers (pode não funcionar em todos os ZW101)
+  if (captureTemplateFromBuffer(1, templateHex, 5000)) {
+#ifdef DEBUG
+    Serial.println(F("[BIO] Template extraído do Buffer 1 (direto)."));
+#endif
+    return true;
+  }
+
+  if (captureTemplateFromBuffer(2, templateHex, 5000)) {
+#ifdef DEBUG
+    Serial.println(F("[BIO] Template extraído do Buffer 2 (direto)."));
+#endif
+    return true;
+  }
+
+#ifdef DEBUG
+  Serial.println(F("[BIO] Falha crítica na extração do template."));
+#endif
+  return false;
+}
+
+bool captureTemplateFromBuffer(uint8_t bufferId, String &templateHex,
+                               uint16_t timeoutMs) {
+  templateHex = "";
+  templateHex.reserve(MAX_TEMPLATE_HEX_CHARS);
+
+  requestTemplateUpload(bufferId);
+  return readTemplateStream(templateHex, timeoutMs);
+}
+
+bool captureAccessTemplateHex(String &templateHex) {
+  if (finger.getImage() != FINGERPRINT_OK) return false;
+  if (finger.image2Tz(1) != FINGERPRINT_OK) return false;
+  return captureTemplateHexFromSensor(templateHex);
+}
+
+void resetEnrollmentState() {
+  enrollmentStep = ENROLL_STEP_IDLE;
+  enrollmentId = "";
+  enrollmentUserId = "";
+  enrollmentFinger = "";
+  enrollmentTemplateHex = "";
+  enrollmentQuality = 0;
+  enrollmentExpiresAt = 0;
+  enrollmentStepAt = 0;
+  currentState = IDLE;
+  clearFingerprintSerialInput();
+}
+
+void publishEnrollmentResult(const String &enrollmentIdValue,
+                             const String &userIdValue,
+                             const String &fingerValue,
+                             const String &status,
+                             const String &templateHex,
+                             uint8_t quality) {
+  // Calcula tamanho EXATO do payload JSON para streaming MQTT.
+  //
+  // Literais (contadas char a char):
+  //   {"enrollmentId":"    = 17      ","userId":"      = 12
+  //   ","finger":"         = 12      ","status":"     = 12
+  //   ","quality":         = 12      ,"deviceSecret":" = 17
+  //   ","template":"       = 14 (opt)  "}              = 2
+  // Fixo sem template: 17+12+12+12+12+17+2 = 84
+
+  char qualityStr[4];
+  snprintf(qualityStr, sizeof(qualityStr), "%u", quality);
+
+  size_t payloadLen = 84;
+  payloadLen += enrollmentIdValue.length();
+  payloadLen += userIdValue.length();
+  payloadLen += fingerValue.length();
+  payloadLen += status.length();
+  payloadLen += strlen(qualityStr);
+  payloadLen += strlen(DEVICE_SECRET);
+  if (templateHex.length() > 0) {
+    payloadLen += 14 + templateHex.length();
+  }
+
+#ifdef DEBUG
+  Serial.print(F("[MQTT] Payload calculado: "));
+  Serial.print(payloadLen);
+  Serial.print(F(" bytes (template hex: "));
+  Serial.print(templateHex.length());
+  Serial.println(F(" chars)"));
+#endif
+
+  if (mqtt.beginPublish(topicEnrollmentResult.c_str(), payloadLen, false)) {
+    mqtt.print(F("{\"enrollmentId\":\""));
+    mqtt.print(enrollmentIdValue);
+    mqtt.print(F("\",\"userId\":\""));
+    mqtt.print(userIdValue);
+    mqtt.print(F("\",\"finger\":\""));
+    mqtt.print(fingerValue);
+    mqtt.print(F("\",\"status\":\""));
+    mqtt.print(status);
+    mqtt.print(F("\",\"quality\":"));
+    mqtt.print(qualityStr);
+    mqtt.print(F(",\"deviceSecret\":\""));
+    mqtt.print(DEVICE_SECRET);
+    if (templateHex.length() > 0) {
+      mqtt.print(F("\",\"template\":\""));
+      mqtt.print(templateHex);
+    }
+    mqtt.print(F("\"}"));
+    mqtt.endPublish();
+#ifdef DEBUG
+    Serial.print(F("[MQTT] Published enrollment-result (stream): "));
+    Serial.print(payloadLen);
+    Serial.println(F(" bytes"));
+#endif
+  } else {
+#ifdef DEBUG
+    Serial.println(F("[MQTT] ERRO: beginPublish falhou para enrollment-result."));
+#endif
+  }
+}
 
 // ── Instâncias ────────────────────────────────────────────────────────────────
 
@@ -170,6 +572,7 @@ void connectMqtt() {
   
   if (mqtt.connect(clientId.c_str())) {
     mqtt.subscribe(topicAccessResult.c_str());
+    mqtt.subscribe(topicEnterEnrollment.c_str());
     publishRegister();
     lastHeartbeat = millis() - HEARTBEAT_INTERVAL_MS;
 #ifdef DEBUG
@@ -186,7 +589,7 @@ void publishRegister() {
   StaticJsonDocument<192> doc;
   doc["controllerId"]    = controllerId;
   doc["firmwareVersion"] = "1.0.0-bio";
-  doc["sensorModel"]     = "ZW-111";
+  doc["sensorModel"]     = "ZW-101";
   
   String p; serializeJson(doc, p);
   String t = String("door/") + controllerId + "/register";
@@ -200,17 +603,26 @@ void sendHeartbeat() {
   mqtt.publish(topicHeartbeat.c_str(), p.c_str());
 }
 
-void publishAccessAttempt(int fingerID) {
-  StaticJsonDocument<256> doc;
-  doc["credentialType"]  = "BIOMETRICS";
-  doc["credentialValue"] = String(fingerID);
-  doc["deviceSecret"]    = DEVICE_SECRET;
+void publishAccessAttempt(const String& templateHex) {
+  // Streaming MQTT publish — evita duplicar o template na heap.
+  size_t payloadLen = 2; // {}
+  payloadLen += 24 + 11;                            // "credentialType":"FINGERPRINT"
+  payloadLen += 20 + templateHex.length();           // "credentialValue":"..."
+  payloadLen += 18 + strlen(DEVICE_SECRET);          // "deviceSecret":"..."
+  payloadLen += 6;                                   // separadores
 
-  String p; serializeJson(doc, p);
-  mqtt.publish(topicAccessAttempt.c_str(), p.c_str());
+  if (mqtt.beginPublish(topicAccessAttempt.c_str(), payloadLen, false)) {
+    mqtt.print(F("{\"credentialType\":\"FINGERPRINT\",\"credentialValue\":\""));
+    mqtt.print(templateHex);
+    mqtt.print(F("\",\"deviceSecret\":\""));
+    mqtt.print(DEVICE_SECRET);
+    mqtt.print(F("\"}"));
+    mqtt.endPublish();
+  }
 
 #ifdef DEBUG
-  Serial.print(F("[BIO] Access-attempt -> ID: ")); Serial.println(fingerID);
+  Serial.print(F("[BIO] Access-attempt -> template bytes: "));
+  Serial.println(templateHex.length() / 2);
 #endif
 }
 
@@ -219,20 +631,50 @@ void publishAccessAttempt(int fingerID) {
 // =============================================================================
 
 void onMqttMessage(char* topic, byte* payload, unsigned int length) {
-  if (String(topic) != topicAccessResult) return;
+  String t = String(topic);
 
-  StaticJsonDocument<256> doc;
-  if (deserializeJson(doc, payload, length)) return;
+  // access-result
+  if (t == topicAccessResult) {
+    StaticJsonDocument<256> doc;
+    if (deserializeJson(doc, payload, length)) return;
+    const char* status = doc["status"];
+    if (!status) return;
+    resultStatus   = String(status);
+    resultReceived = true;
+#ifdef DEBUG
+    Serial.print(F("[MQTT] Result: ")); Serial.println(resultStatus);
+#endif
+    return;
+  }
 
-  const char* status = doc["status"];
-  if (!status) return;
-
-  resultStatus   = String(status);
-  resultReceived = true;
+  // enter-enrollment-mode
+  if (t == topicEnterEnrollment) {
+    StaticJsonDocument<384> doc;
+    if (deserializeJson(doc, payload, length)) return;
+    const char* enrollmentIdValue = doc["enrollmentId"] | "";
+    const char* userId = doc["userId"] | "";
+    const char* fingerName = doc["finger"] | "";
+    enrollmentExpiresAt = millis() + ENROLLMENT_TIMEOUT_MS;
 
 #ifdef DEBUG
-  Serial.print(F("[MQTT] Result: ")); Serial.println(resultStatus);
+    Serial.print(F("[MQTT] Enter enrollment: "));
+    Serial.println(enrollmentIdValue);
+    Serial.print(F("[MQTT] Enrollment timeout local: "));
+    Serial.print(ENROLLMENT_TIMEOUT_MS / 1000);
+    Serial.println(F("s"));
+    Serial.println(F("[BIO] Modo de cadastro ativo. Aguarde a primeira passagem e repita o dedo quando solicitado."));
 #endif
+
+    enrollmentId = String(enrollmentIdValue);
+    enrollmentUserId = String(userId);
+    enrollmentFinger = String(fingerName);
+    enrollmentTemplateHex = "";
+    enrollmentQuality = 0;
+    enrollmentStep = ENROLL_STEP_WAITING_FIRST;
+    enrollmentStepAt = millis();
+    currentState = ENROLLMENT_MODE;
+    return;
+  }
 }
 
 // =============================================================================
@@ -247,9 +689,6 @@ void ledBlink(int times, unsigned long ms) {
 }
 
 void setupFingerprint() {
-  // Alguns sensores vêm de fábrica com baud rates diferentes.
-  // Vamos tentar as velocidades mais comuns: 57600, 9600 e 115200.
-  
   int baudRates[] = {57600, 9600, 115200, 19200};
   bool found = false;
 
@@ -262,6 +701,34 @@ void setupFingerprint() {
       Serial.print(baudRates[i]);
       Serial.println(" baud!");
 #endif
+      finger.getParameters();
+
+      // O manual do ZW-111 define encryption level no registrador 7.
+      // PS_UpChar (upload/download de template) exige nivel 0.
+      uint8_t securityResult = writeEncryptionLevelRaw(0);
+      delay(100);
+
+      finger.getParameters();
+    #ifdef DEBUG
+      if (securityResult == FINGERPRINT_OK) {
+        Serial.println(F("[BIO] Encryption level configurado para 0 via PS_WriteReg(reg 7)."));
+        Serial.println(F("[BIO] Observacao: finger.security_level vem de SysPara/reg 5 e nao reflete o encryption level."));
+      } else {
+        Serial.print(F("[BIO] Aviso: PS_WriteReg(reg 7, 0) retornou "));
+        Serial.println(securityResult);
+      }
+    #endif
+      if (finger.packet_len != FINGERPRINT_PACKET_SIZE_256) {
+        finger.setPacketSize(FINGERPRINT_PACKET_SIZE_256);
+        delay(150);
+        finger.getParameters();
+      }
+      
+#ifdef DEBUG
+      Serial.print(F("[BIO] Capacidade: ")); Serial.println(finger.capacity);
+      Serial.print(F("[BIO] SysPara security_level (reg 5): ")); Serial.println(finger.security_level);
+      Serial.print(F("[BIO] SysPara status_reg: 0x")); Serial.println(finger.status_reg, HEX);
+#endif
       found = true;
       break;
     }
@@ -270,27 +737,91 @@ void setupFingerprint() {
   if (!found) {
 #ifdef DEBUG
     Serial.println("[BIO] Erro: Não foi possível encontrar o sensor biométrico.");
-    Serial.println("      Verifique se o TX do sensor está no D1 e o RX no D2.");
-    Serial.println("      Verifique também a alimentação (3.3V) e o cabo.");
 #endif
   }
 }
 
-// Tenta realizar uma leitura (modo simples)
-int getFingerprintID() {
-  uint8_t p = finger.getImage();
-  if (p != FINGERPRINT_OK)  return -1;
+void processEnrollment(unsigned long now, bool touched) {
+  if (enrollmentStep == ENROLL_STEP_IDLE) {
+    return;
+  }
 
-  p = finger.image2Tz();
-  if (p != FINGERPRINT_OK)  return -1;
+  if (enrollmentExpiresAt > 0 && now >= enrollmentExpiresAt) {
+    publishEnrollmentResult(enrollmentId, enrollmentUserId, enrollmentFinger, "EXPIRED", "", 0);
+    resetEnrollmentState();
+    return;
+  }
 
-  p = finger.fingerFastSearch();
-  if (p != FINGERPRINT_OK)  return -1;
+  switch (enrollmentStep) {
+    case ENROLL_STEP_WAITING_FIRST:
+      if (touched && (now - enrollmentStepAt >= FINGER_DEBOUNCE_MS)) {
+        if (finger.getImage() == FINGERPRINT_OK && finger.image2Tz(1) == FINGERPRINT_OK) {
+          enrollmentStep = ENROLL_STEP_WAITING_SECOND;
+          enrollmentStepAt = now;
+#ifdef DEBUG
+          Serial.println(F("[BIO] Primeira passagem capturada. Retire o dedo e encoste novamente."));
+#endif
+        }
+      }
+      break;
 
-  // Retorna ID se deu match
-  return finger.fingerID;
+    case ENROLL_STEP_WAITING_SECOND:
+      if (touched && (now - enrollmentStepAt >= 1200)) {
+        if (finger.getImage() == FINGERPRINT_OK && finger.image2Tz(2) == FINGERPRINT_OK) {
+          enrollmentStep = ENROLL_STEP_CREATE_MODEL;
+          enrollmentStepAt = now;
+#ifdef DEBUG
+          Serial.println(F("[BIO] Segunda passagem capturada."));
+#endif
+        }
+      }
+      break;
+
+    case ENROLL_STEP_CREATE_MODEL: {
+#ifdef DEBUG
+      Serial.println(F("[BIO] Preparando sensor para createModel()..."));
+#endif
+      clearFingerprintSerialInput();
+      delay(250); 
+
+      uint8_t result = finger.createModel();
+      if (result != FINGERPRINT_OK) {
+#ifdef DEBUG
+        Serial.print(F("[BIO] createModel falhou: "));
+        Serial.println(result);
+#endif
+        publishEnrollmentResult(enrollmentId, enrollmentUserId, enrollmentFinger, "FAILED", "", 0);
+        resetEnrollmentState();
+        return;
+      }
+
+#ifdef DEBUG
+      Serial.println(F("[BIO] createModel OK! Iniciando ciclo de extração..."));
+#endif
+      delay(200); 
+
+      if (enrollmentTemplateHex.length() == 0) {
+        // Escreve diretamente em enrollmentTemplateHex para evitar
+        // duplicação de ~15KB na heap (OOM no ESP8266).
+        if (!captureTemplateHexFromSensor(enrollmentTemplateHex)) {
+          publishEnrollmentResult(enrollmentId, enrollmentUserId, enrollmentFinger, "FAILED", "", 0);
+          resetEnrollmentState();
+          return;
+        }
+      }
+
+      enrollmentQuality = 0;
+      publishEnrollmentResult(enrollmentId, enrollmentUserId, enrollmentFinger, "SUCCESS", enrollmentTemplateHex, enrollmentQuality);
+      resetEnrollmentState();
+      return;
+    }
+
+    default:
+      break;
+  }
 }
 
+// Tenta realizar uma leitura (modo simples)
 // =============================================================================
 //  SETUP
 // =============================================================================
@@ -315,6 +846,8 @@ void setup() {
   topicAccessAttempt = String("door/") + controllerId + "/access-attempt";
   topicAccessResult  = String("door/") + controllerId + "/access-result";
   topicStatus        = String("door/") + controllerId + "/status";
+  topicEnterEnrollment = String("door/") + controllerId + "/enter-enrollment-mode";
+  topicEnrollmentResult = String("door/") + controllerId + "/enrollment-result";
 
 #ifdef DEBUG
   Serial.print(F("Controller ID: ")); Serial.println(controllerId);
@@ -323,6 +856,7 @@ void setup() {
 
   connectWifi();
   mqtt.setServer(MQTT_SERVER, atoi(MQTT_PORT));
+  mqtt.setBufferSize(16384);
   mqtt.setCallback(onMqttMessage);
   
   setupFingerprint();
@@ -333,6 +867,8 @@ void setup() {
 // =============================================================================
 
 void loop() {
+  unsigned long now = millis();
+
   if (WiFi.status() == WL_CONNECTED) {
     if (!mqtt.connected()) {
       connectMqtt();
@@ -346,6 +882,12 @@ void loop() {
     lastHeartbeat = millis();
   }
 
+  if (currentState == ENROLLMENT_MODE) {
+    bool touched = digitalRead(PIN_TOUCHOUT) == HIGH;
+    processEnrollment(now, touched);
+    return;
+  }
+
   // --- Lógica de pareamento / Leitura ---
   
   // Exemplo de uso com PIN_TOUCHOUT (pino em HIGH quando o dedo é encostado):
@@ -355,9 +897,9 @@ void loop() {
   // Por ora, vamos apenas checar IDLE state
   if (currentState == IDLE && touched) {
     if (millis() - lastFingerTime > FINGER_DEBOUNCE_MS) {
-      int id = getFingerprintID();
-      if (id >= 0) {
-        publishAccessAttempt(id);
+      String accessTemplateHex;
+      if (captureAccessTemplateHex(accessTemplateHex)) {
+        publishAccessAttempt(accessTemplateHex);
         currentState = WAITING_RESULT;
         waitingResultAt = millis();
         lastFingerTime = millis();
@@ -367,7 +909,7 @@ void loop() {
 
   if (currentState == WAITING_RESULT) {
     // Timeout
-    if (millis() - waitingResultAt > ACCESS_RESULT_TIMEOUT) {
+    if (now - waitingResultAt > ACCESS_RESULT_TIMEOUT) {
 #ifdef DEBUG
       Serial.println(F("[BIO] Timeout aguardando access-result"));
 #endif

@@ -72,7 +72,7 @@ Ao encostar o dedo no sensor, você deve imediatamente receber uma mensagem JSON
 **Payload:**
 ```json
 {
-  "credentialType": "BIOMETRICS",
+  "credentialType": "FINGERPRINT",
   "credentialValue": "5",
   "deviceSecret": "Zx9kPq2mRn7vWj4tYb8cLe"
 }

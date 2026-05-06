@@ -14,6 +14,7 @@ import { credentialsRoute } from "./routes/credentials";
 import { doorRoute } from "./routes/door";
 import { iotRoute } from "./routes/iot";
 import { logsRoute } from "./routes/logs";
+import { permissionsRoute } from "./routes/permissions";
 import { profileRoute } from "./routes/profile";
 import { roomRoute } from "./routes/room";
 import { roomTypesRoute } from "./routes/room-types"; // GET / added
@@ -59,6 +60,7 @@ async function bootstrap() {
 	app.register(credentialsRoute, { prefix: "/credentials" });
 	app.register(iotRoute, { prefix: "/iot" });
 	app.register(blockRoute, { prefix: "/blocks" });
+	app.register(permissionsRoute, { prefix: "/permissions" });
 	app.register(profileRoute, { prefix: "/profiles" });
 	app.get("/", (_request, reply) => {
 		reply.send({

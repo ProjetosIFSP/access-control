@@ -42,6 +42,17 @@ export type ToggleFingerprintPayload = {
 	isActive: boolean;
 };
 
+export type RequestFingerprintEnrollmentPayload = {
+	userId: string;
+	controllerId: string;
+	finger: FingerKey;
+};
+
+export type RequestFingerprintEnrollmentResult = {
+	enrollmentId: string;
+	expiresAt: string;
+};
+
 // ── Query Keys ────────────────────────────────────────────────────────────────
 
 export const fingerprintQueryKeys = {
@@ -115,6 +126,28 @@ export async function toggleFingerprint(
 	if (!res.ok) {
 		const data = await res.json().catch(() => ({}));
 		throw new Error(data.message ?? "Falha ao alterar o status da digital");
+	}
+
+	return res.json();
+}
+
+export async function requestFingerprintEnrollment(
+	payload: RequestFingerprintEnrollmentPayload,
+): Promise<RequestFingerprintEnrollmentResult> {
+	const { userId, ...body } = payload;
+	const res = await fetch(
+		`${API_BASE_URL}/users/${userId}/fingerprints/enroll-request`,
+		{
+			method: "POST",
+			credentials: "include",
+			headers: { "Content-Type": "application/json" },
+			body: JSON.stringify(body),
+		},
+	);
+
+	if (!res.ok) {
+		const data = await res.json().catch(() => ({}));
+		throw new Error(data.message ?? "Falha ao iniciar o cadastro biométrico");
 	}
 
 	return res.json();
