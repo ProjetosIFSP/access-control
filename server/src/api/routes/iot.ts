@@ -757,6 +757,13 @@ export const iotRoute: FastifyPluginAsyncZod = async (app) => {
 					"Fingerprint registered via MQTT enrollment",
 				);
 
+				// Emit ENROLLED progress so the frontend auto-refreshes
+				sseBus.publishEnrollmentProgress({
+					controllerId,
+					enrollmentId: enrollmentId ?? "",
+					step: "ENROLLED",
+				});
+
 				return reply.status(201).send({
 					...record,
 					createdAt: record.createdAt.toISOString(),
@@ -773,6 +780,83 @@ export const iotRoute: FastifyPluginAsyncZod = async (app) => {
 		},
 	);
 
+
+	// POST /iot/devices/:controllerId/enrollment-progress
+	// Receives enrollment progress steps from IoT broker, emits SSE
+	app.post(
+		"/devices/:controllerId/enrollment-progress",
+		{
+			schema: {
+				params: z.object({
+					controllerId: z.string().min(1),
+				}),
+				body: z.object({
+					enrollmentId: z.string().min(1),
+					step: z.string().min(1),
+				}),
+				tags: ["iot"],
+				summary: "Emitir progresso de enrollment via SSE",
+				response: {
+					204: z.undefined(),
+				},
+			} satisfies SchemaWithExamples,
+		},
+		async (request, reply) => {
+			const { controllerId } = request.params;
+			const { enrollmentId, step } = request.body;
+
+			sseBus.publishEnrollmentProgress({
+				controllerId,
+				enrollmentId,
+				step,
+			});
+
+			request.log.debug(
+				{ controllerId, enrollmentId, step },
+				"Enrollment progress SSE emitted",
+			);
+
+			return reply.status(204).send();
+		},
+	);
+
+	// GET /iot/devices/:controllerId/enrollment-progress
+	// SSE stream for enrollment progress events
+	app.get(
+		"/devices/:controllerId/enrollment-progress",
+		{
+			schema: {
+				params: z.object({ controllerId: z.string().min(1) }),
+				tags: ["iot"],
+				summary: "SSE Stream para progresso de enrollment biométrico",
+			} satisfies SchemaWithExamples,
+		},
+		async (request, reply) => {
+			const { controllerId } = request.params;
+
+			reply.raw.setHeader("Content-Type", "text/event-stream");
+			reply.raw.setHeader("Cache-Control", "no-cache");
+			reply.raw.setHeader("Connection", "keep-alive");
+			reply.raw.setHeader("Access-Control-Allow-Origin", "*");
+
+			reply.hijack();
+			reply.raw.write(`data: connected\n\n`);
+
+			const unsubscribe = sseBus.subscribeEnrollmentProgress((event) => {
+				if (event.controllerId === controllerId) {
+					try {
+						reply.raw.write(`data: ${JSON.stringify(event)}\n\n`);
+					} catch {
+						// Socket closed
+					}
+				}
+			});
+
+			request.raw.on("close", () => {
+				unsubscribe();
+			});
+		},
+	);
 	app.patch(
 		"/devices/:controllerId/commands/:commandId/ack",
 		{

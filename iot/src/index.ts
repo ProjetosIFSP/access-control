@@ -161,6 +161,19 @@ const enrollmentResultPayloadSchema = z.object({
 	quality: z.number().optional(),
 });
 
+const enrollmentProgressPayloadSchema = z.object({
+	enrollmentId: z.string().min(1),
+	step: z.enum([
+		"WAITING_FIRST",
+		"FIRST_CAPTURED",
+		"SECOND_CAPTURED",
+		"CREATING_MODEL",
+		"EXTRACTING",
+		"FAILED",
+		"EXPIRED",
+	] as const),
+});
+
 const topicMatchers = {
 	register: /^door\/([^/]+)\/register$/,
 	heartbeat: /^door\/([^/]+)\/heartbeat$/,
@@ -168,6 +181,7 @@ const topicMatchers = {
 	access: /^door\/([^/]+)\/access-attempt$/,
 	commandResult: /^door\/([^/]+)\/command-result$/,
 	enrollmentResult: /^door\/([^/]+)\/enrollment-result$/,
+	enrollmentProgress: /^door\/([^/]+)\/enrollment-progress$/,
 } as const;
 
 type TopicKind = keyof typeof topicMatchers;
@@ -215,6 +229,8 @@ broker.on("publish", (packet: AedesPublishPacket, client: Client | null) => {
 	if (handleTopic("status", topic, payloadString, handleStatus)) return;
 	if (handleTopic("access", topic, payloadString, handleAccessAttempt)) return;
 	if (handleTopic("commandResult", topic, payloadString, handleCommandResult))
+		return;
+	if (handleTopic("enrollmentProgress", topic, payloadString, handleEnrollmentProgress))
 		return;
 	handleTopic("enrollmentResult", topic, payloadString, handleEnrollmentResult);
 });
@@ -388,6 +404,26 @@ async function handleEnrollmentResult(controllerId: string, payload: string) {
 			finger: data.finger,
 		},
 		"Fingerprint credential registered via MQTT enrollment",
+	);
+}
+
+async function handleEnrollmentProgress(controllerId: string, payload: string) {
+	const parsed = safeParseJson(payload);
+	const data = enrollmentProgressPayloadSchema.parse(parsed);
+
+	logger.info(
+		{ controllerId, enrollmentId: data.enrollmentId, step: data.step },
+		"Enrollment progress",
+	);
+
+	// Forward to backend SSE
+	await callApi(
+		"POST",
+		`/iot/devices/${controllerId}/enrollment-progress`,
+		JSON.stringify({
+			enrollmentId: data.enrollmentId,
+			step: data.step,
+		}),
 	);
 }
 

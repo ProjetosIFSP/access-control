@@ -65,6 +65,7 @@ String topicAccessResult;
 String topicStatus;
 String topicEnterEnrollment;
 String topicEnrollmentResult;
+String topicEnrollmentProgress;
 
 enum State { IDLE, WAITING_RESULT, ENROLLMENT_MODE };
 State currentState = IDLE;
@@ -101,6 +102,7 @@ extern PubSubClient mqtt;
 extern SoftwareSerial fingerSerial;
 extern Adafruit_Fingerprint finger;
 extern String topicEnrollmentResult;
+extern String topicEnrollmentProgress;
 
 constexpr uint8_t TEMPLATE_EMPTY_CODE = 35;
 constexpr size_t MAX_TEMPLATE_HEX_CHARS = 16384;
@@ -397,6 +399,23 @@ bool captureAccessTemplateHex(String &templateHex) {
   return captureTemplateHexFromSensor(templateHex);
 }
 
+// ── Enrollment progress ──────────────────────────────────────────────────────
+
+void publishEnrollmentProgress(const String &step) {
+  // Payload leve: apenas enrollmentId + step (sem template).
+  // Total ~90 bytes — cabe no buffer MQTT sem streaming.
+  StaticJsonDocument<192> doc;
+  doc["enrollmentId"] = enrollmentId;
+  doc["step"] = step;
+  String p;
+  serializeJson(doc, p);
+  mqtt.publish(topicEnrollmentProgress.c_str(), p.c_str());
+#ifdef DEBUG
+  Serial.print(F("[MQTT] enrollment-progress: "));
+  Serial.println(step);
+#endif
+}
+
 void resetEnrollmentState() {
   enrollmentStep = ENROLL_STEP_IDLE;
   enrollmentId = "";
@@ -673,6 +692,7 @@ void onMqttMessage(char* topic, byte* payload, unsigned int length) {
     enrollmentStep = ENROLL_STEP_WAITING_FIRST;
     enrollmentStepAt = millis();
     currentState = ENROLLMENT_MODE;
+    publishEnrollmentProgress("WAITING_FIRST");
     return;
   }
 }
@@ -747,6 +767,7 @@ void processEnrollment(unsigned long now, bool touched) {
   }
 
   if (enrollmentExpiresAt > 0 && now >= enrollmentExpiresAt) {
+    publishEnrollmentProgress("EXPIRED");
     publishEnrollmentResult(enrollmentId, enrollmentUserId, enrollmentFinger, "EXPIRED", "", 0);
     resetEnrollmentState();
     return;
@@ -758,6 +779,7 @@ void processEnrollment(unsigned long now, bool touched) {
         if (finger.getImage() == FINGERPRINT_OK && finger.image2Tz(1) == FINGERPRINT_OK) {
           enrollmentStep = ENROLL_STEP_WAITING_SECOND;
           enrollmentStepAt = now;
+          publishEnrollmentProgress("FIRST_CAPTURED");
 #ifdef DEBUG
           Serial.println(F("[BIO] Primeira passagem capturada. Retire o dedo e encoste novamente."));
 #endif
@@ -770,6 +792,7 @@ void processEnrollment(unsigned long now, bool touched) {
         if (finger.getImage() == FINGERPRINT_OK && finger.image2Tz(2) == FINGERPRINT_OK) {
           enrollmentStep = ENROLL_STEP_CREATE_MODEL;
           enrollmentStepAt = now;
+          publishEnrollmentProgress("SECOND_CAPTURED");
 #ifdef DEBUG
           Serial.println(F("[BIO] Segunda passagem capturada."));
 #endif
@@ -782,7 +805,8 @@ void processEnrollment(unsigned long now, bool touched) {
       Serial.println(F("[BIO] Preparando sensor para createModel()..."));
 #endif
       clearFingerprintSerialInput();
-      delay(250); 
+      delay(250);
+      publishEnrollmentProgress("CREATING_MODEL");
 
       uint8_t result = finger.createModel();
       if (result != FINGERPRINT_OK) {
@@ -790,6 +814,7 @@ void processEnrollment(unsigned long now, bool touched) {
         Serial.print(F("[BIO] createModel falhou: "));
         Serial.println(result);
 #endif
+        publishEnrollmentProgress("FAILED");
         publishEnrollmentResult(enrollmentId, enrollmentUserId, enrollmentFinger, "FAILED", "", 0);
         resetEnrollmentState();
         return;
@@ -798,12 +823,14 @@ void processEnrollment(unsigned long now, bool touched) {
 #ifdef DEBUG
       Serial.println(F("[BIO] createModel OK! Iniciando ciclo de extração..."));
 #endif
-      delay(200); 
+      delay(200);
+      publishEnrollmentProgress("EXTRACTING");
 
       if (enrollmentTemplateHex.length() == 0) {
         // Escreve diretamente em enrollmentTemplateHex para evitar
         // duplicação de ~15KB na heap (OOM no ESP8266).
         if (!captureTemplateHexFromSensor(enrollmentTemplateHex)) {
+          publishEnrollmentProgress("FAILED");
           publishEnrollmentResult(enrollmentId, enrollmentUserId, enrollmentFinger, "FAILED", "", 0);
           resetEnrollmentState();
           return;
@@ -848,6 +875,7 @@ void setup() {
   topicStatus        = String("door/") + controllerId + "/status";
   topicEnterEnrollment = String("door/") + controllerId + "/enter-enrollment-mode";
   topicEnrollmentResult = String("door/") + controllerId + "/enrollment-result";
+  topicEnrollmentProgress = String("door/") + controllerId + "/enrollment-progress";
 
 #ifdef DEBUG
   Serial.print(F("Controller ID: ")); Serial.println(controllerId);

@@ -25,6 +25,12 @@ export type DeviceAccessAttemptEvent = {
 	timestamp: string;
 };
 
+export type EnrollmentProgressEvent = {
+	controllerId: string;
+	enrollmentId: string;
+	step: string;
+};
+
 // ── Bus ───────────────────────────────────────────────────────────────────────
 
 const emitter = new EventEmitter();
@@ -32,8 +38,8 @@ emitter.setMaxListeners(0);
 
 const ROOM_STATUS_EVENT = "room:status";
 const DEVICE_ACCESS_ATTEMPT_EVENT = "device:access_attempt";
-
 const CONTROLLER_STATUS_EVENT = "controller:status";
+const ENROLLMENT_PROGRESS_EVENT = "enrollment:progress";
 
 export const sseBus = {
 	publishControllerStatus(event: ControllerStatusEvent) {
@@ -63,5 +69,16 @@ export const sseBus = {
 	) {
 		emitter.on(DEVICE_ACCESS_ATTEMPT_EVENT, handler);
 		return () => emitter.off(DEVICE_ACCESS_ATTEMPT_EVENT, handler);
+	},
+
+	publishEnrollmentProgress(event: EnrollmentProgressEvent) {
+		emitter.emit(ENROLLMENT_PROGRESS_EVENT, event);
+	},
+
+	subscribeEnrollmentProgress(
+		handler: (event: EnrollmentProgressEvent) => void,
+	) {
+		emitter.on(ENROLLMENT_PROGRESS_EVENT, handler);
+		return () => emitter.off(ENROLLMENT_PROGRESS_EVENT, handler);
 	},
 };

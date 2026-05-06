@@ -8,7 +8,7 @@ import {
 	X,
 } from "lucide-react";
 import { AnimatePresence, motion } from "motion/react";
-import { useCallback, useEffect, useLayoutEffect, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { Hand } from "@/assets/vectors/hand";
 import { Button } from "@/components/ui/button";
@@ -19,6 +19,7 @@ import {
 	DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { useFingerprintReader } from "@/hooks/use-fingerprint-reader";
+import { useEnrollmentStream } from "@/hooks/use-enrollment-stream";
 import {
 	countRegisteredInSet,
 	FINGER_LABELS,
@@ -202,16 +203,15 @@ export function FingerprintHandDrawer({
 			);
 		},
 	});
+
+	// ── Enrollment stream (real-time feedback from physical device) ──────────
+	const enrollment = useEnrollmentStream({ controllerId: selectedDevice });
+
 	const enrollMutation = useMutation({
 		mutationFn: requestFingerprintEnrollment,
-		onSuccess: () => {
-			toast.success("Cadastro biométrico iniciado", {
-				description:
-					"Aproxime o dedo no terminal físico selecionado para concluir o cadastro.",
-			});
-		},
 		onError: (err) => {
 			setSelectedFinger(null);
+			enrollment.reset();
 			toast.error(
 				err instanceof Error
 					? err.message
@@ -223,6 +223,41 @@ export function FingerprintHandDrawer({
 	const registerIsPending = registerMutation.isPending;
 	const enrollMutate = enrollMutation.mutate;
 	const enrollIsPending = enrollMutation.isPending;
+
+	// Track previous step to detect ENROLLED transition
+	const prevStepRef = useRef(enrollment.step);
+	useEffect(() => {
+		const prev = prevStepRef.current;
+		prevStepRef.current = enrollment.step;
+
+		if (enrollment.step === "ENROLLED" && prev !== "ENROLLED") {
+			// Auto-refresh finger list and reset UI after brief delay
+			queryClient.invalidateQueries({
+				queryKey: fingerprintQueryKeys.list(userId),
+			});
+			toast.success("Digital cadastrada com sucesso!");
+			setTimeout(() => {
+				setSelectedFinger(null);
+				enrollment.reset();
+			}, 2000);
+		}
+
+		if (enrollment.step === "FAILED" && prev !== "FAILED") {
+			toast.error("Falha no cadastro biométrico. Tente novamente.");
+			setTimeout(() => {
+				setSelectedFinger(null);
+				enrollment.reset();
+			}, 3000);
+		}
+
+		if (enrollment.step === "EXPIRED" && prev !== "EXPIRED") {
+			toast.error("Tempo esgotado para o cadastro biométrico.");
+			setTimeout(() => {
+				setSelectedFinger(null);
+				enrollment.reset();
+			}, 3000);
+		}
+	}, [enrollment.step, enrollment.reset, queryClient, userId]);
 
 	// ── React to reader status changes ───────────────────────────────────────────
 	useEffect(() => {
@@ -286,8 +321,9 @@ export function FingerprintHandDrawer({
 			readerReset();
 			setActiveTab("left");
 			setSelectedDevice(null);
+			enrollment.reset();
 		}
-	}, [open, readerReset]);
+	}, [open, readerReset, enrollment.reset]);
 
 	// ── Handlers ─────────────────────────────────────────────────────────────────
 
@@ -295,6 +331,7 @@ export function FingerprintHandDrawer({
 		(finger: FingerKey) => {
 			if (selectedDevice) {
 				setSelectedFinger(finger);
+				enrollment.start();
 				enrollMutate({
 					userId,
 					controllerId: selectedDevice,
@@ -333,6 +370,7 @@ export function FingerprintHandDrawer({
 			selectedFinger,
 			selectedDevice,
 			enrollMutate,
+			enrollment,
 			userId,
 		],
 	);
@@ -533,7 +571,8 @@ export function FingerprintHandDrawer({
 																captureActive={
 																	reader.status === "waiting" ||
 																	reader.status === "reading" ||
-																	enrollIsPending
+																	enrollIsPending ||
+																	enrollment.isActive
 																}
 																countdown={reader.countdown}
 																interactive
@@ -543,21 +582,53 @@ export function FingerprintHandDrawer({
 												</div>
 
 												{selectedFinger ? (
-													<Button
-														variant="hoverOutline"
-														className="w-full text-black! dark:text-white! after:border-zinc-200! dark:after:border-zinc-800!"
-														overlayClassname="before:bg-zinc-200 dark:before:bg-zinc-800"
-														onClick={() => {
-															if (selectedDevice) {
-																enrollMutation.reset();
-															} else {
-																reader.cancelCapture();
-															}
-															setSelectedFinger(null);
-														}}
-													>
-														Cancelar leitura
-													</Button>
+													<div className="flex flex-col gap-3">
+														{/* Enrollment step feedback */}
+														{enrollment.step !== "idle" && (
+															<div className="flex items-center gap-2.5 px-3 py-2.5 rounded-lg bg-zinc-50 dark:bg-zinc-800/60 border border-zinc-200 dark:border-zinc-700">
+																{enrollment.step === "ENROLLED" ? (
+																	<div className="size-5 rounded-full bg-emerald-500 flex items-center justify-center shrink-0">
+																		<svg className="size-3 text-white" fill="none" viewBox="0 0 24 24" strokeWidth={3} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" /></svg>
+																	</div>
+																) : enrollment.step === "FAILED" || enrollment.step === "EXPIRED" ? (
+																	<div className="size-5 rounded-full bg-red-500 flex items-center justify-center shrink-0">
+																		<X className="size-3 text-white" />
+																	</div>
+																) : (
+																	<Loader2 className="size-4 animate-spin text-primary shrink-0" />
+																)}
+																<span className={cn(
+																	"text-sm font-medium",
+																	enrollment.step === "ENROLLED"
+																		? "text-emerald-600 dark:text-emerald-400"
+																		: enrollment.step === "FAILED" || enrollment.step === "EXPIRED"
+																			? "text-red-600 dark:text-red-400"
+																			: "text-zinc-700 dark:text-zinc-300",
+																)}>
+																	{enrollment.stepLabel}
+																</span>
+															</div>
+														)}
+
+														{!enrollment.isTerminal && (
+															<Button
+																variant="hoverOutline"
+																className="w-full text-black! dark:text-white! after:border-zinc-200! dark:after:border-zinc-800!"
+																overlayClassname="before:bg-zinc-200 dark:before:bg-zinc-800"
+																onClick={() => {
+																	if (selectedDevice) {
+																		enrollMutation.reset();
+																		enrollment.reset();
+																	} else {
+																		reader.cancelCapture();
+																	}
+																	setSelectedFinger(null);
+																}}
+															>
+																Cancelar leitura
+															</Button>
+														)}
+													</div>
 												) : (
 													<p className="text-center text-xs text-zinc-400 dark:text-zinc-500 pb-2">
 														Toque em um dedo para iniciar o cadastro
