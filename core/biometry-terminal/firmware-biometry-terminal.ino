@@ -1201,7 +1201,11 @@ void setup() {
 
   connectWifi();
   mqtt.setServer(MQTT_SERVER, atoi(MQTT_PORT));
-  mqtt.setBufferSize(16384);
+  if (!mqtt.setBufferSize(4096)) {
+#ifdef DEBUG
+    Serial.println(F("[MQTT] Falha ao alocar buffer de 4096 bytes."));
+#endif
+  }
   mqtt.setCallback(onMqttMessage);
   
   setupFingerprint();
@@ -1291,6 +1295,25 @@ void loop() {
       if (resultStatus == "GRANTED") {
         ledBlink(1, 1000);
         // Cache do template no sensor se veio de match remoto
+        if (pendingCacheStore && resultCredentialId.length() > 0) {
+          cacheCurrentTemplate(resultCredentialId);
+        }
+      } else {
+        ledBlink(5, 50);
+      }
+      currentState = IDLE;
+      resultReceived = false;
+      pendingCacheStore = false;
+      resultCredentialId = "";
+    }
+  }
+}
+eStore = false;
+      resultCredentialId = "";
+    }
+  }
+}
+o de match remoto
         if (pendingCacheStore && resultCredentialId.length() > 0) {
           cacheCurrentTemplate(resultCredentialId);
         }
