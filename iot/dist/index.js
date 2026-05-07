@@ -146,6 +146,7 @@ const topicMatchers = {
     commandResult: /^door\/([^/]+)\/command-result$/,
     enrollmentResult: /^door\/([^/]+)\/enrollment-result$/,
     enrollmentProgress: /^door\/([^/]+)\/enrollment-progress$/,
+    requestSync: /^door\/([^/]+)\/request-sync$/,
 };
 const commandPollers = new Map();
 const broker = createBroker();
@@ -191,6 +192,8 @@ broker.on("publish", (packet, client) => {
         return;
     if (handleTopic("enrollmentProgress", topic, payloadString, handleEnrollmentProgress))
         return;
+    if (handleTopic("requestSync", topic, payloadString, handleRequestSync))
+        return;
     handleTopic("enrollmentResult", topic, payloadString, handleEnrollmentResult);
 });
 function handleTopic(kind, topic, payload, handler) {
@@ -202,6 +205,19 @@ function handleTopic(kind, topic, payload, handler) {
         logger.error({ err: error, controllerId: match[1], topic, payload }, "Failed to process topic");
     });
     return true;
+}
+const requestSyncPayloadSchema = z.object({
+    deviceSecret: z.string().optional(),
+});
+async function handleRequestSync(controllerId, payload) {
+    const parsed = safeParseJson(payload);
+    const data = requestSyncPayloadSchema.parse(parsed);
+    await callApi("POST", `/iot/devices/${controllerId}/request-sync`, JSON.stringify({
+        deviceSecret: data.deviceSecret,
+    }));
+    triggerFingerprintSync(controllerId).catch((err) => {
+        logger.error({ err, controllerId }, "Hardware triggered fingerprint sync failed");
+    });
 }
 async function handleRegister(controllerId, payload) {
     const parsed = safeParseJson(payload);
@@ -465,6 +481,7 @@ async function triggerFingerprintSync(controllerId) {
         const credentials = response.credentials;
         if (!credentials || credentials.length === 0) {
             logger.info({ controllerId }, "No fingerprints to sync");
+            await publish(`door/${controllerId}/sync-complete`, {});
             return;
         }
         logger.info({ controllerId, count: credentials.length }, "Starting fingerprint sync to device");
@@ -478,6 +495,7 @@ async function triggerFingerprintSync(controllerId) {
             // Wait for the firmware to process before sending next
             await new Promise((resolve) => setTimeout(resolve, 2000));
         }
+        await publish(`door/${controllerId}/sync-complete`, {});
         logger.info({ controllerId, synced: credentials.length }, "Fingerprint sync completed");
     }
     catch (error) {

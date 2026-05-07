@@ -191,6 +191,7 @@ const topicMatchers = {
 	commandResult: /^door\/([^/]+)\/command-result$/,
 	enrollmentResult: /^door\/([^/]+)\/enrollment-result$/,
 	enrollmentProgress: /^door\/([^/]+)\/enrollment-progress$/,
+	requestSync: /^door\/([^/]+)\/request-sync$/,
 } as const;
 
 type TopicKind = keyof typeof topicMatchers;
@@ -241,6 +242,8 @@ broker.on("publish", (packet: AedesPublishPacket, client: Client | null) => {
 	if (handleTopic("commandResult", topic, payloadString, handleCommandResult))
 		return;
 	if (handleTopic("enrollmentProgress", topic, payloadString, handleEnrollmentProgress))
+		return;
+	if (handleTopic("requestSync", topic, payloadString, handleRequestSync))
 		return;
 	handleTopic("enrollmentResult", topic, payloadString, handleEnrollmentResult);
 });
@@ -670,6 +673,7 @@ async function triggerFingerprintSync(controllerId: string) {
 		const credentials = (response as { credentials: Array<{ credentialId: string; template: string }> }).credentials;
 		if (!credentials || credentials.length === 0) {
 			logger.info({ controllerId }, "No fingerprints to sync");
+			await publish(`door/${controllerId}/sync-complete`, {});
 			return;
 		}
 
