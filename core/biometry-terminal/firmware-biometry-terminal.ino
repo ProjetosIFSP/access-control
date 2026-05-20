@@ -989,6 +989,19 @@ void sendHeartbeat() {
   mqtt.publish(topicHeartbeat.c_str(), p.c_str());
 }
 
+void publishDoorStatus() {
+  StaticJsonDocument<128> doc;
+  doc["doorState"] = (currentDoorState == OPEN) ? "OPEN" : ((currentDoorState == LOCKED) ? "LOCKED" : "UNKNOWN");
+  doc["isLocked"]  = (currentDoorState == LOCKED);
+
+  String p; serializeJson(doc, p);
+  mqtt.publish(topicStatus.c_str(), p.c_str());
+#ifdef DEBUG
+  Serial.print(F("[Porta] Status publicado: "));
+  Serial.println(currentDoorState == OPEN ? F("ABERTO") : F("FECHADO"));
+#endif
+}
+
 void publishRequestSync() {
   StaticJsonDocument<128> doc;
   doc["deviceSecret"] = DEVICE_SECRET;
@@ -1470,6 +1483,17 @@ void loop() {
     // Recebeu retorno de WAITING_RESULT
     else if (currentState == WAITING_RESULT && resultReceived) {
       if (resultStatus == "GRANTED") {
+        // Toggle door state (mesmo comportamento do terminal NFC)
+        if (currentDoorState == OPEN) {
+          currentDoorState = LOCKED;
+        } else {
+          currentDoorState = OPEN;
+        }
+#ifdef DEBUG
+        Serial.print(F("[Porta] Novo estado: "));
+        Serial.println(currentDoorState == OPEN ? F("ABERTO") : F("FECHADO"));
+#endif
+        publishDoorStatus();
         ledBlink(1, 1000);
         // Cache do template no sensor se veio de match remoto
         if (pendingCacheStore && resultCredentialId.length() > 0) {
