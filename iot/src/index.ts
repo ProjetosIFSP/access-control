@@ -277,13 +277,17 @@ async function handleRequestSync(controllerId: string, payload: string) {
 	const parsed = safeParseJson(payload);
 	const data = requestSyncPayloadSchema.parse(parsed);
 
-	await callApi(
+	// Fire-and-forget the API notification — it's just a log endpoint (202).
+	// Must NOT block triggerFingerprintSync; the firmware has a 20s timeout.
+	callApi(
 		"POST",
 		`/iot/devices/${controllerId}/request-sync`,
 		JSON.stringify({
 			deviceSecret: data.deviceSecret,
 		}),
-	);
+	).catch((err) => {
+		logger.warn({ err, controllerId }, "request-sync API notification failed (non-blocking)");
+	});
 
 	triggerFingerprintSync(controllerId).catch((err) => {
 		logger.error({ err, controllerId }, "Hardware triggered fingerprint sync failed");
@@ -664,11 +668,14 @@ async function enqueueUnlockCommand(controllerId: string) {
 }
 
 async function triggerFingerprintSync(controllerId: string) {
+	const syncStart = Date.now();
+	logger.info({ controllerId }, "triggerFingerprintSync started");
 	try {
 		const response = await callApi(
 			"GET",
 			`/iot/devices/${controllerId}/fingerprint-sync`,
 		);
+		logger.info({ controllerId, apiMs: Date.now() - syncStart }, "fingerprint-sync API returned");
 
 		const credentials = (response as { credentials: Array<{ credentialId: string; template: string }> }).credentials;
 		if (!credentials || credentials.length === 0) {
@@ -683,20 +690,44 @@ async function triggerFingerprintSync(controllerId: string) {
 		);
 
 		// Publish each template individually with a delay
-		// so the ESP8266 can process each one without memory issues
+		// so the ESP8266 can process each one without memory issues.
+		// The firmware's PubSubClient buffer is 16384 bytes; warn if a
+		// message would exceed that.
+		const MQTT_BUF_LIMIT = 24576;
+		let synced = 0;
+
 		for (const cred of credentials) {
-			await publish(`door/${controllerId}/sync-template`, {
+			const payload = {
 				credentialId: cred.credentialId,
 				template: cred.template,
-			});
-			// Wait for the firmware to process before sending next
-			await new Promise((resolve) => setTimeout(resolve, 2000));
+			};
+			const payloadSize = JSON.stringify(payload).length;
+
+			if (payloadSize > MQTT_BUF_LIMIT) {
+				logger.warn(
+					{ controllerId, credentialId: cred.credentialId, payloadSize, limit: MQTT_BUF_LIMIT },
+					"Skipping sync-template: payload exceeds firmware MQTT buffer",
+				);
+				continue;
+			}
+
+			logger.debug(
+				{ controllerId, credentialId: cred.credentialId, payloadSize },
+				"Publishing sync-template",
+			);
+
+			await publish(`door/${controllerId}/sync-template`, payload);
+			synced++;
+			// Small delay between messages — the firmware does heavy UART I/O
+			// (3-5s per template) inside handleSyncTemplate, which naturally
+			// paces reception.  We only need enough time for the MQTT layer.
+			await new Promise((resolve) => setTimeout(resolve, 500));
 		}
 
 		await publish(`door/${controllerId}/sync-complete`, {});
 
 		logger.info(
-			{ controllerId, synced: credentials.length },
+			{ controllerId, synced, total: credentials.length },
 			"Fingerprint sync completed",
 		);
 	} catch (error) {
@@ -704,6 +735,13 @@ async function triggerFingerprintSync(controllerId: string) {
 			{ err: error, controllerId },
 			"Fingerprint sync failed",
 		);
+		// Always send sync-complete so the firmware exits WAITING_SYNC state
+		// instead of hitting the 20-second timeout.
+		try {
+			await publish(`door/${controllerId}/sync-complete`, {});
+		} catch (publishErr) {
+			logger.error({ err: publishErr, controllerId }, "Failed to send sync-complete after error");
+		}
 	}
 }
 

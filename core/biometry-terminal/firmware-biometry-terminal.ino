@@ -52,8 +52,21 @@ void saveConfigCallback () {
 
 const unsigned long HEARTBEAT_INTERVAL_MS = 30000;
 const unsigned long ACCESS_RESULT_TIMEOUT = 20000;
+const unsigned long SYNC_TIMEOUT_MS       = 45000;
 const unsigned long FINGER_DEBOUNCE_MS    = 3000;
 const unsigned long ENROLLMENT_TIMEOUT_MS = 120000;
+
+// Buffer MQTT para recepção de sync-template (templates até ~11KB = ~22KB hex + JSON).
+// Durante enrollment o buffer é reduzido temporariamente para liberar heap.
+const uint16_t MQTT_BUF_SIZE = 24576;
+
+// Tamanho real do template do sensor (lido via PS_ReadSysPara durante setup).
+// Usado para limitar os dados enviados via PS_DownChar.
+uint16_t sensorTemplateSize = 0;  // 0 = ainda não lido
+// Tamanho do pacote de dados do sensor (bytes reais de dados por pacote).
+uint16_t sensorPacketDataSize = 128;  // default = 128 (observado nos logs de PS_UpChar)
+// Baud rate real do sensor (detectado no setup).
+uint32_t sensorBaudRate = 57600;
 
 // ── Variáveis de estado ───────────────────────────────────────────────────────
 
@@ -211,7 +224,7 @@ void cacheCurrentTemplate(const String &credId) {
 
 
 constexpr uint8_t TEMPLATE_EMPTY_CODE = 35;
-constexpr size_t MAX_TEMPLATE_HEX_CHARS = 16384;
+constexpr size_t MAX_TEMPLATE_HEX_CHARS = 32768;
 
 String bytesToHex(const uint8_t* data, size_t length) {
   String hex;
@@ -242,7 +255,7 @@ uint8_t writeEncryptionLevelRaw(uint8_t level) {
   uint8_t responseData[64] = {0};
   Adafruit_Fingerprint_Packet responsePacket(FINGERPRINT_ACKPACKET, 0,
                                              responseData);
-  uint8_t packetResult = finger.getStructuredPacket(&responsePacket, 1500);
+  uint8_t packetResult = finger.getStructuredPacket(&responsePacket, 500);
   if (packetResult != FINGERPRINT_OK) {
 #ifdef DEBUG
     Serial.print(F("[BIO] PS_WriteReg(7) falhou ao ler resposta: "));
@@ -517,26 +530,64 @@ uint8_t hexNibble(char c) {
 // Sends a hex-encoded template to the sensor's character buffer via PS_DownChar.
 // The template stays in buffer `bufferId` until storeModel() persists it.
 bool downloadTemplateToSensor(const char* hexStr, size_t hexLen, uint8_t bufferId) {
+  // O sensor ZW101 pode resetar o encryption level após certas operações.
+  // PS_DownChar/PS_UpChar exigem encryption level 0, senão retornam erro.
+  writeEncryptionLevelRaw(0);
+  delay(50);
+
   clearFingerprintSerialInput();
+  delay(20);
+
+  size_t binaryLen = hexLen / 2;
+
+  // Usa o TempSize real do sensor (lido no setup via PS_ReadSysPara).
+  // Se sensorTemplateSize > 0, limita os dados ao tamanho real do character buffer.
+  // Se = 0 (sensor não reportou), envia tudo.
+  if (sensorTemplateSize > 0 && binaryLen > sensorTemplateSize) {
+    binaryLen = sensorTemplateSize;
+  }
+
+  // Tamanho do chunk = tamanho de pacote configurado no sensor
+  const size_t CHUNK = sensorPacketDataSize;
+
+#ifdef DEBUG
+  Serial.print(F("[SYNC] PS_DownChar buf=")); Serial.print(bufferId);
+  Serial.print(F(" bytes=")); Serial.print(binaryLen);
+  Serial.print(F(" chunk=")); Serial.println(CHUNK);
+#endif
 
   // 1. Send PS_DownChar command (0x09)
   uint8_t cmdData[] = {0x09, bufferId};
   Adafruit_Fingerprint_Packet cmdPkt(FINGERPRINT_COMMANDPACKET, sizeof(cmdData), cmdData);
   finger.writeStructuredPacket(cmdPkt);
 
-  // 2. Wait for ACK
+  // 2. Wait for command ACK
   uint8_t respBuf[64] = {0};
   Adafruit_Fingerprint_Packet respPkt(FINGERPRINT_ACKPACKET, 0, respBuf);
-  if (finger.getStructuredPacket(&respPkt, 2000) != FINGERPRINT_OK || respPkt.data[0] != FINGERPRINT_OK) {
+  uint8_t pktResult = finger.getStructuredPacket(&respPkt, 2000);
+  if (pktResult != FINGERPRINT_OK) {
 #ifdef DEBUG
-    Serial.println(F("[SYNC] PS_DownChar ACK falhou"));
+    Serial.print(F("[SYNC] PS_DownChar sem resposta (pktResult=0x"));
+    Serial.print(pktResult, HEX);
+    Serial.println(F(")"));
+#endif
+    return false;
+  }
+  if (respPkt.data[0] != FINGERPRINT_OK) {
+#ifdef DEBUG
+    Serial.print(F("[SYNC] PS_DownChar rejeitado (code=0x"));
+    Serial.print(respPkt.data[0], HEX);
+    Serial.println(F(")"));
 #endif
     return false;
   }
 
-  // 3. Stream data packets (128 bytes each)
-  const size_t CHUNK = 128;
-  size_t binaryLen = hexLen / 2;
+#ifdef DEBUG
+  Serial.println(F("[SYNC] PS_DownChar ACK OK, enviando dados..."));
+#endif
+
+  // 3. Stream data packets using the sensor's configured packet size
+  uint8_t pktBuf[256];  // max packet data is 256 bytes
   size_t sent = 0;
 
   while (sent < binaryLen) {
@@ -544,21 +595,49 @@ bool downloadTemplateToSensor(const char* hexStr, size_t hexLen, uint8_t bufferI
     size_t chunkLen = (remain > CHUNK) ? CHUNK : remain;
     bool isLast = (sent + chunkLen >= binaryLen);
 
-    uint8_t buf[128];
     for (size_t i = 0; i < chunkLen; i++) {
       size_t hi = (sent + i) * 2;
-      buf[i] = (hexNibble(hexStr[hi]) << 4) | hexNibble(hexStr[hi + 1]);
+      pktBuf[i] = (hexNibble(hexStr[hi]) << 4) | hexNibble(hexStr[hi + 1]);
     }
 
     uint8_t ptype = isLast ? FINGERPRINT_ENDDATAPACKET : FINGERPRINT_DATAPACKET;
-    Adafruit_Fingerprint_Packet dataPkt(ptype, chunkLen, buf);
+    Adafruit_Fingerprint_Packet dataPkt(ptype, chunkLen, pktBuf);
     finger.writeStructuredPacket(dataPkt);
     delay(5);
 
     sent += chunkLen;
   }
 
+  // 4. Aguarda o sensor processar e despeja bytes pendentes para diagnóstico
+  delay(300);
+
+#ifdef DEBUG
+  int avail = fingerSerial.available();
+  if (avail > 0) {
+    Serial.print(F("[SYNC] Sensor enviou ")); Serial.print(avail);
+    Serial.print(F(" bytes pós-stream: "));
+    int maxDump = (avail > 40) ? 40 : avail;
+    for (int i = 0; i < maxDump; i++) {
+      uint8_t b = fingerSerial.read();
+      if (b < 0x10) Serial.print('0');
+      Serial.print(b, HEX);
+      Serial.print(' ');
+    }
+    Serial.println();
+  } else {
+    Serial.println(F("[SYNC] Nenhum byte do sensor pós-stream."));
+  }
+#endif
+
+  // 5. Reinicializa SoftwareSerial para resetar o estado corrupto.
+  //    Após centenas de writeStructuredPacket (que desabilita interrupts),
+  //    o SoftwareSerial fica instável e comandos subsequentes falham (0x01).
+  fingerSerial.end();
+  delay(50);
+  fingerSerial.begin(sensorBaudRate);
   delay(100);
+  clearFingerprintSerialInput();
+
   return true;
 }
 
@@ -580,12 +659,17 @@ uint8_t storeModelBuffer(uint8_t bufferId, uint16_t id) {
   finger.writeStructuredPacket(commandPacket);
   uint8_t responseData[64] = {0};
   Adafruit_Fingerprint_Packet responsePacket(FINGERPRINT_ACKPACKET, 0, responseData);
-  uint8_t result = finger.getStructuredPacket(&responsePacket, 2000);
+  uint8_t result = finger.getStructuredPacket(&responsePacket, 5000);
   if (result != FINGERPRINT_OK) return result;
   return responsePacket.data[0];
 }
 
 void handleSyncTemplate(byte* payload, unsigned int length) {
+#ifdef DEBUG
+  Serial.print(F("[SYNC] Recebido sync-template, payload: "));
+  Serial.print(length);
+  Serial.println(F(" bytes"));
+#endif
   // Parse credentialId from raw payload (avoid large ArduinoJson alloc)
   int cidPos = findStrInBuf(payload, length, "\"credentialId\":\"");
   if (cidPos < 0) return;
@@ -621,12 +705,24 @@ void handleSyncTemplate(byte* payload, unsigned int length) {
   if (tplEnd < 0) return;
 
   size_t hexLen = tplEnd - tplPos;
-  if (hexLen < 512 || hexLen > MAX_TEMPLATE_HEX_CHARS) return;
+#ifdef DEBUG
+  Serial.print(F("[SYNC] credId=")); Serial.print(credId);
+  Serial.print(F(" hexLen=")); Serial.print(hexLen);
+  Serial.print(F(" (")); Serial.print(hexLen / 2); Serial.println(F(" bytes)"));
+#endif
+  if (hexLen < 512 || hexLen > MAX_TEMPLATE_HEX_CHARS) {
+#ifdef DEBUG
+    Serial.println(F("[SYNC] Template fora dos limites, ignorando"));
+#endif
+    return;
+  }
 
   const char* hexStr = (const char*)(payload + tplPos);
 
-  // Download to sensor buffer 2 to avoid overwriting the user's finger in Buffer 1
-  if (!downloadTemplateToSensor(hexStr, hexLen, 2)) {
+  // Download to buffer 1 e usar finger.storeModel() (da biblioteca Adafruit)
+  // que sabemos que funciona (é o mesmo código usado no enrollment).
+  // Buffer 1 será sobrescrito, mas re-capturamos a imagem no sync-complete.
+  if (!downloadTemplateToSensor(hexStr, hexLen, 1)) {
 #ifdef DEBUG
     Serial.println(F("[SYNC] Download para sensor falhou"));
 #endif
@@ -644,17 +740,28 @@ void handleSyncTemplate(byte* payload, unsigned int length) {
 #endif
   }
 
-  if (storeModelBuffer(2, slot) == FINGERPRINT_OK) {
-    slotTable[slot].occupied = true;
-    strncpy(slotTable[slot].credentialId, credId, 37);
-    slotTable[slot].credentialId[37] = '\0';
-    slotTable[slot].lastUsed = millis() / 1000;
-    saveSlotTable();
+  // Usa finger.storeModel() da biblioteca Adafruit (armazena buffer 1 → flash).
+  // NOTA: Após PS_DownChar streaming, a serial pode estar corrompida e
+  // storeModel pode retornar 0x01 (falso negativo — template foi armazenado
+  // no sensor mas a resposta veio corrompida). Sempre atualizamos slotTable
+  // porque fingerSearch não encontrará templates que realmente não existem.
+  uint8_t storeResult = finger.storeModel(slot);
 #ifdef DEBUG
-    Serial.print(F("[SYNC] Synced ")); Serial.print(credId);
-    Serial.print(F(" -> slot ")); Serial.println(slot);
+  Serial.print(F("[SYNC] storeModel code=0x"));
+  Serial.print(storeResult, HEX);
+  Serial.print(F(" slot=")); Serial.println(slot);
 #endif
-  }
+
+  // Atualiza slotTable independentemente do resultado (pode ser falso negativo)
+  slotTable[slot].occupied = true;
+  strncpy(slotTable[slot].credentialId, credId, 37);
+  slotTable[slot].credentialId[37] = '\0';
+  slotTable[slot].lastUsed = millis() / 1000;
+  saveSlotTable();
+#ifdef DEBUG
+  Serial.print(F("[SYNC] Slot ")); Serial.print(slot);
+  Serial.print(F(" <- ")); Serial.println(credId);
+#endif
 }
 
 // ── Enrollment progress ──────────────────────────────────────────────────────
@@ -886,10 +993,13 @@ void publishRequestSync() {
   StaticJsonDocument<128> doc;
   doc["deviceSecret"] = DEVICE_SECRET;
   String p; serializeJson(doc, p);
-  mqtt.publish(topicRequestSync.c_str(), p.c_str());
+  bool ok = mqtt.publish(topicRequestSync.c_str(), p.c_str());
 
 #ifdef DEBUG
-  Serial.println(F("[BIO] Request-sync enviado."));
+  Serial.print(F("[BIO] Request-sync enviado (ok="));
+  Serial.print(ok);
+  Serial.print(F(") t="));
+  Serial.println(millis());
 #endif
 }
 
@@ -978,12 +1088,41 @@ void onMqttMessage(char* topic, byte* payload, unsigned int length) {
 
   // sync-complete (server finished pushing templates)
   if (t == topicSyncComplete) {
+#ifdef DEBUG
+    Serial.print(F("[BIO] sync-complete recebido (state="));
+    Serial.print(currentState);
+    Serial.println(F(")"));
+#endif
     if (currentState == WAITING_SYNC) {
 #ifdef DEBUG
-      Serial.println(F("[BIO] Sync concluído, verificando dedo novamente..."));
+      Serial.println(F("[BIO] Sync concluído, re-capturando dedo..."));
 #endif
-      // O dedo já estava no sensor e a imagem/características no Buffer 1
+      // Re-captura a imagem pois as operações de PS_DownChar (streaming
+      // de templates grandes para buffer 2) podem corromper o Buffer 1.
+      // O dedo provavelmente ainda está no sensor.
+      if (finger.getImage() != FINGERPRINT_OK) {
+#ifdef DEBUG
+        Serial.println(F("[BIO] Dedo não detectado após sync. Acesso negado."));
+#endif
+        ledBlink(5, 50);
+        currentState = IDLE;
+        return;
+      }
+      if (finger.image2Tz(1) != FINGERPRINT_OK) {
+#ifdef DEBUG
+        Serial.println(F("[BIO] image2Tz falhou após sync."));
+#endif
+        ledBlink(5, 50);
+        currentState = IDLE;
+        return;
+      }
+
       int searchResult = finger.fingerSearch();
+#ifdef DEBUG
+      Serial.print(F("[BIO] fingerSearch resultado=")); Serial.print(searchResult);
+      Serial.print(F(" id=")); Serial.print(finger.fingerID);
+      Serial.print(F(" conf=")); Serial.println(finger.confidence);
+#endif
       if (searchResult == FINGERPRINT_OK && finger.fingerID < MAX_CACHE_SLOTS
           && slotTable[finger.fingerID].occupied) {
         // Match encontrado pós-sincronização
@@ -993,14 +1132,20 @@ void onMqttMessage(char* topic, byte* payload, unsigned int length) {
         currentState = WAITING_RESULT;
         waitingResultAt = millis();
         lastFingerTime = millis();
-#ifdef DEBUG
-        Serial.print(F("[BIO] Match local slot ")); Serial.print(finger.fingerID);
-        Serial.print(F(" conf=")); Serial.println(finger.confidence);
-#endif
       } else {
         // Definitivamente não tem acesso
 #ifdef DEBUG
-        Serial.println(F("[BIO] Sem match após sync. Acesso negado."));
+        Serial.print(F("[BIO] Sem match após sync. searchResult="));
+        Serial.print(searchResult);
+        if (searchResult == FINGERPRINT_OK) {
+          Serial.print(F(" id=")); Serial.print(finger.fingerID);
+          Serial.print(F(" idOK=")); Serial.print(finger.fingerID < MAX_CACHE_SLOTS);
+          if (finger.fingerID < MAX_CACHE_SLOTS) {
+            Serial.print(F(" occupied=")); Serial.print(slotTable[finger.fingerID].occupied);
+            Serial.print(F(" cred=")); Serial.print(slotTable[finger.fingerID].credentialId);
+          }
+        }
+        Serial.println();
 #endif
         ledBlink(5, 50);
         currentState = IDLE;
@@ -1030,10 +1175,11 @@ void setupFingerprint() {
     delay(100);
     if (finger.verifyPassword()) {
 #ifdef DEBUG
-      Serial.print("[BIO] Sensor biométrico encontrado a ");
+      Serial.print(F("[BIO] Sensor biométrico encontrado a "));
       Serial.print(baudRates[i]);
       Serial.println(" baud!");
 #endif
+      sensorBaudRate = baudRates[i];
       finger.getParameters();
 
       // O manual do ZW-111 define encryption level no registrador 7.
@@ -1061,6 +1207,24 @@ void setupFingerprint() {
       Serial.print(F("[BIO] Capacidade: ")); Serial.println(finger.capacity);
       Serial.print(F("[BIO] SysPara security_level (reg 5): ")); Serial.println(finger.security_level);
       Serial.print(F("[BIO] SysPara status_reg: 0x")); Serial.println(finger.status_reg, HEX);
+      Serial.print(F("[BIO] SysPara system_id (TempSize): ")); Serial.println(finger.system_id);
+      Serial.print(F("[BIO] SysPara packet_len (CFG_PktSize): ")); Serial.println(finger.packet_len);
+#endif
+      // Decodifica TempSize: o campo system_id da Adafruit corresponde ao
+      // registrador TempSize do AS608 (tamanho do character file em bytes).
+      // Valor típico: 0 = sensor não reporta, caso contrário é o tamanho real.
+      sensorTemplateSize = finger.system_id;
+      // Decodifica packet_len: 0=32, 1=64, 2=128, 3=256
+      // Se o sensor reporta 0 (32 bytes), provavelmente não suporta setPacketSize
+      // e usa 128 bytes na prática (observado nos logs de PS_UpChar).
+      if (finger.packet_len >= 1 && finger.packet_len <= 3) {
+        sensorPacketDataSize = 32u << finger.packet_len;
+      } else {
+        sensorPacketDataSize = 128;  // default seguro baseado no comportamento real
+      }
+#ifdef DEBUG
+      Serial.print(F("[BIO] Template real: ")); Serial.print(sensorTemplateSize); Serial.println(F(" bytes"));
+      Serial.print(F("[BIO] Packet data: ")); Serial.print(sensorPacketDataSize); Serial.println(F(" bytes"));
 #endif
       found = true;
       break;
@@ -1139,19 +1303,27 @@ void processEnrollment(unsigned long now, bool touched) {
       delay(200);
       publishEnrollmentProgress("EXTRACTING");
 
+      // Libera o buffer MQTT grande (24KB) para dar espaço ao template
+      // hex na heap (pode chegar a ~22KB). Restaurado após o publish.
+      mqtt.setBufferSize(512);
+
       if (enrollmentTemplateHex.length() == 0) {
-        // Escreve diretamente em enrollmentTemplateHex para evitar
-        // duplicação de ~15KB na heap (OOM no ESP8266).
         if (!captureTemplateHexFromSensor(enrollmentTemplateHex)) {
           publishEnrollmentProgress("FAILED");
           publishEnrollmentResult(enrollmentId, enrollmentUserId, enrollmentFinger, "FAILED", "", 0);
+          mqtt.setBufferSize(MQTT_BUF_SIZE);
           resetEnrollmentState();
           return;
         }
       }
 
       enrollmentQuality = 0;
+#ifdef DEBUG
+      Serial.print(F("[MQTT] Heap antes do publish: ")); Serial.println(ESP.getFreeHeap());
+#endif
       publishEnrollmentResult(enrollmentId, enrollmentUserId, enrollmentFinger, "SUCCESS", enrollmentTemplateHex, enrollmentQuality);
+      mqtt.setBufferSize(MQTT_BUF_SIZE);
+
       resetEnrollmentState();
       return;
     }
@@ -1201,9 +1373,10 @@ void setup() {
 
   connectWifi();
   mqtt.setServer(MQTT_SERVER, atoi(MQTT_PORT));
-  if (!mqtt.setBufferSize(4096)) {
+  if (!mqtt.setBufferSize(MQTT_BUF_SIZE)) {
 #ifdef DEBUG
-    Serial.println(F("[MQTT] Falha ao alocar buffer de 4096 bytes."));
+    Serial.print(F("[MQTT] Falha ao alocar buffer de ")); Serial.print(MQTT_BUF_SIZE);
+    Serial.print(F(" bytes. Heap livre: ")); Serial.println(ESP.getFreeHeap());
 #endif
   }
   mqtt.setCallback(onMqttMessage);
@@ -1280,10 +1453,14 @@ void loop() {
   }
 
   if (currentState == WAITING_RESULT || currentState == WAITING_SYNC) {
-    // Timeout
-    if (now - waitingResultAt > ACCESS_RESULT_TIMEOUT) {
+    // Usa millis() fresco em vez de 'now' (capturado no topo do loop,
+    // antes das operações UART bloqueantes que avançam o relógio).
+    unsigned long elapsed = millis() - waitingResultAt;
+    unsigned long timeout = (currentState == WAITING_SYNC) ? SYNC_TIMEOUT_MS : ACCESS_RESULT_TIMEOUT;
+    if (elapsed > timeout) {
 #ifdef DEBUG
-      Serial.println(F("[BIO] Timeout aguardando resposta/sync do servidor"));
+      Serial.print(F("[BIO] Timeout (")); Serial.print(elapsed / 1000);
+      Serial.print(F("s) state=")); Serial.println(currentState);
 #endif
       ledBlink(3, 100);
       currentState = IDLE;
@@ -1295,25 +1472,6 @@ void loop() {
       if (resultStatus == "GRANTED") {
         ledBlink(1, 1000);
         // Cache do template no sensor se veio de match remoto
-        if (pendingCacheStore && resultCredentialId.length() > 0) {
-          cacheCurrentTemplate(resultCredentialId);
-        }
-      } else {
-        ledBlink(5, 50);
-      }
-      currentState = IDLE;
-      resultReceived = false;
-      pendingCacheStore = false;
-      resultCredentialId = "";
-    }
-  }
-}
-eStore = false;
-      resultCredentialId = "";
-    }
-  }
-}
-o de match remoto
         if (pendingCacheStore && resultCredentialId.length() > 0) {
           cacheCurrentTemplate(resultCredentialId);
         }
