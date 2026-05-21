@@ -1,8 +1,9 @@
+import crypto from "node:crypto";
+import { and, eq } from "drizzle-orm";
 import { v7 as uuidv7 } from "uuid";
 import { db } from "@/db";
 import { accessCredential } from "@/db/schema/access";
 import type { fingerKeyEnum } from "@/db/schema/enums";
-import crypto from "crypto";
 
 type FingerKey = (typeof fingerKeyEnum.enumValues)[number];
 
@@ -13,6 +14,8 @@ export interface RegisterFingerprintInput {
 	template: string;
 	/** ID do controlador físico que realizou a captura (terminal de enrollment via MQTT) */
 	enrolledByControllerId?: string;
+	/** Opcional: ID predefinido para a credencial (ex: para sync imediato com o hardware) */
+	id?: string;
 }
 
 export interface RegisteredFingerprintRecord {
@@ -39,36 +42,60 @@ export class FingerprintDuplicateTemplateError extends Error {
 export async function registerFingerprint(
 	input: RegisterFingerprintInput,
 ): Promise<RegisteredFingerprintRecord> {
-	const { userId, finger, template, enrolledByControllerId } = input;
+	const { userId, finger, template, enrolledByControllerId, id: providedId } = input;
 
 	try {
-		const templateHash = crypto.createHash("sha256").update(template).digest("hex");
+		const templateHash = crypto
+			.createHash("sha256")
+			.update(template)
+			.digest("hex");
 
-		const [inserted] = await db
-			.insert(accessCredential)
-			.values({
-				id: uuidv7(),
-				userId,
-				type: "FINGERPRINT",
-				finger,
-				value: templateHash,
-				template,
-				isActive: true,
-				...(enrolledByControllerId ? { enrolledByControllerId } : {}),
-			})
-			.returning({
-				id: accessCredential.id,
-				finger: accessCredential.finger,
-				isActive: accessCredential.isActive,
-				createdAt: accessCredential.createdAt,
-			});
+		return await db.transaction(async (tx) => {
+			const [existing] = await tx
+				.select()
+				.from(accessCredential)
+				.where(
+					and(
+						eq(accessCredential.userId, userId),
+						eq(accessCredential.finger, finger),
+						eq(accessCredential.type, "FINGERPRINT"),
+					),
+				);
 
-		return {
-			id: inserted.id,
-			finger: inserted.finger as FingerKey,
-			isActive: inserted.isActive,
-			createdAt: inserted.createdAt,
-		};
+			if (existing) {
+				// Removemos a antiga para gerar um novo ID, forçando a invalidação
+				// do cache no terminal biométrico.
+				await tx
+					.delete(accessCredential)
+					.where(eq(accessCredential.id, existing.id));
+			}
+
+			const [inserted] = await tx
+				.insert(accessCredential)
+				.values({
+					id: providedId ?? uuidv7(),
+					userId,
+					type: "FINGERPRINT",
+					finger,
+					value: templateHash,
+					template,
+					isActive: true,
+					...(enrolledByControllerId ? { enrolledByControllerId } : {}),
+				})
+				.returning({
+					id: accessCredential.id,
+					finger: accessCredential.finger,
+					isActive: accessCredential.isActive,
+					createdAt: accessCredential.createdAt,
+				});
+
+			return {
+				id: inserted.id,
+				finger: inserted.finger as FingerKey,
+				isActive: inserted.isActive,
+				createdAt: inserted.createdAt,
+			};
+		});
 	} catch (err) {
 		if (isUniqueViolation(err)) {
 			const conflictColumn = getConflictColumn(err);

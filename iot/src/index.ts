@@ -693,7 +693,7 @@ async function triggerFingerprintSync(controllerId: string) {
 		// so the ESP8266 can process each one without memory issues.
 		// The firmware's PubSubClient buffer is 16384 bytes; warn if a
 		// message would exceed that.
-		const MQTT_BUF_LIMIT = 24576;
+		const MQTT_BUF_LIMIT = 32768;
 		let synced = 0;
 
 		for (const cred of credentials) {

@@ -1,9 +1,15 @@
 /** biome-ignore-all lint/suspicious/noArrayIndexKey: intencional em SVG paths estáticos */
 
 import dayjs from "dayjs";
-import { Check } from "lucide-react";
-import { useRef } from "react";
+import { Check, Fingerprint, RefreshCw, Trash2 } from "lucide-react";
+import { useCallback, useRef, useState } from "react";
 import { FingerprintIcon } from "@/components/icons/fingerprint-icon";
+import {
+	DropdownMenu,
+	DropdownMenuContent,
+	DropdownMenuItem,
+	DropdownMenuSeparator,
+} from "@/components/ui/dropdown-menu";
 import {
 	FINGER_LABELS,
 	FINGERS_LEFT,
@@ -24,12 +30,16 @@ import { cn } from "@/lib/utils";
 
 export type { FingerKey };
 
+export type FingerContextAction = "register" | "re-register" | "delete";
+
 export interface HandProps {
 	side?: "left" | "right";
 	className?: string;
 	registeredFingers?: RegisteredFingerprint[];
 	selectedFinger?: FingerKey | null;
 	onFingerClick?: (finger: FingerKey) => void;
+	/** Context menu action (right-click / long-press) */
+	onFingerContextAction?: (finger: FingerKey, action: FingerContextAction) => void;
 	interactive?: boolean;
 	/** Status atual do leitor — controla animação de pulsação */
 	readerStatus?: FingerprintStatus;
@@ -202,6 +212,7 @@ interface FingerButtonProps {
 	registered: boolean;
 	selected: boolean;
 	onFingerClick?: (finger: FingerKey) => void;
+	onFingerContextAction?: (finger: FingerKey, action: FingerContextAction) => void;
 	viewBoxSize: number;
 	/** Status do leitor para controlar animação — pulsação só ativa em waiting/reading */
 	readerStatus?: FingerprintStatus;
@@ -213,8 +224,46 @@ function FingerButton({
 	registered,
 	selected,
 	onFingerClick,
+	onFingerContextAction,
 	readerStatus,
 }: FingerButtonProps) {
+	const [menuOpen, setMenuOpen] = useState(false);
+	const [menuPos, setMenuPos] = useState({ x: 0, y: 0 });
+	const longPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+	const openMenu = useCallback((clientX: number, clientY: number) => {
+		setMenuPos({ x: clientX, y: clientY });
+		setMenuOpen(true);
+	}, []);
+
+	const handleContextMenu = useCallback(
+		(e: React.MouseEvent) => {
+			if (!onFingerContextAction) return;
+			e.preventDefault();
+			e.stopPropagation();
+			openMenu(e.clientX, e.clientY);
+		},
+		[onFingerContextAction, openMenu],
+	);
+
+	const handleTouchStart = useCallback(
+		(e: React.TouchEvent) => {
+			if (!onFingerContextAction) return;
+			const touch = e.touches[0];
+			longPressTimer.current = setTimeout(() => {
+				openMenu(touch.clientX, touch.clientY);
+			}, 500);
+		},
+		[onFingerContextAction, openMenu],
+	);
+
+	const handleTouchEnd = useCallback(() => {
+		if (longPressTimer.current) {
+			clearTimeout(longPressTimer.current);
+			longPressTimer.current = null;
+		}
+	}, []);
+
 	const label = FINGER_LABELS[finger];
 	const diameter = zone.r * 2;
 	const iconSize = diameter;
@@ -254,6 +303,10 @@ function FingerButton({
 					aria-label={`${label}${registered ? " — já cadastrado" : " — cadastrar"}`}
 					title={label}
 					onClick={() => onFingerClick?.(finger)}
+					onContextMenu={handleContextMenu}
+					onTouchStart={handleTouchStart}
+					onTouchEnd={handleTouchEnd}
+					onTouchCancel={handleTouchEnd}
 					style={{
 						width: iconSize,
 						height: iconSize,
@@ -313,6 +366,50 @@ function FingerButton({
 						</span>
 					)}
 				</button>
+
+				{/* Context menu (right-click / long-press) */}
+				{onFingerContextAction && (
+					<DropdownMenu open={menuOpen} onOpenChange={setMenuOpen}>
+						<DropdownMenuContent
+							style={{
+								position: "fixed",
+								left: menuPos.x,
+								top: menuPos.y,
+							}}
+							align="start"
+							className="min-w-40"
+						>
+							{registered ? (
+								<>
+									<DropdownMenuItem
+										onSelect={() => onFingerContextAction(finger, "re-register")}
+										className="cursor-pointer"
+									>
+										<RefreshCw className="size-4" />
+										Recadastrar
+									</DropdownMenuItem>
+									<DropdownMenuSeparator />
+									<DropdownMenuItem
+										variant="destructive"
+										onSelect={() => onFingerContextAction(finger, "delete")}
+										className="cursor-pointer"
+									>
+										<Trash2 className="size-4" />
+										Apagar digital
+									</DropdownMenuItem>
+								</>
+							) : (
+								<DropdownMenuItem
+									onSelect={() => onFingerContextAction(finger, "register")}
+									className="cursor-pointer"
+								>
+									<Fingerprint className="size-4" />
+									Cadastrar
+								</DropdownMenuItem>
+							)}
+						</DropdownMenuContent>
+					</DropdownMenu>
+				)}
 			</foreignObject>
 		</g>
 	);
@@ -326,6 +423,7 @@ interface HotZoneOverlayProps {
 	registeredFingers: RegisteredFingerprint[];
 	selectedFinger?: FingerKey | null;
 	onFingerClick?: (finger: FingerKey) => void;
+	onFingerContextAction?: (finger: FingerKey, action: FingerContextAction) => void;
 	viewBoxSize: number;
 	readerStatus?: FingerprintStatus;
 }
@@ -336,6 +434,7 @@ function HotZoneOverlay({
 	registeredFingers,
 	selectedFinger,
 	onFingerClick,
+	onFingerContextAction,
 	viewBoxSize,
 	readerStatus,
 }: HotZoneOverlayProps) {
@@ -355,6 +454,7 @@ function HotZoneOverlay({
 						registered={registered}
 						selected={selected}
 						onFingerClick={onFingerClick}
+						onFingerContextAction={onFingerContextAction}
 						viewBoxSize={viewBoxSize}
 						readerStatus={readerStatus}
 					/>
@@ -371,6 +471,7 @@ interface InternalHandProps {
 	registeredFingers: RegisteredFingerprint[];
 	selectedFinger?: FingerKey | null;
 	onFingerClick?: (finger: FingerKey) => void;
+	onFingerContextAction?: (finger: FingerKey, action: FingerContextAction) => void;
 	interactive: boolean;
 	readerStatus?: FingerprintStatus;
 	captureActive?: boolean;
@@ -384,6 +485,7 @@ function RightHand({
 	registeredFingers,
 	selectedFinger,
 	onFingerClick,
+	onFingerContextAction,
 	interactive,
 	readerStatus,
 	captureActive = false,
@@ -425,6 +527,7 @@ function RightHand({
 						registeredFingers={registeredFingers}
 						selectedFinger={selectedFinger}
 						onFingerClick={onFingerClick}
+						onFingerContextAction={onFingerContextAction}
 						viewBoxSize={146}
 						readerStatus={readerStatus}
 					/>
@@ -470,6 +573,7 @@ function RightHand({
 					registeredFingers={registeredFingers}
 					selectedFinger={selectedFinger}
 					onFingerClick={onFingerClick}
+					onFingerContextAction={onFingerContextAction}
 					viewBoxSize={496}
 					readerStatus={readerStatus}
 				/>
@@ -485,6 +589,7 @@ function LeftHand({
 	registeredFingers,
 	selectedFinger,
 	onFingerClick,
+	onFingerContextAction,
 	interactive,
 	readerStatus,
 	captureActive = false,
@@ -526,6 +631,7 @@ function LeftHand({
 						registeredFingers={registeredFingers}
 						selectedFinger={selectedFinger}
 						onFingerClick={onFingerClick}
+						onFingerContextAction={onFingerContextAction}
 						viewBoxSize={146}
 						readerStatus={readerStatus}
 					/>
@@ -571,6 +677,7 @@ function LeftHand({
 					registeredFingers={registeredFingers}
 					selectedFinger={selectedFinger}
 					onFingerClick={onFingerClick}
+					onFingerContextAction={onFingerContextAction}
 					viewBoxSize={496}
 					readerStatus={readerStatus}
 				/>
@@ -587,6 +694,7 @@ export function Hand({
 	registeredFingers = [],
 	selectedFinger = null,
 	onFingerClick,
+	onFingerContextAction,
 	interactive = false,
 	readerStatus,
 	captureActive = false,
@@ -597,6 +705,7 @@ export function Hand({
 		registeredFingers,
 		selectedFinger,
 		onFingerClick,
+		onFingerContextAction,
 		interactive,
 		readerStatus,
 		captureActive,

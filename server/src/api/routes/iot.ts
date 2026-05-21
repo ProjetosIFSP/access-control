@@ -863,6 +863,7 @@ export const iotRoute: FastifyPluginAsyncZod = async (app) => {
 					finger,
 					template,
 					enrolledByControllerId: controllerId,
+					id: enrollmentId,
 				});
 
 				request.log.info(

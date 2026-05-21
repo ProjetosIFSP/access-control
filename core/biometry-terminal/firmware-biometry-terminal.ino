@@ -48,6 +48,9 @@ void saveConfigCallback () {
 #define PIN_FINGER_RX 5  // D1 -> TX do sensor
 #define PIN_FINGER_TX 4  // D2 -> RX do sensor
 #define PIN_TOUCHOUT  14 // D5 (GPIO14) -> Interrupção/Detecção de toque 
+// PIN_LED não é mais usado para feedback — o LED RGB do sensor ZW-101
+// é controlado via PS_ControlBLN (finger.LEDcontrol).
+// Mantemos o define para compatibilidade, mas não usamos no feedback.
 #define PIN_LED       LED_BUILTIN
 
 const unsigned long HEARTBEAT_INTERVAL_MS = 30000;
@@ -58,7 +61,7 @@ const unsigned long ENROLLMENT_TIMEOUT_MS = 120000;
 
 // Buffer MQTT para recepção de sync-template (templates até ~11KB = ~22KB hex + JSON).
 // Durante enrollment o buffer é reduzido temporariamente para liberar heap.
-const uint16_t MQTT_BUF_SIZE = 24576;
+const uint16_t MQTT_BUF_SIZE = 32768; // Increased from 24576 to prevent silent drops
 
 // Tamanho real do template do sensor (lido via PS_ReadSysPara durante setup).
 // Usado para limitar os dados enviados via PS_DownChar.
@@ -95,10 +98,9 @@ enum EnrollmentStep {
 };
 
 EnrollmentStep enrollmentStep = ENROLL_STEP_IDLE;
-String enrollmentId;
-String enrollmentUserId;
-String enrollmentFinger;
-String enrollmentTemplateHex;
+String enrollmentId = "";
+String enrollmentUserId = "";
+String enrollmentFinger = "";
 uint8_t enrollmentQuality = 0;
 unsigned long enrollmentExpiresAt = 0;
 unsigned long enrollmentStepAt = 0;
@@ -114,6 +116,7 @@ bool   resultReceived = false;
 String resultStatus   = "";
 String resultCredentialId = "";
 bool   pendingCacheStore  = false;
+int    lastMatchedSlot    = -1;
 
 // Forward declarations for globals defined later in the sketch.
 extern WiFiClient espClient;
@@ -122,6 +125,12 @@ extern SoftwareSerial fingerSerial;
 extern Adafruit_Fingerprint finger;
 extern String topicEnrollmentResult;
 extern String topicEnrollmentProgress;
+
+// Forward declarations for sensor LED functions (defined in HARDWARE section).
+void sensorLedOff();
+void sensorLedGreen(uint8_t count = 0);
+void sensorLedRed(uint8_t count = 0);
+void sensorLedBlue();
 
 // ── Slot table (maps sensor flash slots to credential IDs) ──────────────
 // Reserve slot (capacity-1) for scratch during enrollment.
@@ -222,6 +231,38 @@ void cacheCurrentTemplate(const String &credId) {
   }
 }
 
+void evictSlot(int slot) {
+  if (slot >= 0 && slot < MAX_CACHE_SLOTS) {
+    if (finger.deleteModel(slot) == FINGERPRINT_OK) {
+      slotTable[slot].occupied = false;
+      saveSlotTable();
+#ifdef DEBUG
+      Serial.print(F("[SLOT] Evicted slot ")); Serial.println(slot);
+#endif
+    }
+  }
+}
+
+int performFingerSearch() {
+  int searchResult;
+  while (true) {
+    searchResult = finger.fingerSearch();
+    if (searchResult == FINGERPRINT_OK) {
+      if (finger.fingerID >= MAX_CACHE_SLOTS || !slotTable[finger.fingerID].occupied) {
+#ifdef DEBUG
+        Serial.print(F("[BIO] Ghost template found at slot "));
+        Serial.print(finger.fingerID);
+        Serial.println(F(". Deleting and retrying..."));
+#endif
+        delay(50); // Dá tempo para o sensor respirar após a busca antes de deletar
+        finger.deleteModel(finger.fingerID);
+        continue; // Try again after deleting ghost
+      }
+    }
+    break;
+  }
+  return searchResult;
+}
 
 constexpr uint8_t TEMPLATE_EMPTY_CODE = 35;
 constexpr size_t MAX_TEMPLATE_HEX_CHARS = 32768;
@@ -340,12 +381,11 @@ bool readRawFingerprintPacket(uint8_t &packetType,
 
   // Checksum, ignorado aqui porque o objetivo é extrair o template bruto.
   if (!readByte(byte, timer)) return false;
-  if (!readByte(byte, timer)) return false;
 
   return true;
 }
 
-bool readTemplateStream(String &templateHex, uint16_t timeoutMs) {
+bool readTemplateStream(File &file, uint32_t timeoutMs) {
 #ifdef DEBUG
   Serial.println(F("[BIO] Lendo stream raw do template..."));
 #endif
@@ -397,14 +437,14 @@ bool readTemplateStream(String &templateHex, uint16_t timeoutMs) {
       return false;
     }
 
-    if (templateHex.length() + (packetDataLength * 2) > MAX_TEMPLATE_HEX_CHARS) {
+    if (file.size() + (packetDataLength * 2) > MAX_TEMPLATE_HEX_CHARS) {
 #ifdef DEBUG
       Serial.println(F("[BIO] ERRO: template excedeu o limite seguro do parser."));
 #endif
       return false;
     }
 
-    templateHex += bytesToHex(packetData, packetDataLength);
+    file.print(bytesToHex(packetData, packetDataLength));
     packetNum++;
 
 #ifdef DEBUG
@@ -428,10 +468,10 @@ bool readTemplateStream(String &templateHex, uint16_t timeoutMs) {
   // ZW101 templates are usually 512 bytes (1024 hex chars) or 256 bytes (512 hex chars).
   // Some firmware variants stream larger packets; we accept any non-empty
   // template that stays within the conservative parser cap.
-  if (templateHex.length() < 512) {
+  if (file.size() < 512) {
 #ifdef DEBUG
     Serial.print(F("[BIO] Template curto demais: "));
-    Serial.print(templateHex.length() / 2);
+    Serial.print(file.size() / 2);
     Serial.println(F(" bytes"));
 #endif
     return false;
@@ -439,14 +479,20 @@ bool readTemplateStream(String &templateHex, uint16_t timeoutMs) {
 
 #ifdef DEBUG
   Serial.print(F("[BIO] ✓ Template extraído! Tamanho: "));
-  Serial.print(templateHex.length() / 2);
+  Serial.print(file.size() / 2);
   Serial.println(F(" bytes"));
 #endif
 
   return true;
 }
 
-bool captureTemplateHexFromSensor(String &templateHex) {
+bool captureTemplateFromBuffer(uint8_t bufferId, File &file, uint32_t timeoutMs) {
+  clearFingerprintSerialInput();
+  requestTemplateUpload(bufferId);
+  return readTemplateStream(file, timeoutMs);
+}
+
+bool captureTemplateHexFromSensor(File &file) {
   // O ZW101 frequentemente retorna 0x23 nos buffers após createModel().
   // Estratégia principal: store → load → upload (mais confiável).
   uint16_t scratchSlot = (finger.capacity > 1) ? (finger.capacity - 1) : 0;
@@ -460,14 +506,14 @@ bool captureTemplateHexFromSensor(String &templateHex) {
     delay(100);
     if (finger.loadModel(scratchSlot) == FINGERPRINT_OK) {
       delay(100);
-      if (captureTemplateFromBuffer(1, templateHex, 5000)) {
+      if (captureTemplateFromBuffer(1, file, 5000)) {
         finger.deleteModel(scratchSlot);
 #ifdef DEBUG
         Serial.println(F("[BIO] Template extraído via store/load (buf 1)."));
 #endif
         return true;
       }
-      if (captureTemplateFromBuffer(2, templateHex, 5000)) {
+      if (captureTemplateFromBuffer(2, file, 5000)) {
         finger.deleteModel(scratchSlot);
 #ifdef DEBUG
         Serial.println(F("[BIO] Template extraído via store/load (buf 2)."));
@@ -483,14 +529,14 @@ bool captureTemplateHexFromSensor(String &templateHex) {
 #endif
 
   // Fallback: upload direto dos buffers (pode não funcionar em todos os ZW101)
-  if (captureTemplateFromBuffer(1, templateHex, 5000)) {
+  if (captureTemplateFromBuffer(1, file, 5000)) {
 #ifdef DEBUG
     Serial.println(F("[BIO] Template extraído do Buffer 1 (direto)."));
 #endif
     return true;
   }
 
-  if (captureTemplateFromBuffer(2, templateHex, 5000)) {
+  if (captureTemplateFromBuffer(2, file, 5000)) {
 #ifdef DEBUG
     Serial.println(F("[BIO] Template extraído do Buffer 2 (direto)."));
 #endif
@@ -503,20 +549,7 @@ bool captureTemplateHexFromSensor(String &templateHex) {
   return false;
 }
 
-bool captureTemplateFromBuffer(uint8_t bufferId, String &templateHex,
-                               uint16_t timeoutMs) {
-  templateHex = "";
-  templateHex.reserve(MAX_TEMPLATE_HEX_CHARS);
 
-  requestTemplateUpload(bufferId);
-  return readTemplateStream(templateHex, timeoutMs);
-}
-
-bool captureAccessTemplateHex(String &templateHex) {
-  if (finger.getImage() != FINGERPRINT_OK) return false;
-  if (finger.image2Tz(1) != FINGERPRINT_OK) return false;
-  return captureTemplateHexFromSensor(templateHex);
-}
 
 // ── PS_DownChar: download template from host to sensor ───────────────────────
 
@@ -603,7 +636,10 @@ bool downloadTemplateToSensor(const char* hexStr, size_t hexLen, uint8_t bufferI
     uint8_t ptype = isLast ? FINGERPRINT_ENDDATAPACKET : FINGERPRINT_DATAPACKET;
     Adafruit_Fingerprint_Packet dataPkt(ptype, chunkLen, pktBuf);
     finger.writeStructuredPacket(dataPkt);
-    delay(5);
+    
+    // ZW111 requires more time to process 128 bytes, otherwise the stream
+    // gets corrupted and the final storeModel returns 0x01.
+    delay(25);
 
     sent += chunkLen;
   }
@@ -786,7 +822,6 @@ void resetEnrollmentState() {
   enrollmentId = "";
   enrollmentUserId = "";
   enrollmentFinger = "";
-  enrollmentTemplateHex = "";
   enrollmentQuality = 0;
   enrollmentExpiresAt = 0;
   enrollmentStepAt = 0;
@@ -798,17 +833,9 @@ void publishEnrollmentResult(const String &enrollmentIdValue,
                              const String &userIdValue,
                              const String &fingerValue,
                              const String &status,
-                             const String &templateHex,
+                             bool hasTemplate,
                              uint8_t quality) {
   // Calcula tamanho EXATO do payload JSON para streaming MQTT.
-  //
-  // Literais (contadas char a char):
-  //   {"enrollmentId":"    = 17      ","userId":"      = 12
-  //   ","finger":"         = 12      ","status":"     = 12
-  //   ","quality":         = 12      ,"deviceSecret":" = 17
-  //   ","template":"       = 14 (opt)  "}              = 2
-  // Fixo sem template: 17+12+12+12+12+17+2 = 84
-
   char qualityStr[4];
   snprintf(qualityStr, sizeof(qualityStr), "%u", quality);
 
@@ -819,15 +846,22 @@ void publishEnrollmentResult(const String &enrollmentIdValue,
   payloadLen += status.length();
   payloadLen += strlen(qualityStr);
   payloadLen += strlen(DEVICE_SECRET);
-  if (templateHex.length() > 0) {
-    payloadLen += 14 + templateHex.length();
+  
+  File f;
+  if (hasTemplate) {
+    f = LittleFS.open("/temp_template.hex", "r");
+    if (f) {
+      payloadLen += 14 + f.size();
+    } else {
+      hasTemplate = false; // fallback if file missing
+    }
   }
 
 #ifdef DEBUG
   Serial.print(F("[MQTT] Payload calculado: "));
   Serial.print(payloadLen);
   Serial.print(F(" bytes (template hex: "));
-  Serial.print(templateHex.length());
+  Serial.print(hasTemplate ? f.size() : 0);
   Serial.println(F(" chars)"));
 #endif
 
@@ -844,9 +878,14 @@ void publishEnrollmentResult(const String &enrollmentIdValue,
     mqtt.print(qualityStr);
     mqtt.print(F(",\"deviceSecret\":\""));
     mqtt.print(DEVICE_SECRET);
-    if (templateHex.length() > 0) {
+    if (hasTemplate && f) {
       mqtt.print(F("\",\"template\":\""));
-      mqtt.print(templateHex);
+      while (f.available()) {
+        uint8_t buf[256];
+        size_t n = f.read(buf, sizeof(buf));
+        mqtt.write(buf, n);
+      }
+      f.close();
     }
     mqtt.print(F("\"}"));
     mqtt.endPublish();
@@ -1084,12 +1123,12 @@ void onMqttMessage(char* topic, byte* payload, unsigned int length) {
     enrollmentId = String(enrollmentIdValue);
     enrollmentUserId = String(userId);
     enrollmentFinger = String(fingerName);
-    enrollmentTemplateHex = "";
     enrollmentQuality = 0;
     enrollmentStep = ENROLL_STEP_WAITING_FIRST;
     enrollmentStepAt = millis();
     currentState = ENROLLMENT_MODE;
     publishEnrollmentProgress("WAITING_FIRST");
+    sensorLedBlue();  // azul: modo de cadastro ativo, aguardando leitura
     return;
   }
 
@@ -1117,7 +1156,9 @@ void onMqttMessage(char* topic, byte* payload, unsigned int length) {
 #ifdef DEBUG
         Serial.println(F("[BIO] Dedo não detectado após sync. Acesso negado."));
 #endif
-        ledBlink(5, 50);
+        sensorLedRed(3);  // vermelho: erro na leitura
+        delay(800);
+        sensorLedOff();
         currentState = IDLE;
         return;
       }
@@ -1125,12 +1166,14 @@ void onMqttMessage(char* topic, byte* payload, unsigned int length) {
 #ifdef DEBUG
         Serial.println(F("[BIO] image2Tz falhou após sync."));
 #endif
-        ledBlink(5, 50);
+        sensorLedRed(3);  // vermelho: erro na leitura
+        delay(800);
+        sensorLedOff();
         currentState = IDLE;
         return;
       }
 
-      int searchResult = finger.fingerSearch();
+      int searchResult = performFingerSearch();
 #ifdef DEBUG
       Serial.print(F("[BIO] fingerSearch resultado=")); Serial.print(searchResult);
       Serial.print(F(" id=")); Serial.print(finger.fingerID);
@@ -1160,7 +1203,9 @@ void onMqttMessage(char* topic, byte* payload, unsigned int length) {
         }
         Serial.println();
 #endif
-        ledBlink(5, 50);
+        sensorLedRed(3);  // vermelho: sem permissão de acesso
+        delay(800);
+        sensorLedOff();
         currentState = IDLE;
       }
     }
@@ -1169,12 +1214,67 @@ void onMqttMessage(char* topic, byte* payload, unsigned int length) {
 }
 
 // =============================================================================
-//  HARDWARE & FEEDBACK
+//  HARDWARE & FEEDBACK (LED do anel RGB do sensor ZW-101)
 // =============================================================================
+// Cores do ZW-101 (bitmask): bit0=blue(0x01), bit1=green(0x02), bit2=red(0x04)
 
+#define ZW_COLOR_OFF    0x00
+#define ZW_COLOR_BLUE   0x01
+#define ZW_COLOR_GREEN  0x02
+#define ZW_COLOR_RED    0x04
+#define ZW_COLOR_PURPLE 0x05
+#define ZW_COLOR_WHITE  0x07
+
+// Modos do PS_ControlBLN
+#define ZW_MODE_BREATHING    0x01
+#define ZW_MODE_FLASHING     0x02
+#define ZW_MODE_ON           0x03
+#define ZW_MODE_OFF          0x04
+#define ZW_MODE_GRADUAL_ON   0x05
+#define ZW_MODE_GRADUAL_OFF  0x06
+
+// Envia o comando PS_ControlBLN (0x3C) diretamente ao sensor ZW-101.
+// A biblioteca Adafruit usa 0x35 (AURALEDCONFIG) que o ZW-101 nao suporta.
+void sensorLedCmd(uint8_t mode, uint8_t startColor, uint8_t endColor, uint8_t cycles) {
+  uint8_t data[] = {0x3C, mode, startColor, endColor, cycles};
+  Adafruit_Fingerprint_Packet pkt(FINGERPRINT_COMMANDPACKET, sizeof(data), data);
+  finger.writeStructuredPacket(pkt);
+  // Le e descarta a resposta
+  uint8_t respBuf[64] = {0};
+  Adafruit_Fingerprint_Packet resp(FINGERPRINT_ACKPACKET, 0, respBuf);
+  finger.getStructuredPacket(&resp, 500);
+}
+
+void sensorLedOff() {
+  // Tenta PS_ControlBLN com modo OFF
+  sensorLedCmd(ZW_MODE_OFF, ZW_COLOR_OFF, ZW_COLOR_OFF, 0);
+  // Fallback: tenta LEDOFF (0x51) caso o sensor use esse comando simples
+  finger.LEDcontrol(false);
+}
+
+void sensorLedGreen(uint8_t count) {
+  if (count > 0) {
+    sensorLedCmd(ZW_MODE_FLASHING, ZW_COLOR_GREEN, ZW_COLOR_GREEN, count);
+  } else {
+    sensorLedCmd(ZW_MODE_ON, ZW_COLOR_GREEN, ZW_COLOR_GREEN, 0);
+  }
+}
+
+void sensorLedRed(uint8_t count) {
+  if (count > 0) {
+    sensorLedCmd(ZW_MODE_FLASHING, ZW_COLOR_RED, ZW_COLOR_RED, count);
+  } else {
+    sensorLedCmd(ZW_MODE_ON, ZW_COLOR_RED, ZW_COLOR_RED, 0);
+  }
+}
+
+void sensorLedBlue() {
+  sensorLedCmd(ZW_MODE_BREATHING, ZW_COLOR_BLUE, ZW_COLOR_BLUE, 0);
+}
+
+// Mantém LED_BUILTIN para compatibilidade mas não é usado ativamente.
 void ledOn()  { digitalWrite(PIN_LED, LOW); }
 void ledOff() { digitalWrite(PIN_LED, HIGH); }
-
 void ledBlink(int times, unsigned long ms) {
   for (int i = 0; i < times; i++) { ledOn(); delay(ms); ledOff(); delay(ms); }
 }
@@ -1244,10 +1344,9 @@ void setupFingerprint() {
     }
   }
 
-  if (!found) {
-#ifdef DEBUG
-    Serial.println("[BIO] Erro: Não foi possível encontrar o sensor biométrico.");
-#endif
+  // Desliga o LED do sensor ao final do setup (padrão = apagado)
+  if (found) {
+    sensorLedOff();
   }
 }
 
@@ -1259,6 +1358,9 @@ void processEnrollment(unsigned long now, bool touched) {
   if (enrollmentExpiresAt > 0 && now >= enrollmentExpiresAt) {
     publishEnrollmentProgress("EXPIRED");
     publishEnrollmentResult(enrollmentId, enrollmentUserId, enrollmentFinger, "EXPIRED", "", 0);
+    sensorLedRed(3);  // vermelho: expirado
+    delay(800);
+    sensorLedOff();
     resetEnrollmentState();
     return;
   }
@@ -1270,6 +1372,9 @@ void processEnrollment(unsigned long now, bool touched) {
           enrollmentStep = ENROLL_STEP_WAITING_SECOND;
           enrollmentStepAt = now;
           publishEnrollmentProgress("FIRST_CAPTURED");
+          sensorLedGreen(2);  // verde: biometria coletada
+          delay(600);
+          sensorLedBlue();    // volta a azul: aguardando segunda leitura
 #ifdef DEBUG
           Serial.println(F("[BIO] Primeira passagem capturada. Retire o dedo e encoste novamente."));
 #endif
@@ -1283,6 +1388,7 @@ void processEnrollment(unsigned long now, bool touched) {
           enrollmentStep = ENROLL_STEP_CREATE_MODEL;
           enrollmentStepAt = now;
           publishEnrollmentProgress("SECOND_CAPTURED");
+          sensorLedGreen(2);  // verde: biometria coletada
 #ifdef DEBUG
           Serial.println(F("[BIO] Segunda passagem capturada."));
 #endif
@@ -1306,6 +1412,9 @@ void processEnrollment(unsigned long now, bool touched) {
 #endif
         publishEnrollmentProgress("FAILED");
         publishEnrollmentResult(enrollmentId, enrollmentUserId, enrollmentFinger, "FAILED", "", 0);
+        sensorLedRed(3);  // vermelho: erro no cadastro
+        delay(800);
+        sensorLedOff();
         resetEnrollmentState();
         return;
       }
@@ -1320,23 +1429,63 @@ void processEnrollment(unsigned long now, bool touched) {
       // hex na heap (pode chegar a ~22KB). Restaurado após o publish.
       mqtt.setBufferSize(512);
 
-      if (enrollmentTemplateHex.length() == 0) {
-        if (!captureTemplateHexFromSensor(enrollmentTemplateHex)) {
+      // NOVIDADE: O ZW111 suporta storeModel diretamente após createModel (o modelo já está no buffer 1/2).
+      // Salva a digital imediatamente no sensor, evitando a necessidade de download via MQTT (que é instável).
+      int slot = findFreeSlot();
+      if (slot < 0) {
+        slot = findLruSlot();
+        if (slot >= 0) finger.deleteModel(slot);
+      }
+      if (slot >= 0) {
+        if (finger.storeModel(slot) == FINGERPRINT_OK) {
+          slotTable[slot].occupied = true;
+          strncpy(slotTable[slot].credentialId, enrollmentId.c_str(), 37);
+          slotTable[slot].credentialId[37] = '\0';
+          slotTable[slot].lastUsed = millis() / 1000;
+          saveSlotTable();
+#ifdef DEBUG
+          Serial.print(F("[BIO] Template armazenado localmente imediato no slot "));
+          Serial.println(slot);
+#endif
+        }
+      }
+
+      bool hasTemplate = false;
+      File f = LittleFS.open("/temp_template.hex", "w");
+      if (f) {
+        if (!captureTemplateHexFromSensor(f)) {
+          f.close();
           publishEnrollmentProgress("FAILED");
-          publishEnrollmentResult(enrollmentId, enrollmentUserId, enrollmentFinger, "FAILED", "", 0);
-          mqtt.setBufferSize(MQTT_BUF_SIZE);
+          publishEnrollmentResult(enrollmentId, enrollmentUserId, enrollmentFinger, "FAILED", false, 0);
+          sensorLedRed(3);  // vermelho: erro no cadastro
+          delay(800);
+          sensorLedOff();
           resetEnrollmentState();
           return;
         }
+        f.close();
+        hasTemplate = true;
+      } else {
+        // Fallback or error handling if LittleFS fails
+        publishEnrollmentProgress("FAILED");
+        publishEnrollmentResult(enrollmentId, enrollmentUserId, enrollmentFinger, "FAILED", false, 0);
+        sensorLedRed(3);
+        delay(800);
+        sensorLedOff();
+        resetEnrollmentState();
+        return;
       }
 
       enrollmentQuality = 0;
 #ifdef DEBUG
       Serial.print(F("[MQTT] Heap antes do publish: ")); Serial.println(ESP.getFreeHeap());
 #endif
-      publishEnrollmentResult(enrollmentId, enrollmentUserId, enrollmentFinger, "SUCCESS", enrollmentTemplateHex, enrollmentQuality);
-      mqtt.setBufferSize(MQTT_BUF_SIZE);
+      
+      publishEnrollmentResult(enrollmentId, enrollmentUserId, enrollmentFinger, "SUCCESS", hasTemplate, enrollmentQuality);
 
+      sensorLedGreen();  // verde: biometria cadastrada com sucesso
+      delay(1500);
+      sensorLedOff();
       resetEnrollmentState();
       return;
     }
@@ -1360,7 +1509,7 @@ void setup() {
 
   pinMode(PIN_LED, OUTPUT);
   pinMode(PIN_TOUCHOUT, INPUT);
-  ledOff();
+  ledOff();   // Desliga LED_BUILTIN
 
   String mac = WiFi.macAddress();
   mac.replace(":", "");
@@ -1433,11 +1582,12 @@ void loop() {
   if (currentState == IDLE && touched) {
     if (millis() - lastFingerTime > FINGER_DEBOUNCE_MS) {
       if (finger.getImage() == FINGERPRINT_OK && finger.image2Tz(1) == FINGERPRINT_OK) {
+        sensorLedBlue();  // azul: efetuando leitura/busca
         // 1. Tenta match local (sensor flash)
-        int searchResult = finger.fingerSearch();
-        if (searchResult == FINGERPRINT_OK && finger.fingerID < MAX_CACHE_SLOTS
-            && slotTable[finger.fingerID].occupied) {
+        int searchResult = performFingerSearch();
+        if (searchResult == FINGERPRINT_OK) {
           // Match local encontrado — confirma permissão com o servidor
+          lastMatchedSlot = finger.fingerID;
           publishLocalMatch(finger.fingerID, slotTable[finger.fingerID].credentialId, finger.confidence);
           // Atualiza LRU
           slotTable[finger.fingerID].lastUsed = millis() / 1000;
@@ -1450,6 +1600,7 @@ void loop() {
           Serial.print(F(" conf=")); Serial.println(finger.confidence);
 #endif
         } else {
+          lastMatchedSlot = -1;
           // 2. Sem match local — pede os templates faltantes do servidor
 #ifdef DEBUG
           Serial.println(F("[BIO] Sem match local, pedindo templates do servidor (sync)..."));
@@ -1475,7 +1626,9 @@ void loop() {
       Serial.print(F("[BIO] Timeout (")); Serial.print(elapsed / 1000);
       Serial.print(F("s) state=")); Serial.println(currentState);
 #endif
-      ledBlink(3, 100);
+      sensorLedRed(3);  // vermelho: timeout
+      delay(800);
+      sensorLedOff();
       currentState = IDLE;
       resultReceived = false;
       pendingCacheStore = false;
@@ -1494,17 +1647,28 @@ void loop() {
         Serial.println(currentDoorState == OPEN ? F("ABERTO") : F("FECHADO"));
 #endif
         publishDoorStatus();
-        ledBlink(1, 1000);
+        sensorLedGreen();  // verde: acesso garantido
+        delay(1500);
+        sensorLedOff();
         // Cache do template no sensor se veio de match remoto
         if (pendingCacheStore && resultCredentialId.length() > 0) {
           cacheCurrentTemplate(resultCredentialId);
         }
       } else {
-        ledBlink(5, 50);
+        sensorLedRed(3);  // vermelho: sem permissão de acesso
+        delay(800);
+        sensorLedOff();
+        
+        // Se foi um match local que resultou em DENIED, removemos do cache
+        // pois a credencial pode ter sido revogada no servidor
+        if (lastMatchedSlot >= 0) {
+          evictSlot(lastMatchedSlot);
+        }
       }
       currentState = IDLE;
       resultReceived = false;
       pendingCacheStore = false;
+      lastMatchedSlot = -1;
       resultCredentialId = "";
     }
   }

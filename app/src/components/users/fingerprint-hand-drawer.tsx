@@ -8,9 +8,26 @@ import {
 	X,
 } from "lucide-react";
 import { AnimatePresence, motion } from "motion/react";
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import {
+	useCallback,
+	useEffect,
+	useLayoutEffect,
+	useRef,
+	useState,
+} from "react";
 import { toast } from "sonner";
+import type { FingerContextAction } from "@/assets/vectors/hand";
 import { Hand } from "@/assets/vectors/hand";
+import {
+	AlertDialog,
+	AlertDialogAction,
+	AlertDialogCancel,
+	AlertDialogContent,
+	AlertDialogDescription,
+	AlertDialogFooter,
+	AlertDialogHeader,
+	AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
 import {
 	DropdownMenu,
@@ -18,8 +35,8 @@ import {
 	DropdownMenuItem,
 	DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { useFingerprintReader } from "@/hooks/use-fingerprint-reader";
 import { useEnrollmentStream } from "@/hooks/use-enrollment-stream";
+import { useFingerprintReader } from "@/hooks/use-fingerprint-reader";
 import {
 	countRegisteredInSet,
 	FINGER_LABELS,
@@ -30,6 +47,7 @@ import {
 import { cn } from "@/lib/utils";
 import { pairingDevicesQueryOptions } from "@/services/devices/pairing";
 import {
+	deleteFingerprint,
 	fingerprintQueryKeys,
 	registerFingerprint,
 	requestFingerprintEnrollment,
@@ -174,6 +192,12 @@ export function FingerprintHandDrawer({
 	const [selectedFinger, setSelectedFinger] = useState<FingerKey | null>(null);
 	const [selectedDevice, setSelectedDevice] = useState<string | null>(null);
 
+	// Delete confirmation state
+	const [deleteTarget, setDeleteTarget] = useState<{
+		finger: FingerKey;
+		credentialId: string;
+	} | null>(null);
+
 	// ── Reader hook ─────────────────────────────────────────────────────────────
 	const reader = useFingerprintReader({ mode: "keyboard" });
 
@@ -223,6 +247,24 @@ export function FingerprintHandDrawer({
 	const registerIsPending = registerMutation.isPending;
 	const enrollMutate = enrollMutation.mutate;
 	const enrollIsPending = enrollMutation.isPending;
+
+	// ── Delete mutation ─────────────────────────────────────────────────────────
+	const deleteMutation = useMutation({
+		mutationFn: deleteFingerprint,
+		onSuccess: () => {
+			queryClient.invalidateQueries({
+				queryKey: fingerprintQueryKeys.list(userId),
+			});
+			toast.success("Digital removida com sucesso.");
+			setDeleteTarget(null);
+		},
+		onError: (err) => {
+			toast.error(
+				err instanceof Error ? err.message : "Erro ao remover a digital",
+			);
+			setDeleteTarget(null);
+		},
+	});
 
 	// Track previous step to detect ENROLLED transition
 	const prevStepRef = useRef(enrollment.step);
@@ -375,6 +417,25 @@ export function FingerprintHandDrawer({
 		],
 	);
 
+	// ── Context menu handler ────────────────────────────────────────────────────
+	const handleFingerContextAction = useCallback(
+		(finger: FingerKey, action: FingerContextAction) => {
+			if (action === "register" || action === "re-register") {
+				handleFingerClick(finger);
+				return;
+			}
+			if (action === "delete") {
+				const cred = fingerprints.find(
+					(f) => f.finger === finger && f.isActive,
+				);
+				if (cred) {
+					setDeleteTarget({ finger, credentialId: cred.id });
+				}
+			}
+		},
+		[fingerprints, handleFingerClick],
+	);
+
 	const handleTabChange = useCallback(
 		(tab: ActiveHandTab) => {
 			if (tab === activeTab) return;
@@ -403,246 +464,306 @@ export function FingerprintHandDrawer({
 	];
 
 	return (
-		<AnimatePresence>
-			{open && (
-				<>
-					{/* Overlay */}
-					<motion.div
-						key="fp-drawer-overlay"
-						className="fixed inset-0 z-50 cursor-pointer bg-black/50"
-						initial={{ opacity: 0 }}
-						animate={{ opacity: 1 }}
-						exit={{ opacity: 0 }}
-						transition={{ duration: 0.35, ease: EASE_CLOSE }}
-						onClick={handleClose}
-						aria-hidden
-					/>
-
-					{/* Outer positioner */}
-					<div
-						key="fp-drawer-positioner"
-						className="fixed inset-0 z-50 md:inset-y-0 md:left-auto md:w-full md:max-w-md"
-						role="dialog"
-						aria-modal
-						aria-label={`Cadastro de digitais — ${userName}`}
-					>
+		<>
+			<AnimatePresence>
+				{open && (
+					<>
+						{/* Overlay */}
 						<motion.div
-							className="relative h-full overflow-hidden md:rounded-tl-2xl md:rounded-bl-2xl"
-							initial={{ x: "101%" }}
-							animate={{ x: 0 }}
-							exit={{ x: "101%" }}
-							transition={{ duration: 0.575, ease: EASE_CLOSE }}
+							key="fp-drawer-overlay"
+							className="fixed inset-0 z-50 cursor-pointer bg-black/50"
+							initial={{ opacity: 0 }}
+							animate={{ opacity: 1 }}
+							exit={{ opacity: 0 }}
+							transition={{ duration: 0.35, ease: EASE_CLOSE }}
+							onClick={handleClose}
+							aria-hidden
+						/>
+
+						{/* Outer positioner */}
+						<div
+							key="fp-drawer-positioner"
+							className="fixed inset-0 z-50 md:inset-y-0 md:left-auto md:w-full md:max-w-md"
+							role="dialog"
+							aria-modal
+							aria-label={`Cadastro de digitais — ${userName}`}
 						>
-							{/* ── Background wipe layers ── */}
 							<motion.div
-								className="absolute inset-0 bg-primary filter brightness-200 dark:brightness-50"
+								className="relative h-full overflow-hidden md:rounded-tl-2xl md:rounded-bl-2xl"
 								initial={{ x: "101%" }}
 								animate={{ x: 0 }}
-								exit={{ x: 0 }}
-								transition={{ duration: 0.5, ease: EASE, delay: 0 }}
-							/>
-							<motion.div
-								className="absolute inset-0 bg-primary"
-								initial={{ x: "101%" }}
-								animate={{ x: 0 }}
-								exit={{ x: 0 }}
-								transition={{ duration: 0.5, ease: EASE, delay: 0.06 }}
-							/>
-							<motion.div
-								className="absolute inset-0 bg-white dark:bg-zinc-900"
-								initial={{ x: "101%" }}
-								animate={{ x: 0 }}
-								exit={{ x: 0 }}
-								transition={{ duration: 0.575, ease: EASE, delay: 0.12 }}
-							/>
-
-							{/* ── Content ── */}
-							<div className="absolute inset-0 z-10 flex flex-col overflow-hidden">
-								{/* ── Fixed Header (não rola) ── */}
+								exit={{ x: "101%" }}
+								transition={{ duration: 0.575, ease: EASE_CLOSE }}
+							>
+								{/* ── Background wipe layers ── */}
 								<motion.div
-									className="flex items-start justify-between gap-4 px-6 pt-8 pb-4 shrink-0"
-									initial={{ opacity: 0, y: 20 }}
-									animate={{ opacity: 1, y: 0 }}
-									exit={{ opacity: 0 }}
-									transition={{ duration: 0.4, ease: EASE, delay: 0.32 }}
-								>
-									<div className="flex flex-col gap-0.5">
-										<h2 className="text-lg font-bold leading-tight text-zinc-900 dark:text-zinc-50">
-											Credenciais
-										</h2>
-										<p className="text-sm text-zinc-400 dark:text-zinc-500">
-											Gerencie suas credenciais de acesso
-										</p>
-									</div>
+									className="absolute inset-0 bg-primary filter brightness-200 dark:brightness-50"
+									initial={{ x: "101%" }}
+									animate={{ x: 0 }}
+									exit={{ x: 0 }}
+									transition={{ duration: 0.5, ease: EASE, delay: 0 }}
+								/>
+								<motion.div
+									className="absolute inset-0 bg-primary"
+									initial={{ x: "101%" }}
+									animate={{ x: 0 }}
+									exit={{ x: 0 }}
+									transition={{ duration: 0.5, ease: EASE, delay: 0.06 }}
+								/>
+								<motion.div
+									className="absolute inset-0 bg-white dark:bg-zinc-900"
+									initial={{ x: "101%" }}
+									animate={{ x: 0 }}
+									exit={{ x: 0 }}
+									transition={{ duration: 0.575, ease: EASE, delay: 0.12 }}
+								/>
 
-									<Button
-										variant="hover"
-										size="icon"
-										className="shrink-0 size-8 rounded-md bg-transparent! text-black hover:text-white dark:text-white"
-										onClick={handleClose}
-										aria-label="Fechar"
-										overlayClassname="before:bg-primary"
+								{/* ── Content ── */}
+								<div className="absolute inset-0 z-10 flex flex-col overflow-hidden">
+									{/* ── Fixed Header (não rola) ── */}
+									<motion.div
+										className="flex items-start justify-between gap-4 px-6 pt-8 pb-4 shrink-0"
+										initial={{ opacity: 0, y: 20 }}
+										animate={{ opacity: 1, y: 0 }}
+										exit={{ opacity: 0 }}
+										transition={{ duration: 0.4, ease: EASE, delay: 0.32 }}
 									>
-										<X className="size-4" />
-									</Button>
-								</motion.div>
+										<div className="flex flex-col gap-0.5">
+											<h2 className="text-lg font-bold leading-tight text-zinc-900 dark:text-zinc-50">
+												Credenciais
+											</h2>
+											<p className="text-sm text-zinc-400 dark:text-zinc-500">
+												Gerencie suas credenciais de acesso
+											</p>
+										</div>
 
-								{/* ── Scrollable body ── */}
-								<motion.div
-									className="flex-1 overflow-y-auto custom-scrollbar"
-									initial={{ opacity: 0, y: 16 }}
-									animate={{ opacity: 1, y: 0 }}
-									exit={{ opacity: 0 }}
-									transition={{ duration: 0.4, ease: EASE, delay: 0.36 }}
-								>
-									{/* User identity */}
-									<div className="px-6 pt-4 pb-5 flex flex-col gap-1">
-										<span className="text-xs font-black tracking-wider uppercase text-primary">
-											CREDENCIAIS
-										</span>
-										<span className="text-4xl font-medium tracking-tight text-zinc-900 dark:text-zinc-50 leading-none truncate">
-											{userName}
-										</span>
-									</div>
+										<Button
+											variant="hover"
+											size="icon"
+											className="shrink-0 size-8 rounded-md bg-transparent! text-black hover:text-white dark:text-white"
+											onClick={handleClose}
+											aria-label="Fechar"
+											overlayClassname="before:bg-primary"
+										>
+											<X className="size-4" />
+										</Button>
+									</motion.div>
 
-									{/* ── Device Selector — acima das tabs ── */}
-									<DeviceSelector
-										selectedDevice={selectedDevice}
-										onSelectDevice={setSelectedDevice}
-									/>
+									{/* ── Scrollable body ── */}
+									<motion.div
+										className="flex-1 overflow-y-auto custom-scrollbar"
+										initial={{ opacity: 0, y: 16 }}
+										animate={{ opacity: 1, y: 0 }}
+										exit={{ opacity: 0 }}
+										transition={{ duration: 0.4, ease: EASE, delay: 0.36 }}
+									>
+										{/* User identity */}
+										<div className="px-6 pt-4 pb-5 flex flex-col gap-1">
+											<span className="text-xs font-black tracking-wider uppercase text-primary">
+												CREDENCIAIS
+											</span>
+											<span className="text-4xl font-medium tracking-tight text-zinc-900 dark:text-zinc-50 leading-none truncate">
+												{userName}
+											</span>
+										</div>
 
-									{/* ── Tabs bar ── */}
-									<div className="flex border-b border-zinc-200 dark:border-zinc-700 px-6 mt-2">
-										{TABS.map(({ key, label, count }) => (
-											<button
-												key={key}
-												type="button"
-												onClick={() => handleTabChange(key)}
-												className={cn(
-													"flex items-center gap-1.5 px-3 py-2.5 text-sm font-medium border-b-2 -mb-px transition-colors",
-													activeTab === key
-														? "border-primary text-primary"
-														: "border-transparent text-zinc-500 hover:text-zinc-700 dark:text-zinc-400 dark:hover:text-zinc-200",
-												)}
-											>
-												{label}
-												{count > 0 && (
-													<span
-														className={cn(
-															"inline-flex items-center justify-center min-w-4.5 h-4.5 px-1 rounded-full text-[10px] font-semibold",
-															activeTab === key
-																? "bg-primary text-primary-foreground"
-																: "bg-zinc-100 text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400",
-														)}
-													>
-														{count}
-													</span>
-												)}
-											</button>
-										))}
-									</div>
+										{/* ── Device Selector — acima das tabs ── */}
+										<DeviceSelector
+											selectedDevice={selectedDevice}
+											onSelectDevice={setSelectedDevice}
+										/>
 
-									{/* ── Tab content ── */}
-									<div className="px-6 pt-4 pb-16">
-										{activeTab === "nfc" ? (
-											<NfcTab
-												user={{ id: userId, name: userName }}
-												selectedControllerId={selectedDevice}
-											/>
-										) : (
-											<div
-												key={activeTab}
-												className="flex flex-col gap-4 w-full animate-in fade-in slide-in-from-bottom-2 duration-300"
-											>
-												{/* Hand SVG */}
-												<div className="flex justify-center">
-													{isLoadingFingerprints ? (
-														<div className="flex size-56 items-center justify-center">
-															<Loader2 className="size-6 animate-spin text-zinc-300 dark:text-zinc-600" />
-														</div>
-													) : (
-														<div className="relative size-56 text-zinc-300 dark:text-zinc-700">
-															<Hand
-																side={activeTab}
-																registeredFingers={fingerprints}
-																selectedFinger={selectedFinger}
-																onFingerClick={handleFingerClick}
-																readerStatus={reader.status}
-																captureActive={
-																	reader.status === "waiting" ||
-																	reader.status === "reading" ||
-																	enrollIsPending ||
-																	enrollment.isActive
-																}
-																countdown={reader.countdown}
-																interactive
-															/>
-														</div>
+										{/* ── Tabs bar ── */}
+										<div className="flex border-b border-zinc-200 dark:border-zinc-700 px-6 mt-2">
+											{TABS.map(({ key, label, count }) => (
+												<button
+													key={key}
+													type="button"
+													onClick={() => handleTabChange(key)}
+													className={cn(
+														"flex items-center gap-1.5 px-3 py-2.5 text-sm font-medium border-b-2 -mb-px transition-colors",
+														activeTab === key
+															? "border-primary text-primary"
+															: "border-transparent text-zinc-500 hover:text-zinc-700 dark:text-zinc-400 dark:hover:text-zinc-200",
 													)}
-												</div>
+												>
+													{label}
+													{count > 0 && (
+														<span
+															className={cn(
+																"inline-flex items-center justify-center min-w-4.5 h-4.5 px-1 rounded-full text-[10px] font-semibold",
+																activeTab === key
+																	? "bg-primary text-primary-foreground"
+																	: "bg-zinc-100 text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400",
+															)}
+														>
+															{count}
+														</span>
+													)}
+												</button>
+											))}
+										</div>
 
-												{selectedFinger ? (
-													<div className="flex flex-col gap-3">
-														{/* Enrollment step feedback */}
-														{enrollment.step !== "idle" && (
-															<div className="flex items-center gap-2.5 px-3 py-2.5 rounded-lg bg-zinc-50 dark:bg-zinc-800/60 border border-zinc-200 dark:border-zinc-700">
-																{enrollment.step === "ENROLLED" ? (
-																	<div className="size-5 rounded-full bg-emerald-500 flex items-center justify-center shrink-0">
-																		<svg className="size-3 text-white" fill="none" viewBox="0 0 24 24" strokeWidth={3} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" /></svg>
-																	</div>
-																) : enrollment.step === "FAILED" || enrollment.step === "EXPIRED" ? (
-																	<div className="size-5 rounded-full bg-red-500 flex items-center justify-center shrink-0">
-																		<X className="size-3 text-white" />
-																	</div>
-																) : (
-																	<Loader2 className="size-4 animate-spin text-primary shrink-0" />
-																)}
-																<span className={cn(
-																	"text-sm font-medium",
-																	enrollment.step === "ENROLLED"
-																		? "text-emerald-600 dark:text-emerald-400"
-																		: enrollment.step === "FAILED" || enrollment.step === "EXPIRED"
-																			? "text-red-600 dark:text-red-400"
-																			: "text-zinc-700 dark:text-zinc-300",
-																)}>
-																	{enrollment.stepLabel}
-																</span>
+										{/* ── Tab content ── */}
+										<div className="px-6 pt-4 pb-16">
+											{activeTab === "nfc" ? (
+												<NfcTab
+													user={{ id: userId, name: userName }}
+													selectedControllerId={selectedDevice}
+												/>
+											) : (
+												<div
+													key={activeTab}
+													className="flex flex-col gap-4 w-full animate-in fade-in slide-in-from-bottom-2 duration-300"
+												>
+													{/* Hand SVG */}
+													<div className="flex justify-center">
+														{isLoadingFingerprints ? (
+															<div className="flex size-56 items-center justify-center">
+																<Loader2 className="size-6 animate-spin text-zinc-300 dark:text-zinc-600" />
+															</div>
+														) : (
+															<div className="relative size-56 text-zinc-300 dark:text-zinc-700">
+																<Hand
+																	side={activeTab}
+																	registeredFingers={fingerprints}
+																	selectedFinger={selectedFinger}
+																	onFingerClick={handleFingerClick}
+																	onFingerContextAction={
+																		handleFingerContextAction
+																	}
+																	readerStatus={reader.status}
+																	captureActive={
+																		reader.status === "waiting" ||
+																		reader.status === "reading" ||
+																		enrollIsPending ||
+																		enrollment.isActive
+																	}
+																	countdown={reader.countdown}
+																	interactive
+																/>
 															</div>
 														)}
-
-														{!enrollment.isTerminal && (
-															<Button
-																variant="hoverOutline"
-																className="w-full text-black! dark:text-white! after:border-zinc-200! dark:after:border-zinc-800!"
-																overlayClassname="before:bg-zinc-200 dark:before:bg-zinc-800"
-																onClick={() => {
-																	if (selectedDevice) {
-																		enrollMutation.reset();
-																		enrollment.reset();
-																	} else {
-																		reader.cancelCapture();
-																	}
-																	setSelectedFinger(null);
-																}}
-															>
-																Cancelar leitura
-															</Button>
-														)}
 													</div>
-												) : (
-													<p className="text-center text-xs text-zinc-400 dark:text-zinc-500 pb-2">
-														Toque em um dedo para iniciar o cadastro
-													</p>
-												)}
-											</div>
-										)}
-									</div>
-								</motion.div>
-							</div>
-						</motion.div>
-					</div>
-				</>
-			)}
-		</AnimatePresence>
+
+													{selectedFinger ? (
+														<div className="flex flex-col gap-3">
+															{/* Enrollment step feedback */}
+															{enrollment.step !== "idle" && (
+																<div className="flex items-center gap-2.5 px-3 py-2.5 rounded-lg bg-zinc-50 dark:bg-zinc-800/60 border border-zinc-200 dark:border-zinc-700">
+																	{enrollment.step === "ENROLLED" ? (
+																		<div className="size-5 rounded-full bg-emerald-500 flex items-center justify-center shrink-0">
+																			{/** biome-ignore lint/a11y/noSvgWithoutTitle: <svg sem propósito visual mas mandatory para o funcionamento do código> */}
+																			<svg
+																				className="size-3 text-white"
+																				fill="none"
+																				viewBox="0 0 24 24"
+																				strokeWidth={3}
+																				stroke="currentColor"
+																			>
+																				<path
+																					strokeLinecap="round"
+																					strokeLinejoin="round"
+																					d="M4.5 12.75l6 6 9-13.5"
+																				/>
+																			</svg>
+																		</div>
+																	) : enrollment.step === "FAILED" ||
+																		enrollment.step === "EXPIRED" ? (
+																		<div className="size-5 rounded-full bg-red-500 flex items-center justify-center shrink-0">
+																			<X className="size-3 text-white" />
+																		</div>
+																	) : (
+																		<Loader2 className="size-4 animate-spin text-primary shrink-0" />
+																	)}
+																	<span
+																		className={cn(
+																			"text-sm font-medium",
+																			enrollment.step === "ENROLLED"
+																				? "text-emerald-600 dark:text-emerald-400"
+																				: enrollment.step === "FAILED" ||
+																						enrollment.step === "EXPIRED"
+																					? "text-red-600 dark:text-red-400"
+																					: "text-zinc-700 dark:text-zinc-300",
+																		)}
+																	>
+																		{enrollment.stepLabel}
+																	</span>
+																</div>
+															)}
+
+															{!enrollment.isTerminal && (
+																<Button
+																	variant="hoverOutline"
+																	className="w-full text-black! dark:text-white! after:border-zinc-200! dark:after:border-zinc-800!"
+																	overlayClassname="before:bg-zinc-200 dark:before:bg-zinc-800"
+																	onClick={() => {
+																		if (selectedDevice) {
+																			enrollMutation.reset();
+																			enrollment.reset();
+																		} else {
+																			reader.cancelCapture();
+																		}
+																		setSelectedFinger(null);
+																	}}
+																>
+																	Cancelar leitura
+																</Button>
+															)}
+														</div>
+													) : (
+														<p className="text-center text-xs text-zinc-400 dark:text-zinc-500 pb-2">
+															Toque em um dedo para iniciar o cadastro
+														</p>
+													)}
+												</div>
+											)}
+										</div>
+									</motion.div>
+								</div>
+							</motion.div>
+						</div>
+					</>
+				)}
+			</AnimatePresence>
+
+			{/* Delete confirmation dialog */}
+			<AlertDialog
+				open={!!deleteTarget}
+				onOpenChange={(open) => !open && setDeleteTarget(null)}
+			>
+				<AlertDialogContent>
+					<AlertDialogHeader>
+						<AlertDialogTitle>Apagar digital</AlertDialogTitle>
+						<AlertDialogDescription>
+							Tem certeza que deseja remover a digital{" "}
+							<strong>
+								{deleteTarget ? FINGER_LABELS[deleteTarget.finger] : ""}
+							</strong>
+							? Esta ação não pode ser desfeita.
+						</AlertDialogDescription>
+					</AlertDialogHeader>
+					<AlertDialogFooter>
+						<AlertDialogCancel disabled={deleteMutation.isPending}>
+							Cancelar
+						</AlertDialogCancel>
+						<AlertDialogAction
+							className="bg-destructive text-white hover:bg-destructive/90"
+							disabled={deleteMutation.isPending}
+							onClick={() => {
+								if (deleteTarget) {
+									deleteMutation.mutate({
+										userId,
+										credentialId: deleteTarget.credentialId,
+									});
+								}
+							}}
+						>
+							{deleteMutation.isPending ? "Removendo..." : "Apagar"}
+						</AlertDialogAction>
+					</AlertDialogFooter>
+				</AlertDialogContent>
+			</AlertDialog>
+		</>
 	);
 }
