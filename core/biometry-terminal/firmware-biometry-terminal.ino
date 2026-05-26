@@ -1246,10 +1246,10 @@ void sensorLedCmd(uint8_t mode, uint8_t startColor, uint8_t endColor, uint8_t cy
 }
 
 void sensorLedOff() {
-  // Tenta PS_ControlBLN com modo OFF
-  sensorLedCmd(ZW_MODE_OFF, ZW_COLOR_OFF, ZW_COLOR_OFF, 0);
-  // Fallback: tenta LEDOFF (0x51) caso o sensor use esse comando simples
-  finger.LEDcontrol(false);
+  // Hack: Força o sensor a ficar no modo LIGADO (ZW_MODE_ON) eternamente, 
+  // mas emitindo a cor PRETA (ZW_COLOR_OFF).
+  // Apenas enviar ZW_MODE_OFF faz o sensor retornar ao "modo de repouso" dele (que é pulsar azul).
+  sensorLedCmd(ZW_MODE_ON, ZW_COLOR_OFF, ZW_COLOR_OFF, 0);
 }
 
 void sensorLedGreen(uint8_t count) {
@@ -1582,7 +1582,6 @@ void loop() {
   if (currentState == IDLE && touched) {
     if (millis() - lastFingerTime > FINGER_DEBOUNCE_MS) {
       if (finger.getImage() == FINGERPRINT_OK && finger.image2Tz(1) == FINGERPRINT_OK) {
-        sensorLedBlue();  // azul: efetuando leitura/busca
         // 1. Tenta match local (sensor flash)
         int searchResult = performFingerSearch();
         if (searchResult == FINGERPRINT_OK) {
