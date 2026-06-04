@@ -1,5 +1,6 @@
 import type { FastifyPluginAsyncZod } from "fastify-type-provider-zod";
 import type { SchemaWithExamples } from "@/api/openapi";
+import { eq } from "drizzle-orm";
 import { db } from "@/db";
 import {
 	accessStatusEnum,
@@ -9,7 +10,7 @@ import {
 	doorStateEnum,
 	fingerKeyEnum,
 } from "@/db/schema/enums";
-import { doorController } from "@/db/schema/room";
+import { doorController, room } from "@/db/schema/room";
 import { env } from "@/env";
 import { sseBus } from "@/lib/sse-bus";
 import { z } from "@/lib/zod";
@@ -25,6 +26,7 @@ import {
 	recordDoorHeartbeat,
 	registerDoorController,
 	updateDoorStatus,
+	deleteDoorController,
 } from "@/services/iot/door-controller";
 import {
 	FingerprintConflictError,
@@ -492,6 +494,74 @@ export const iotRoute: FastifyPluginAsyncZod = async (app) => {
 			});
 
 			return reply.status(200).send(payload);
+		},
+	);
+
+	// GET /iot/devices/:controllerId/status - Lê o estado atual da porta (sem modificar)
+	app.get(
+		"/devices/:controllerId/status",
+		{
+			schema: {
+				params: z.object({
+					controllerId: z.string().min(1),
+				}),
+				tags: ["iot"],
+				summary: "Consultar estado atual da porta",
+				description:
+					"Retorna o estado atual da sala vinculada ao controlador sem modificá-lo. Usado para sincronização do firmware ao iniciar.",
+				response: {
+					200: roomStateResponseSchema,
+					404: z.object({
+						error: z.string(),
+						code: z.literal("CONTROLLER_NOT_FOUND"),
+					}),
+				},
+			} satisfies SchemaWithExamples,
+		},
+		async (request, reply) => {
+			const { controllerId } = request.params;
+			const controller = await db
+				.select({ roomId: doorController.roomId })
+				.from(doorController)
+				.where(eq(doorController.id, controllerId))
+				.limit(1)
+				.then((rows) => rows[0] ?? null);
+
+			if (!controller || !controller.roomId) {
+				return reply.status(404).send({
+					error: "Controller not found or no room linked",
+					code: "CONTROLLER_NOT_FOUND",
+				});
+			}
+
+			const [roomData] = await db
+				.select({
+					id: room.id,
+					name: room.name,
+					doorState: room.doorState,
+					isLocked: room.isLocked,
+					lastStatusUpdateAt: room.lastStatusUpdateAt,
+				})
+				.from(room)
+				.where(eq(room.id, controller.roomId))
+				.limit(1);
+
+			if (!roomData) {
+				return reply.status(404).send({
+					error: "Room not found",
+					code: "CONTROLLER_NOT_FOUND",
+				});
+			}
+
+			return reply.status(200).send({
+				room: {
+					id: roomData.id,
+					name: roomData.name,
+					doorState: roomData.doorState,
+					isLocked: roomData.isLocked,
+					lastStatusUpdateAt: roomData.lastStatusUpdateAt?.toISOString() ?? null,
+				},
+			});
 		},
 	);
 

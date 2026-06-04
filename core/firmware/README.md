@@ -1,6 +1,6 @@
 # Guia de Conexão e Plano de Implementação: Terminal Unificado (ESP32)
 
-Este documento detalha o plano de implementação e o guia de conexão para o novo firmware unificado, que engloba as funcionalidades de **NFC (RC522)** e **Biometria (ZW-101)** rodando simultaneamente em um único **ESP32 (30 pinos)**.
+Este documento detalha o plano de implementação e o guia de conexão para o novo firmware unificado, que engloba as funcionalidades de **NFC (RC522)** e **Biometria (ZW-101)** rodando simultaneamente em um único **ESP32 (30 pinos)**, controlando uma **fechadura bolt lock 5YOA DC12V fail-safe com pass detector** (indução magnética).
 
 ## Plano de Implementação
 
@@ -47,13 +47,88 @@ O sensor ZW-101 comunica-se via UART (Serial) e precisa do sinal TouchOut para "
 | **PIN5 (RX)** | **D17** (GPIO17 / TX2) | Conecta ao TX2 do ESP32 |
 | **PIN6 (GND)** | **GND** | Terra |
 
-### 3. Opcional (Fechadura / Relé / LED de Feedback)
-Caso utilize um relé para acionar a fechadura ou um LED externo de indicação.
+### 3. Fechadura / Relé / LED de Feedback
+Conexões de controle da fechadura e indicação.
 
 | Componente | Pino ESP32 | Função |
 | :--- | :--- | :--- |
 | **LED Interno** | **D2** (GPIO2) | Indica porta aberta ou Erro |
 | **Relé (Fechadura)** | **D27** (GPIO27) | Controle do Solenoide/Eletroímã |
+
+---
+
+## Guia de Montagem da Alimentação e Fechadura (12V)
+
+**Passo 1: Alta Tensão (Tomada -> Fonte Colmeia)**
+Com a tomada desconectada da parede:
+- **Fio 1** do cabo paralelo: Prenda no borne `L` da colmeia.
+- **Fio 2** do cabo paralelo: Prenda no borne `N` da colmeia.
+
+**Passo 2: Alimentação do Step-Down (12V Brutos)**
+- **Borne V+** da colmeia: Puxe um fio até o `VIN+` do Step-Down.
+- **Borne V-** da colmeia: Puxe um fio até o `VIN-` do Step-Down.
+> **Nota**: Ligue na tomada e regule a saída do Step-Down para 5V com o multímetro *antes* de avançar.
+
+**Passo 3: Alimentação da Lógica (5V Regulados -> Protoboard)**
+- **OUT+** do Step-Down (5V): Puxe para a Linha Vermelha lateral da protoboard.
+- **OUT-** do Step-Down (GND): Puxe para a Linha Azul lateral da protoboard.
+- Conecte o pino **VIN** do ESP32 na Linha Vermelha (5V).
+- Conecte o pino **GND** do ESP32 na Linha Azul (GND).
+- Conecte o pino **VCC** do Módulo Relé na Linha Vermelha (5V).
+- Conecte o pino **GND** do Módulo Relé na Linha Azul (GND).
+- Conecte o pino **IN** do Módulo Relé em um pino digital do ESP32 (ex: GPIO 27).
+
+**Passo 4: O Circuito de Potência e o Diodo (A Ramificação de 12V)**
+Agora vamos usar duas fileiras vazias na protoboard para o diodo (vamos usar como exemplo as Fileiras 10 e 11).
+- **Fixando o Diodo**:
+  - Espete a perna do diodo que tem a faixa cinza na Fileira 10.
+  - Espete a outra perna do diodo (lado todo preto) na Fileira 11.
+- **Fechando as Conexões de 12V**:
+  - No **borne V+** da colmeia: Puxe um fio até o borne **COM** (Comum - Meio) do Módulo Relé.
+  - No **borne V-** da colmeia: Puxe um fio até a **Fileira 11** da protoboard (onde está o lado preto do diodo).
+
+**Passo 5: Ligando a Fechadura (2 fios)**
+A fechadura 5YOA possui apenas **2 fios** de alimentação (vermelho e preto). O pass detector interno é um ímã sem conexão elétrica externa.
+- Puxe um fio do borne **NC** (Normalmente Fechado) do Módulo Relé e mande para a **Fileira 10** da protoboard (onde está a faixa cinza do diodo).
+- **Fio Vermelho** da Fechadura (12V+): Espete na **Fileira 10** da protoboard.
+- **Fio Preto** da Fechadura (GND): Espete na **Fileira 11** da protoboard.
+
+> **Nota**: A fechadura é **fail-safe**: sem energia → bolt recolhida (destrancada), com energia → bolt estendida (trancada). O relé corta/fornece a energia para controlar a trava.
+
+🔍 **Resumo de como as Fileiras 10 e 11 vão ficar**:
+- **Fileira 10** (Ponto Positivo Interrompido pelo Relé):
+  - Perna do diodo com a Faixa Cinza.
+  - Fio vindo do borne NC do Relé.
+  - Fio Vermelho da Fechadura.
+- **Fileira 11** (Ponto Negativo Direto da Colmeia):
+  - Perna do diodo Toda Preta.
+  - Fio vindo direto do borne V- da Colmeia.
+  - Fio Preto da Fechadura.
+
+### Sobre o Pass Detector (Indução Magnética) e Lógica de Trancamento
+A fechadura 5YOA possui um **pass detector interno por indução magnética**. Ele é composto por um ímã embutido na contraplaca que se comunica magneticamente com o corpo da fechadura. **Não há fios de sinal** — o mecanismo é inteiramente mecânico/magnético.
+
+**Funcionamento**:
+- Quando a porta está **fechada** (ímã da contraplaca alinhado com o corpo da fechadura), o sensor interno detecta o alinhamento e permite que o bolt se estenda assim que a energia for ligada.
+- Quando a porta está **aberta** (ímã longe), o bolt não se estende mesmo com energia — evitando que a trava se feche no ar.
+
+**Lógica de Trancamento (Toggle)**: O firmware não usa timeout e opera como um **interruptor (toggle)**:
+- Por padrão, a fechadura inicia **TRANCADA** (relé desligado → NC fecha → energia da colmeia passa pela fechadura → bolt estendida).
+- Ao passar uma credencial autorizada (ou enviar comando MQTT), o estado **alterna**: se estiver trancada, ela **destranca** (relé aciona → NC abre → corta energia → bolt recolhe por fail-safe); se estiver destrancada, ela **tranca** (relé desliga → NC fecha → energia volta → bolt estende).
+- Isso garante que a porta permaneça livre enquanto houver uso da sala, sendo trancada apenas por intervenção intencional.
+
+> **Nota sobre compatibilidade 3.3V ↔ 5V**: O ESP32 é 3.3V, mas a maioria dos módulos relé com optoacoplador operam com lógica 5V. Um GPIO em HIGH (3.3V) não é suficiente para desativar o optoacoplador alimentado com 5V (5V - 3.3V = 1.7V ainda o mantém parcialmente ON). O firmware resolve isso usando `OUTPUT_OPEN_DRAIN` no GPIO do relé: HIGH = pino flutuante (sem corrente → relé desativa), LOW = puxa para GND (corrente flui → relé ativa). Nenhum level-shifter ou componente extra é necessário.
+
+### Diagnóstico via Serial Monitor
+O firmware possui comandos de diagnóstico acessíveis pelo Serial Monitor (115200 baud, Newline):
+
+| Comando | Descrição |
+| :--- | :--- |
+| `RELAY_TEST` | Alterna GPIO 5x entre LOW/HIGH com 2s de intervalo. Observe o LED do módulo e o click para determinar se é Active-LOW ou Active-HIGH. |
+| `LOCK` | Tranca a fechadura diretamente (sem MQTT). |
+| `UNLOCK` | Destranca a fechadura diretamente (sem MQTT). |
+| `STATUS` | Mostra o estado atual da porta e configuração do relé. |
+| `HELP` | Lista todos os comandos disponíveis. |
 
 ---
 

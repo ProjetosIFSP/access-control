@@ -26,7 +26,7 @@ export interface BlockWithRooms {
 }
 
 function mapDoorState(doorState: string, isLocked: boolean | null): RoomState {
-	if (doorState === "OPEN") {
+	if (doorState === "OPEN" || doorState === "UNLOCKED") {
 		return isLocked ? "alerta" : "aberta";
 	}
 	if (doorState === "CLOSED" || doorState === "LOCKED") {
@@ -154,7 +154,7 @@ export async function getRoomsSummary(
 			: undefined;
 		// "currentUser" is meaningful only when the door is currently open
 		const currentUser = authenticated
-			? row.doorState === "OPEN"
+			? row.doorState === "OPEN" || row.doorState === "UNLOCKED"
 				? (lastAccessMap.get(row.roomId) ?? null)
 				: null
 			: undefined;

@@ -47,7 +47,7 @@ const COMMAND_POLL_INTERVAL = parseInt(
 	10,
 );
 
-const doorStateValues = ["OPEN", "CLOSED", "LOCKED", "UNKNOWN"] as const;
+const doorStateValues = ["OPEN", "CLOSED", "UNLOCKED", "LOCKED", "UNKNOWN"] as const;
 const credentialTypeValues = ["FINGERPRINT", "NFC_TAG"] as const;
 const commandTypeValues = [
 	"UNLOCK",
@@ -322,6 +322,34 @@ async function handleRegister(controllerId: string, payload: string) {
 	);
 
 	ensureCommandPolling(controllerId);
+
+	// Sincroniza o estado da porta com o firmware ao conectar
+	if (registerResponse.controller.roomId) {
+		try {
+			const statusResponse = await callApi(
+				"GET",
+				`/iot/devices/${controllerId}/status`,
+			);
+			const roomStatus = apiRoomStatusResponseSchema.parse(statusResponse);
+			await publish(`door/${controllerId}/sync-state`, {
+				doorState: roomStatus.room.doorState,
+				isLocked: roomStatus.room.isLocked,
+			});
+			logger.info(
+				{
+					controllerId,
+					doorState: roomStatus.room.doorState,
+					isLocked: roomStatus.room.isLocked,
+				},
+				"Synced door state to firmware on register",
+			);
+		} catch (err) {
+			logger.warn(
+				{ err, controllerId },
+				"Failed to sync door state on register — firmware will default to LOCKED",
+			);
+		}
+	}
 }
 
 async function handleHeartbeat(controllerId: string, payload: string) {
@@ -392,10 +420,6 @@ async function handleAccessAttempt(controllerId: string, payload: string) {
 		},
 		"Processed access attempt",
 	);
-
-	if (decision.status === "GRANTED") {
-		await enqueueUnlockCommand(controllerId);
-	}
 }
 
 async function handleLocalMatch(controllerId: string, payload: string) {
@@ -424,10 +448,6 @@ async function handleLocalMatch(controllerId: string, payload: string) {
 		},
 		"Processed local biometric match",
 	);
-
-	if (decision.status === "GRANTED") {
-		await enqueueUnlockCommand(controllerId);
-	}
 }
 
 async function handleEnrollmentResult(controllerId: string, payload: string) {

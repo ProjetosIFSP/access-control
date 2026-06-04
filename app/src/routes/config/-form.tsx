@@ -1,8 +1,16 @@
-import type { UseMutationResult } from "@tanstack/react-query";
+import { type UseMutationResult, useQuery } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { FormField } from "@/components/ui/form-field";
 import { Input } from "@/components/ui/input";
+import {
+	Select,
+	SelectContent,
+	SelectItem,
+	SelectTrigger,
+	SelectValue,
+} from "@/components/ui/select";
+import { roomsAdminQueryOptions } from "@/services/rooms";
 import type { IotController } from "./-types";
 
 interface ConfigControllerFormProps {
@@ -22,10 +30,14 @@ export function ConfigControllerForm({
 	onSuccess,
 	onCancel,
 }: ConfigControllerFormProps) {
-	const [roomId, setRoomId] = useState("");
-	const [sensorProtocol, setSensorProtocol] = useState("");
-	const [sensorModel, setSensorModel] = useState("");
-	const [firmwareVersion, setFirmwareVersion] = useState("");
+	const { data: roomsData } = useQuery(
+		roomsAdminQueryOptions({ pageSize: 100 }),
+	);
+
+	const [roomId, setRoomId] = useState(controller?.roomId ?? "");
+	const [sensorProtocol, setSensorProtocol] = useState(controller?.sensorProtocol ?? "");
+	const [sensorModel, setSensorModel] = useState(controller?.sensorModel ?? "");
+	const [firmwareVersion, setFirmwareVersion] = useState(controller?.firmwareVersion ?? "");
 
 	useEffect(() => {
 		if (controller) {
@@ -60,13 +72,31 @@ export function ConfigControllerForm({
 
 	return (
 		<form onSubmit={handleSubmit} className="space-y-4">
-			<FormField label="Room ID (Vinculado)" htmlFor="roomId">
-				<Input
-					id="roomId"
-					value={roomId}
-					onChange={(e) => setRoomId(e.target.value)}
-					placeholder="ID da sala vinculada"
-				/>
+			<FormField label="Sala (Vinculada)" htmlFor="roomId">
+				<Select
+					value={roomId || "unassigned"}
+					onValueChange={(val) => setRoomId(val === "unassigned" ? "" : val)}
+				>
+					<SelectTrigger
+						id="roomId"
+						className="w-full rounded-full shadow-xs border-px bg-white"
+					>
+						<SelectValue placeholder="Selecione uma sala">
+							{roomId && roomId !== "unassigned"
+								? roomsData?.result?.find((r) => r.id === roomId)?.name ||
+									"Carregando..."
+								: "Sem vínculo"}
+						</SelectValue>
+					</SelectTrigger>
+					<SelectContent>
+						<SelectItem value="unassigned">Sem vínculo</SelectItem>
+						{roomsData?.result?.map((room) => (
+							<SelectItem key={room.id} value={room.id}>
+								{room.name}
+							</SelectItem>
+						))}
+					</SelectContent>
+				</Select>
 			</FormField>
 
 			<FormField label="Protocolo do Sensor" htmlFor="sensorProtocol">
@@ -75,6 +105,7 @@ export function ConfigControllerForm({
 					value={sensorProtocol}
 					onChange={(e) => setSensorProtocol(e.target.value)}
 					placeholder="Ex: zw111_basic"
+					className="bg-white"
 				/>
 			</FormField>
 
@@ -84,6 +115,7 @@ export function ConfigControllerForm({
 					value={sensorModel}
 					onChange={(e) => setSensorModel(e.target.value)}
 					placeholder="Ex: WA26"
+					className="bg-white"
 				/>
 			</FormField>
 
@@ -93,6 +125,7 @@ export function ConfigControllerForm({
 					value={firmwareVersion}
 					onChange={(e) => setFirmwareVersion(e.target.value)}
 					placeholder="Ex: 1.0.0"
+					className="bg-white"
 				/>
 			</FormField>
 

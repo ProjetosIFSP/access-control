@@ -5,6 +5,7 @@
 
 // ── Pinos e constantes Gerais ────────────────────────────────────────────────
 #define PIN_LED      2   // LED_BUILTIN no ESP32
+#define PIN_RELAY    21  // IN do módulo relé (Fechadura)
 
 const unsigned long HEARTBEAT_INTERVAL_MS = 30000;
 const unsigned long ACCESS_RESULT_TIMEOUT = 10000;
@@ -25,7 +26,7 @@ const unsigned long ENROLLMENT_TIMEOUT_MS = 120000;
 extern char controllerId[48];
 extern char DEVICE_SECRET[40];
 
-enum DoorState { OPEN, LOCKED, UNKNOWN };
+enum DoorState { OPEN, CLOSED, UNLOCKED, LOCKED, UNKNOWN };
 extern DoorState currentDoorState;
 
 enum TerminalState { IDLE, WAITING_RESULT, ENROLLMENT_MODE, WAITING_SYNC };
@@ -40,7 +41,8 @@ extern bool pendingCacheStore;
 // Callbacks (definidos no .ino e usados nas libs)
 void publishAccessAttemptNfc(const String& uid);
 void publishLocalMatchBio(int slotId, const char* credentialId, uint16_t confidence);
-void publishEnrollmentProgress(const String &step);
+void publishRequestSync();
+void publishEnrollmentProgress(const String &enrollmentIdValue, const String &step);
 void publishEnrollmentResult(const String &enrollmentIdValue, const String &userIdValue, const String &fingerValue, const String &status, bool hasTemplate, uint8_t quality);
 
 #endif // CONFIG_H

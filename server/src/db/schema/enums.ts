@@ -30,6 +30,7 @@ export const accessStatusEnum = pgEnum("access_status", ["GRANTED", "DENIED"]);
 export const doorStateEnum = pgEnum("door_state", [
 	"OPEN",
 	"CLOSED",
+	"UNLOCKED",
 	"LOCKED",
 	"UNKNOWN",
 ]);

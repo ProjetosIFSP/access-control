@@ -223,6 +223,7 @@ function ConfigManagePage() {
 						<div className="flex h-full flex-col p-6 overflow-auto">
 							<h2 className="text-xl font-bold mb-4">Editar Controlador</h2>
 							<ConfigControllerForm
+								key={editTarget?.id ?? "empty"}
 								controller={editTarget}
 								mutation={putMut}
 								onSuccess={() => setEditTarget(null)}

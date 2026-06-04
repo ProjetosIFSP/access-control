@@ -14,6 +14,25 @@
 #include "NfcManager.h"
 #include "BiometryManager.h"
 
+// ── Controle do Relé ──────────────────────────────────────────────────────────
+// Usa GPIO_MODE_DISABLE para desconectar completamente o pino (relé OFF)
+// e GPIO_MODE_OUTPUT com nível LOW para ativar o relé (relé ON).
+// Circuito: V+ Colmeia → COM, NC → Fechadura (fail-safe)
+
+#include "driver/gpio.h"
+
+void relayLock() {
+  gpio_set_direction((gpio_num_t)PIN_RELAY, GPIO_MODE_DISABLE);
+  gpio_set_pull_mode((gpio_num_t)PIN_RELAY, GPIO_FLOATING);
+  Serial.println(F("[Relé] LOCK"));
+}
+
+void relayUnlock() {
+  gpio_set_direction((gpio_num_t)PIN_RELAY, GPIO_MODE_OUTPUT);
+  gpio_set_level((gpio_num_t)PIN_RELAY, 0);
+  Serial.println(F("[Relé] UNLOCK"));
+}
+
 // ── Globais (Declaradas como extern em Config.h) ──────────────────────────────
 char controllerId[48];
 char DEVICE_SECRET[40] = "Zx9kPq2mRn7vWj4tYb8cLe";
@@ -50,6 +69,9 @@ String topicLocalMatch;
 String topicSyncTemplate;
 String topicRequestSync;
 String topicSyncComplete;
+String topicSyncState;
+
+String topicCommand;
 
 unsigned long lastHeartbeat = 0;
 unsigned long waitingResultAt = 0;
@@ -57,7 +79,6 @@ unsigned long lastMqttAttempt = 0;
 
 String getMacAddress() {
 	uint8_t baseMac[6];
-	// Obtem o MAC Base a partir do eFuse (independente do Wi-Fi)
 	esp_efuse_mac_get_default(baseMac);
 	char baseMacChr[18] = {0};
 	sprintf(baseMacChr, "%02X:%02X:%02X:%02X:%02X:%02X", baseMac[0], baseMac[1], baseMac[2], baseMac[3], baseMac[4], baseMac[5]);
@@ -65,7 +86,7 @@ String getMacAddress() {
 }
 
 void saveConfigCallback () {
-  Serial.println("[Wi-Fi] Configuração alterada, salvando...");
+  Serial.println("[Wi-Fi] Configuração salva.");
   shouldSaveConfig = true;
 }
 
@@ -130,9 +151,11 @@ void connectWifi() {
     mqtt.setServer(MQTT_SERVER, atoi(MQTT_PORT));
   }
 
-  Serial.print(F("[WiFi] Conectado IP: "));
+  Serial.print(F("[Wi-Fi] Conectado. IP: "));
   Serial.println(WiFi.localIP());
 }
+
+// ── Publicações MQTT ─────────────────────────────────────────────────────────
 
 void publishRegister() {
   StaticJsonDocument<256> doc;
@@ -164,6 +187,8 @@ void connectMqtt() {
     mqtt.subscribe(topicEnterEnrollment.c_str());
     mqtt.subscribe(topicSyncTemplate.c_str());
     mqtt.subscribe(topicSyncComplete.c_str());
+    mqtt.subscribe(topicSyncState.c_str());
+    mqtt.subscribe(topicCommand.c_str());
     publishRegister();
     lastHeartbeat = millis() - HEARTBEAT_INTERVAL_MS;
     Serial.println(F("[MQTT] Conectado."));
@@ -194,6 +219,7 @@ void publishLocalMatchBio(int slotId, const char* credentialId, uint16_t confide
   String p; serializeJson(doc, p);
   mqtt.publish(topicLocalMatch.c_str(), p.c_str());
   
+  pendingSlotId = slotId;
   currentState = WAITING_RESULT;
   waitingResultAt = millis();
 }
@@ -205,26 +231,77 @@ void publishRequestSync() {
   mqtt.publish(topicRequestSync.c_str(), p.c_str());
 }
 
-void publishEnrollmentProgress(const String &step) {
+void publishDoorStatus() {
+  StaticJsonDocument<128> doc;
+  const char* stateStr;
+  switch (currentDoorState) {
+    case OPEN:     stateStr = "OPEN"; break;
+    case CLOSED:   stateStr = "CLOSED"; break;
+    case UNLOCKED: stateStr = "UNLOCKED"; break;
+    case LOCKED:   stateStr = "LOCKED"; break;
+    default:       stateStr = "UNKNOWN"; break;
+  }
+  doc["doorState"] = stateStr;
+  doc["isLocked"]  = (currentDoorState == LOCKED);
+  String p; serializeJson(doc, p);
+  mqtt.publish(topicStatus.c_str(), p.c_str());
+}
+
+void publishEnrollmentProgress(const String &enrollmentIdValue, const String &step) {
   StaticJsonDocument<192> doc;
-  // Acesso a variaveis locais dentro de BiometryManager nao é estritamente necessário aqui, 
-  // mas o manager chama essa func
+  doc["enrollmentId"] = enrollmentIdValue;
   doc["step"] = step;
   String p; serializeJson(doc, p);
   mqtt.publish(topicEnrollmentProgress.c_str(), p.c_str());
 }
 
 void publishEnrollmentResult(const String &enrollmentIdValue, const String &userIdValue, const String &fingerValue, const String &status, bool hasTemplate, uint8_t quality) {
-  // Simplificado. Ver logica real no BiometryManager caso queira enviar hex grandão
-  StaticJsonDocument<256> doc;
-  doc["enrollmentId"] = enrollmentIdValue;
-  doc["userId"] = userIdValue;
-  doc["finger"] = fingerValue;
-  doc["status"] = status;
-  doc["deviceSecret"] = DEVICE_SECRET;
+  char qualityStr[4];
+  snprintf(qualityStr, sizeof(qualityStr), "%u", quality);
+
+  size_t payloadLen = 84;
+  payloadLen += enrollmentIdValue.length();
+  payloadLen += userIdValue.length();
+  payloadLen += fingerValue.length();
+  payloadLen += status.length();
+  payloadLen += strlen(qualityStr);
+  payloadLen += strlen(DEVICE_SECRET);
   
-  String p; serializeJson(doc, p);
-  mqtt.publish(topicEnrollmentResult.c_str(), p.c_str());
+  File f;
+  if (hasTemplate) {
+    f = LittleFS.open("/temp_template.hex", "r");
+    if (f) {
+      payloadLen += 14 + f.size();
+    } else {
+      hasTemplate = false;
+    }
+  }
+
+  if (mqtt.beginPublish(topicEnrollmentResult.c_str(), payloadLen, false)) {
+    mqtt.print(F("{\"enrollmentId\":\""));
+    mqtt.print(enrollmentIdValue);
+    mqtt.print(F("\",\"userId\":\""));
+    mqtt.print(userIdValue);
+    mqtt.print(F("\",\"finger\":\""));
+    mqtt.print(fingerValue);
+    mqtt.print(F("\",\"status\":\""));
+    mqtt.print(status);
+    mqtt.print(F("\",\"quality\":"));
+    mqtt.print(qualityStr);
+    mqtt.print(F(",\"deviceSecret\":\""));
+    mqtt.print(DEVICE_SECRET);
+    if (hasTemplate && f) {
+      mqtt.print(F("\",\"template\":\""));
+      while (f.available()) {
+        uint8_t buf[256];
+        size_t n = f.read(buf, sizeof(buf));
+        mqtt.write(buf, n);
+      }
+      f.close();
+    }
+    mqtt.print(F("\"}"));
+    mqtt.endPublish();
+  }
 }
 
 // ── Recepção MQTT ────────────────────────────────────────────────────────────
@@ -241,18 +318,34 @@ void onMqttMessage(char* topic, byte* payload, unsigned int length) {
     bool granted = (String(status) == "GRANTED");
     
     if (granted) {
-      Serial.println(F("[Acesso] GRANTED."));
-      digitalWrite(PIN_LED, HIGH); delay(1500); digitalWrite(PIN_LED, LOW);
-      sensorLedGreen(); delay(1500); sensorLedOff();
+      Serial.println(F("[Acesso] GRANTED"));
+      
+      if (currentDoorState == LOCKED || currentDoorState == UNKNOWN) {
+        currentDoorState = UNLOCKED;
+        relayUnlock();
+        digitalWrite(PIN_LED, HIGH); 
+        sensorLedGreen(); 
+      } else {
+        currentDoorState = LOCKED;
+        relayLock();
+        digitalWrite(PIN_LED, LOW);
+        sensorLedOff();
+      }
+      publishDoorStatus();
 
-      // Caching biometria?
+      // Cache de biometria
       const char* credId = doc["credentialId"] | "";
       if (strlen(credId) > 0) {
         cacheCurrentTemplate(String(credId));
       }
     } else {
-      Serial.println(F("[Acesso] DENIED."));
+      Serial.println(F("[Acesso] DENIED"));
       sensorLedRed(4);
+      
+      // Remove do cache local se credencial foi revogada no servidor
+      if (pendingSlotId >= 0) {
+        evictSlot(pendingSlotId);
+      }
     }
     
     currentState = IDLE;
@@ -279,14 +372,82 @@ void onMqttMessage(char* topic, byte* payload, unsigned int length) {
     handleSyncComplete();
     return;
   }
+
+  if (t == topicCommand) {
+    StaticJsonDocument<384> doc;
+    if (deserializeJson(doc, payload, length)) return;
+    const char* cmdType = doc["type"];
+    const char* cmdId = doc["commandId"];
+    
+    if (cmdType) {
+      if (strcmp(cmdType, "UNLOCK") == 0) {
+        currentDoorState = UNLOCKED;
+        relayUnlock();
+        digitalWrite(PIN_LED, HIGH);
+        sensorLedGreen();
+        Serial.println(F("[Comando] UNLOCK -> Porta destrancada"));
+        publishDoorStatus();
+      } else if (strcmp(cmdType, "LOCK") == 0) {
+        currentDoorState = LOCKED;
+        relayLock();
+        digitalWrite(PIN_LED, LOW);
+        sensorLedOff();
+        Serial.println(F("[Comando] LOCK -> Porta trancada"));
+        publishDoorStatus();
+      }
+
+      // ACK do comando
+      if (cmdId) {
+        StaticJsonDocument<128> ackDoc;
+        ackDoc["commandId"] = cmdId;
+        ackDoc["status"] = "COMPLETED";
+        String ackStr; serializeJson(ackDoc, ackStr);
+        String topicAck = String("door/") + controllerId + "/command-result";
+        mqtt.publish(topicAck.c_str(), ackStr.c_str());
+      }
+    }
+    return;
+  }
+
+  // Sincronização do estado da porta ao iniciar
+  if (t == topicSyncState) {
+    StaticJsonDocument<128> doc;
+    if (deserializeJson(doc, payload, length)) return;
+    const char* doorState = doc["doorState"];
+    bool isLocked = doc["isLocked"] | true; // default: trancada
+    if (!doorState) return;
+
+    if (strcmp(doorState, "UNLOCKED") == 0 || (strcmp(doorState, "OPEN") == 0 && !isLocked)) {
+      currentDoorState = UNLOCKED;
+      relayUnlock();
+      digitalWrite(PIN_LED, HIGH);
+      sensorLedGreen();
+      Serial.println(F("[Sync] Estado do servidor: DESTRANCADA"));
+    } else {
+      currentDoorState = LOCKED;
+      relayLock();
+      digitalWrite(PIN_LED, LOW);
+      sensorLedOff();
+      Serial.println(F("[Sync] Estado do servidor: TRANCADA"));
+    }
+    publishDoorStatus();
+    return;
+  }
 }
 
 // ── Main Setup & Loop ────────────────────────────────────────────────────────
 
 void setup() {
   Serial.begin(115200);
+  delay(500);
+  Serial.println(F("\n\n  Gerenciamento de Acesso IoT\n"));
+
   pinMode(PIN_LED, OUTPUT);
   digitalWrite(PIN_LED, LOW);
+
+  // Estado inicial da fechadura: TRANCADA
+  relayLock();
+  currentDoorState = LOCKED;
 
   String mac = getMacAddress();
   mac.replace(":", "");
@@ -304,17 +465,19 @@ void setup() {
   topicSyncTemplate       = String("door/") + controllerId + "/sync-template";
   topicRequestSync        = String("door/") + controllerId + "/request-sync";
   topicSyncComplete       = String("door/") + controllerId + "/sync-complete";
+  topicSyncState          = String("door/") + controllerId + "/sync-state";
+  topicCommand            = String("door/") + controllerId + "/command";
 
   connectWifi();
   
   mqtt.setServer(MQTT_SERVER, atoi(MQTT_PORT));
-  mqtt.setBufferSize(8192); // Aumentado para lidar com payloads grandes no ESP32
+  mqtt.setBufferSize(8192);
   mqtt.setCallback(onMqttMessage);
 
   setupNfc();
   setupBiometry();
 
-  Serial.println(F("[Sistema] Pronto. ESP32 Unified Terminal Iniciado."));
+  Serial.println(F("[Sistema] Pronto."));
 }
 
 void loop() {
@@ -334,7 +497,7 @@ void loop() {
 
   if (currentState == WAITING_RESULT) {
     if (now - waitingResultAt >= ACCESS_RESULT_TIMEOUT) {
-      Serial.println(F("[Acesso] Timeout sem resposta do servidor."));
+      Serial.println(F("[Acesso] Timeout."));
       sensorLedRed(3);
       currentState = IDLE;
     }

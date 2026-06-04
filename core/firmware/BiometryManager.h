@@ -21,5 +21,6 @@ void startEnrollment(const String& enrollId, const String& userId, const String&
 
 // Cache
 void cacheCurrentTemplate(const String &credId);
+void evictSlot(int slot);
 
 #endif // BIOMETRY_MANAGER_H
