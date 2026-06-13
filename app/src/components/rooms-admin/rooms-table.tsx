@@ -9,15 +9,12 @@ import {
 import {
 	ArrowUpDown,
 	CreditCard,
-	DoorClosed,
-	DoorOpen,
 	Fingerprint,
 	Pencil,
 	Trash2,
 } from "lucide-react";
 import { useState } from "react";
 import { Badge } from "@/components/ui/badge";
-import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import {
 	Table,
@@ -32,6 +29,7 @@ import {
 	TooltipContent,
 	TooltipTrigger,
 } from "@/components/ui/tooltip";
+import { cn } from "@/lib/utils";
 import type { RoomSummaryAdmin } from "@/services/rooms/types";
 
 const columnHelper = createColumnHelper<RoomSummaryAdmin>();
