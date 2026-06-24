@@ -1,9 +1,9 @@
 ---
-title: Sensor Biométrico ZN-53X
+title: Sensor Biométrico HiLink ZW-101
 description: Protocolo R30x, comandos, integração SoftwareSerial com ESP8266, fluxo de enrollment e matching, e tratamento de erros.
 ---
 
-O **ZN-53X** é o módulo de sensor biométrico óptico utilizado no projeto. Ele é compatível com o protocolo **R30x** (também conhecido como protocolo R307/R308/FPM10A), amplamente suportado por bibliotecas Arduino. O sensor realiza o matching **on-device** — os templates são armazenados diretamente na flash interna do módulo.
+O **HiLink ZW-101** é o módulo de sensor biométrico óptico utilizado no projeto. Ele é compatível com o protocolo **R30x** (também conhecido como protocolo R307/R308/FPM10A), amplamente suportado por bibliotecas Arduino. O sensor realiza o matching **on-device** — os templates são armazenados diretamente na flash interna do módulo.
 
 ---
 
@@ -28,11 +28,11 @@ O **ZN-53X** é o módulo de sensor biométrico óptico utilizado no projeto. El
 
 ## Pinagem e conexão com o NodeMCU v3
 
-O ZN-53X se comunica via **UART serial**. Como o ESP8266 possui apenas uma UART de hardware (usada pelo monitor serial), a comunicação com o sensor utiliza **SoftwareSerial** em pinos alternativos.
+O HiLink ZW-101 se comunica via **UART serial**. Como o ESP8266 possui apenas uma UART de hardware (usada pelo monitor serial), a comunicação com o sensor utiliza **SoftwareSerial** em pinos alternativos.
 
 ### Conexão física
 
-| Pino ZN-53X | Descrição | Pino NodeMCU | GPIO |
+| Pino HiLink ZW-101 | Descrição | Pino NodeMCU | GPIO |
 |---|---|---|---|
 | VCC | Alimentação | VIN (5V) ou 3,3V | — |
 | GND | Terra | GND | — |
@@ -44,7 +44,7 @@ O ZN-53X se comunica via **UART serial**. Como o ESP8266 possui apenas uma UART 
 ### Diagrama de conexão
 
 ```
-NodeMCU v3                ZN-53X
+NodeMCU v3                HiLink ZW-101
 ─────────────             ──────────────
 VIN (5V)   ──────────────► VCC
 GND        ──────────────► GND
@@ -252,7 +252,7 @@ void fingerprintSetup() {
   finger.begin(57600);
 
   if (finger.verifyPassword()) {
-    Serial.println("ZN-53X encontrado e senha verificada!");
+    Serial.println("HiLink ZW-101 encontrado e senha verificada!");
   } else {
     Serial.println("ERRO: sensor biométrico não encontrado ou senha incorreta.");
     // Entrar em loop de erro ou tentar reconexão

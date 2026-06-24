@@ -1,8 +1,8 @@
 {
-  "title": "Hardware & Firmware",
+  "title": "Hardware",
   "pages": [
+    "montagem",
     "componentes",
-    "firmware",
     "sensor-biometrico"
   ]
 }

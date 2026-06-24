@@ -23,7 +23,7 @@ core/
 │   │   └── mqtt.cpp        # Conexão, publicação e callback MQTT
 │   ├── fingerprint/
 │   │   ├── fingerprint.h
-│   │   └── fingerprint.cpp # Integração ZN-53X via SoftwareSerial (R30x)
+│   │   └── fingerprint.cpp # Integração HiLink ZW-101 via SoftwareSerial (R30x)
 │   ├── nfc/
 │   │   ├── nfc.h
 │   │   └── nfc.cpp         # Decodificação Wiegand 26 (IC V1.3A)
@@ -78,7 +78,7 @@ Todas as constantes de configuração ficam centralizadas em `config.h`. **Nunca
 
 // ── Hardware ───────────────────────────────────────────────────
 #define SENSOR_PROTOCOL   "R30X"
-#define SENSOR_MODEL      "ZN-53X"
+#define SENSOR_MODEL      "HiLink ZW-101"
 
 // ── Pinos GPIO ─────────────────────────────────────────────────
 #define PIN_RELAY         5   // D1 — controle do relé da fechadura
@@ -86,8 +86,8 @@ Todas as constantes de configuração ficam centralizadas em `config.h`. **Nunca
 #define PIN_LED_STATUS    2   // D4 — LED de status (azul)
 #define PIN_NFC_D0        14  // D5 — Wiegand D0 do leitor NFC
 #define PIN_NFC_D1        12  // D6 — Wiegand D1 do leitor NFC
-#define PIN_FP_TX         1   // D10 — SoftwareSerial TX → ZN-53X RX
-#define PIN_FP_RX         3   // D9  — SoftwareSerial RX ← ZN-53X TX
+#define PIN_FP_TX         1   // D10 — SoftwareSerial TX → HiLink ZW-101 RX
+#define PIN_FP_RX         3   // D9  — SoftwareSerial RX ← HiLink ZW-101 TX
 
 // ── Temporização ───────────────────────────────────────────────
 #define HEARTBEAT_INTERVAL_MS     30000   // 30 segundos
@@ -211,7 +211,7 @@ Ativado ao receber `door/{id}/enter-enrollment-mode`:
 
 - Para de processar tentativas de acesso (relé permanece inativo)
 - LED azul pisca a cada 500ms (aguardando dedo)
-- Captura 2 passagens do dedo com o ZN-53X
+- Captura 2 passagens do dedo com o HiLink ZW-101
 - Publica `door/{id}/enrollment-result` com o template ou status de falha
 - Retorna ao **Modo Fechadura** imediatamente após publicar o resultado
 - Expira automaticamente ao atingir `expiresAt`
@@ -307,7 +307,7 @@ void enrollmentLoop(unsigned long now) {
     return;
   }
 
-  // Máquina de estados do ZN-53X
+  // Máquina de estados do HiLink ZW-101
   switch (enrollState.step) {
     case ENROLL_STEP_WAITING_FIRST:
       if (fingerprintGenImg() == OK) {
@@ -493,7 +493,7 @@ Em produção, remova `-DDEBUG` dos `build_flags` para eliminar completamente os
 | Feature | ID | Status |
 |---|---|---|
 | Wi-Fi + MQTT + heartbeat | HW-001 | 🔧 Funcional em teste; não modularizado |
-| Integração ZN-53X (enrollment + matching) | HW-002 | ⬜ Aguarda definição do formato do template |
+| Integração HiLink ZW-101 (enrollment + matching) | HW-002 | ⬜ Aguarda definição do formato do template |
 | Integração NFC IC V1.3A (Wiegand) | HW-003 | ⬜ Hardware possuído; sem implementação |
 | Controle do relé | HW-004 | ⬜ Hardware ainda não adquirido |
 | Reed switch (estado da porta) | HW-005 | 🔧 Testado com botão simulado |

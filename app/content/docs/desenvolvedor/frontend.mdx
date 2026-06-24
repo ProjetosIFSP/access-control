@@ -1,0 +1,27 @@
+---
+title: Frontend
+description: Estrutura do portal web em React e TanStack Router.
+---
+
+# Guia do Frontend
+
+O portal web (interface administrativa) é um SPA moderno focado em performance e tipagem end-to-end.
+
+## Tecnologias Principais
+
+- **React 19**: Biblioteca de interface de usuário.
+- **TanStack Router**: Roteamento client-side com tipagem forte baseada no sistema de arquivos (`/app/src/routes`).
+- **Tailwind CSS**: Estilização via classes utilitárias.
+- **shadcn/ui**: Componentes de UI acessíveis e customizáveis.
+- **Fumadocs**: Engine utilizada para renderizar esta documentação (`/app/content/docs`).
+
+## Estrutura de Pastas
+
+- `/app/src/components`: Componentes reutilizáveis (botões, modais, formulários).
+- `/app/src/routes`: Definição de rotas da aplicação web. O TanStack Router gera a árvore de rotas automaticamente a partir desses arquivos.
+- `/app/src/lib`: Funções utilitárias, chamadas de API (`fetch` wrappers) e clientes.
+- `/app/content/docs`: Arquivos `.mdx` desta documentação técnica.
+
+## Fluxo de Estado e Autenticação
+
+A autenticação é persistida via cookies http-only pelo backend. No frontend, utilizamos hooks de contexto (`useAuth`) para verificar se o usuário está logado e obter suas informações básicas, adaptando a interface (ex: escondendo botões de administração caso o usuário não tenha o perfil adequado).

@@ -1,0 +1,32 @@
+---
+title: Guia para Administradores
+description: Instruções de uso do painel web para gestão de usuários, portas e logs.
+---
+
+# Guia para Administradores
+
+Este guia aborda o uso do painel web por parte dos administradores e gestores do sistema de controle de acesso do IFSP.
+
+## 1. Gestão de Usuários
+
+Através da aba "Usuários", o administrador pode:
+- **Criar Novos Usuários:** Cadastrar dados pessoais e atribuir perfis.
+- **Gerenciar Perfis:** Associar o usuário a um perfil específico (ex: "Professor", "Aluno", "Servidor"), definindo permissões de base.
+
+## 2. Gestão de Salas e Blocos
+
+Na aba correspondente de "Salas e Blocos", você pode:
+- **Criar e Editar Salas:** Configurar os espaços com um controlador MQTT.
+- **Atribuir Controlador:** Vincular o `deviceId` (MAC Address) do controlador ESP32/ESP8266 à respectiva sala física.
+
+## 3. Gestão de Credenciais
+
+Para permitir que um usuário acesse as portas, é necessário registrar suas credenciais:
+- **Biometria:** Iniciar o fluxo de registro via painel, onde o controlador entra em "Modo Terminal" para capturar as duas imagens necessárias da impressão digital e salvar o *template*.
+- **RFID/NFC:** Cadastrar a UID (identificador único) do cartão ou chaveiro da pessoa através do painel.
+
+## 4. Monitoramento e Histórico
+
+Acessando a aba "Logs" ou os detalhes da sala:
+- **Monitoramento em Tempo Real:** Verifique quais portas estão abertas ou fechadas.
+- **Histórico (Logs):** Analise quem entrou em qual sala, qual a credencial utilizada, e se a requisição foi concedida (`GRANTED`) ou negada (`DENIED`). Isso é fundamental para auditorias e segurança.

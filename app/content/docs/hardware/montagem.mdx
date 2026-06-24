@@ -1,0 +1,35 @@
+---
+title: Guia de Montagem
+description: Diagramas e instruções para a conexão elétrica dos componentes da porta.
+---
+
+# Guia de Montagem
+
+Este guia descreve as conexões físicas e elétricas necessárias para montar o controlador da porta. O sistema é dividido em dois circuitos principais: o **Circuito de Potência (Fechadura)** e o **Circuito Lógico (Sensores e Módulos)**.
+
+## 1. Conexão da Fechadura Solenoide
+
+A fechadura solenoide exige 12V e possui um consumo de corrente maior, logo deve ser controlada via relé, isolada da lógica do ESP32/ESP8266.
+
+**Diagrama de Potência:**
+
+![Diagrama Elétrico da Fechadura](/docs/pins/eletrica-fechadura.png)
+
+Neste circuito:
+- A fonte (**Colmeia**) de 12V alimenta todo o sistema.
+- O fio 12V positivo passa pelo relé antes de chegar à **Fechadura Solenoide**, permitindo que o ESP32 libere ou bloqueie a energia.
+- O **Step-down** é fundamental para rebaixar a tensão de 12V para 5V de forma a alimentar a placa (NodeMCU/ESP32).
+- Um **Diodo** flyback deve ser instalado em paralelo com a fechadura para proteger o circuito contra picos de tensão quando a bobina for desligada.
+
+## 2. Conexão dos Sensores (Lógica)
+
+Os leitores (Biometria e RFID) são conectados diretamente aos pinos lógicos da placa.
+
+**Diagrama Lógico:**
+
+![Diagrama de Conexão dos Sensores](/docs/pins/sensores.png)
+
+Neste circuito:
+- O **Módulo RFID (RC522)** é alimentado com 3.3V. Os pinos de comunicação SPI (MISO, MOSI, SCK, SDA) são ligados aos GPIOs correspondentes do microcontrolador.
+- O **Sensor Biométrico (HiLink ZW-101)** requer os pinos de TX/RX conectados aos RX/TX do ESP (comumente por SoftwareSerial ou UART2 no ESP32). Certifique-se de cruzar os pinos: TX do sensor vai no RX da placa, e vice-versa.
+- Lembre-se de utilizar a saída 5V do Step-down conectada ao pino VIN da placa ESP. Todos os GNDs de sensores, placa e alimentação devem ser unidos (GND comum).

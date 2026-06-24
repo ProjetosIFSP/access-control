@@ -1,4 +1,4 @@
-#include <WiFi.h>
+esp32#include <WiFi.h>
 #include <DNSServer.h>
 #include "esp_system.h"
 #if __has_include("esp_mac.h")

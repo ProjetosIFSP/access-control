@@ -2,11 +2,10 @@
   "title": "Documentação",
   "pages": [
     "index",
-    "---Guias---",
-    "guia",
-    "---Referência---",
-    "api",
-    "iot",
-    "hardware"
+    "---Manuais---",
+    "usuarios",
+    "hardware",
+    "---Técnico---",
+    "desenvolvedor"
   ]
 }

@@ -1,0 +1,12 @@
+{
+  "title": "Para Desenvolvedores",
+  "pages": [
+    "arquitetura",
+    "backend",
+    "frontend",
+    "iot",
+    "firmware",
+    "testes",
+    "melhorias"
+  ]
+}
