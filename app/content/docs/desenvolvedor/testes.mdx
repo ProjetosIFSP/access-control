@@ -1,0 +1,41 @@
+---
+title: Testes
+description: Guia sobre como rodar e escrever testes automatizados para o sistema.
+---
+
+# Testes
+
+A qualidade do código é mantida através de testes unitários e de integração implementados tanto no frontend quanto no backend.
+
+## Testes no Backend
+
+No backend (Fastify/Node.js), a qualidade do código automatizado pode ser validada usando comandos como `npm run test` (se configurado). Porém, para testes e validação visual de rotas e dados, utilizamos duas ferramentas fundamentais:
+
+### Testes de Rotas via Swagger
+O backend expõe a documentação interativa via **Swagger/OpenAPI**. Esta é a forma mais simples de testar endpoints individualmente.
+- **Como Iniciar:** Com o servidor backend rodando (comando `npm run dev:server` na raiz), acesse a interface interativa no navegador na URL configurada para sua API local acompanhada de `/docs` (por exemplo, `http://localhost:3333/docs`).
+- **Como Testar:** Na interface do Swagger, você pode explorar cada rota, autorizar-se (se necessário), preencher os parâmetros de entrada ou *payloads* e clicar em *Try it out* para disparar uma requisição real contra o servidor de desenvolvimento.
+
+### Testando o Banco de Dados com Drizzle Studio
+Para inspecionar, testar e manipular os dados do banco localmente utilizando uma interface visual amigável:
+- **Como Iniciar:** No terminal, execute o comando na raiz do projeto:
+  ```bash
+  npm run db:studio
+  ```
+- **Como Testar:** Este comando iniciará uma aplicação visual própria do Drizzle no navegador. Através dessa interface, é possível visualizar todas as tabelas (como *user*, *room*, *profile*), criar dados artificiais (mock data) ou deletar registros manualmente para facilitar cenários de teste.
+
+## Testes no Frontend
+
+No frontend React, os componentes lógicos e fluxos mais complexos podem ser validados com **Testing Library** e **Playwright** (`npm run test:e2e`). Para testes visuais, usamos o Storybook.
+
+### Visualização e Teste Visual com Storybook
+Para desenvolver e testar componentes de Interface do Usuário (UI) isolados da lógica da página e do roteamento, utilizamos o **Storybook**.
+- **Como Iniciar:** No terminal, a partir da raiz do monorepo, rode:
+  ```bash
+  npm run storybook --workspace app
+  ```
+- **Como Testar:** O script iniciará um servidor rodando (por padrão na porta `6006`). Acesse `http://localhost:6006` no seu navegador para abrir o catálogo interativo. Lá, você pode navegar pela biblioteca de componentes, preencher *props* em tempo real e testar os diferentes estados visuais e de acessibilidade sem depender do estado global da aplicação.
+
+## Testes IoT
+
+O broker MQTT possui testes simulando a conexão de clientes MQTT (`mqtt.js`) e validando o correto disparo das regras de autorização ao enviar mensagens para o tópico de tentativa de acesso.

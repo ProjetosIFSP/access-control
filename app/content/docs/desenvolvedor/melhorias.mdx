@@ -1,0 +1,41 @@
+---
+title: Pontos de Melhoria
+description: Débitos técnicos, pendências e melhorias planejadas para o futuro.
+---
+
+# Pontos de Melhoria e Evolução
+
+Esta página documenta pendências técnicas, débitos e melhorias que devem ser consideradas em próximas iterações do sistema.
+
+## 1. Segurança das UIDs (NFC/RFID)
+
+Atualmente, os leitores RFID tradicionais (como o RC522) leem o UID (Unique Identifier) gravado de fábrica no cartão. 
+**Risco:** UIDs podem ser facilmente clonados usando cartões regraváveis (ex: cartões mágicos MIFARE).
+**Solução:** Implementar o uso de setores criptografados do cartão (cartões MIFARE Classic ou DESFire), armazenando um token único encriptado no cartão, ao invés de confiar apenas no UID aberto.
+
+## 2. Autenticação de 2 Fatores (2FA) Híbrida
+
+Para portas que dão acesso a áreas de alta segurança (ex: Sala de Servidores, Tesouraria), planeja-se a implementação de um sistema duplo:
+- **Identificador (RFID):** O usuário aproxima o cartão para informar *quem* ele é.
+- **Autenticador (Biometria):** O usuário então coloca o dedo no leitor para *provar* quem ele é.
+A lógica do MQTT/Backend deve ser atualizada para suportar o estado intermediário (`WAITING_2FA`) na máquina de estados da porta.
+
+## 3. Matching Biométrico On-Device vs Backend
+
+Atualmente, o template biométrico gerado pelo sensor HiLink ZW-101 é extraído (via comando UART `UploadTemplate`) e enviado ao backend. No entanto:
+- O módulo HiLink ZW-101 suporta armazenar templates na sua memória flash interna.
+- Realizar o matching *on-device* reduz a latência e a dependência da rede, facilitando um funcionamento *offline-first*.
+A transição para matching on-device requer sincronizar os dicionários de ID de templates do backend com a memória flash de cada microcontrolador (HW-008 e HW-002).
+
+## 4. Histórico e Monitoramento em Tempo Real Avançado
+
+Expandir os gráficos e dashboards no painel React para:
+- Mostrar o status `online/offline` real e instantâneo dos controladores baseado no *heartbeat* MQTT, através de WebSockets.
+- Implementar paginação avançada e relatórios em PDF do histórico de acessos.
+
+## 5. Portabilidade e Alimentação por Baterias
+
+Para locais onde não é viável puxar fiação elétrica constante (como portas mais isoladas, catracas móveis ou fechaduras de armários), uma melhoria significativa seria o uso de **baterias recarregáveis** para alimentar o sistema:
+- **Alimentação 12V:** Utilizar um conjunto de baterias (como packs 3S de Li-Ion 18650 ou baterias pequenas de chumbo-ácido de 12V) capazes de fornecer a tensão necessária para a fechadura solenoide e para alimentar o step-down do ESP32.
+- **Gerenciamento:** Adicionar um circuito de gerenciamento de carga (BMS) para recarga segura e monitoramento do nível de bateria via MQTT para alertar administradores sobre a necessidade de carga.
+- **Benefícios:** Isso aumenta absurdamente a **portabilidade** do controlador, permitindo instalação autônoma independente da rede elétrica do edifício, além de já atuar como um *Nobreak* natural durante quedas de energia.

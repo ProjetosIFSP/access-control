@@ -1,0 +1,37 @@
+---
+title: Backend e Rotas
+description: Guia de desenvolvimento do backend, estrutura de rotas e banco de dados.
+---
+
+# Guia do Backend
+
+O backend é construído utilizando o micro-framework **Fastify**, com tipagem estática e validação via **Zod**, e ORM **Drizzle** conectado a um banco de dados **PostgreSQL**.
+
+## Estrutura de Rotas
+
+As rotas da API estão organizadas modularmente. Aqui estão os principais domínios:
+
+- **Auth (`/auth`)**: Rotas de autenticação, login, logout, recuperação de senha e validação de sessão usando `better-auth`.
+- **Users (`/users`)**: CRUD completo de usuários.
+- **Rooms (`/rooms`)**: Gerenciamento de salas, blocos e associação com os controladores (devices).
+- **Profiles (`/profiles`)**: Gerenciamento de perfis de permissão (ex: Admin, Professor, etc.).
+- **IoT (`/iot`)**: Rotas para comunicação com o broker MQTT (ex: `/iot/access` chamado pelo broker quando um acesso é tentado na porta).
+
+## Banco de Dados e ORM
+
+Utilizamos o **Drizzle ORM** por ser extremamente leve e focado em SQL nativo tipado. O *schema* do banco define tabelas como `user`, `session`, `room`, `block`, `profile`, `permission`, `access_credential` e `access_log`.
+
+### Gerando Migrations
+Para criar uma nova migration após alterar o schema:
+```bash
+npm run db:generate
+```
+
+Para aplicar no banco de dados:
+```bash
+npm run db:migrate
+```
+
+## Middlewares e Autenticação
+
+A maioria das rotas está protegida pelo middleware de sessão. Para acessar rotas privadas, o cliente deve enviar os cookies de autenticação válidos obtidos no `/auth/login`. Rotas de nível administrativo também verificam as `permissions` atreladas ao `profile` do usuário logado.

@@ -31,7 +31,7 @@ O sistema é composto por quatro camadas independentes que se comunicam via **HT
            ▼
 ┌─────────────────────────────────────────────────────────────────┐
 │                     HARDWARE (core/)                            │
-│     ESP8266 · Sensor Biométrico ZN-53X · Leitor NFC IC V1.3A   │
+│     ESP8266 · Sensor Biométrico HiLink ZW-101 · Leitor NFC IC V1.3A   │
 │           Reed Switch · Relé + Fechadura Solenoide              │
 └─────────────────────────────────────────────────────────────────┘
 ```
@@ -178,7 +178,7 @@ Cada controlador opera em um dos dois modos, alternável remotamente via MQTT:
 | Componente | Modelo | Status |
 |---|---|---|
 | Microcontrolador | NodeMCU v3 (ESP8266MOD) | ✅ Possuído |
-| Sensor biométrico | ZN-53X (protocolo R30x) | ✅ Possuído |
+| Sensor biométrico | HiLink ZW-101 (protocolo R30x) | ✅ Possuído |
 | Leitor NFC | IC V1.3A — 2 pinos | ✅ Possuído ⚠️ |
 | Reed switch | Genérico | ❌ A adquirir |
 | Módulo relê | 5V 1 canal com optoacoplador | ❌ A adquirir |
@@ -232,7 +232,7 @@ enrollment_request ──── user
 | `door_command` | Fila de comandos para controladores (UNLOCK, LOCK, SYNC_STATE) |
 | `access_credential` | Credenciais físicas (FINGERPRINT / NFC_TAG) |
 | `access_log` | Histórico de tentativas de acesso |
-| `controller_credential_slot` | Mapeamento slotId ZN-53X ↔ credentialId por controlador |
+| `controller_credential_slot` | Mapeamento slotId HiLink ZW-101 ↔ credentialId por controlador |
 | `enrollment_request` | Enrollments biométricos em andamento (TTL ~2 min) |
 
 ---

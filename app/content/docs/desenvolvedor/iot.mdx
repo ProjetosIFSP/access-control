@@ -1,0 +1,24 @@
+---
+title: IoT e Protocolo MQTT
+description: Fluxos de comunicação entre controladores ESP32 e o Broker Node.js.
+---
+
+# Fluxo IoT e MQTT
+
+A comunicação entre as portas físicas e a lógica central ocorre de forma assíncrona usando MQTT via o broker **Aedes**.
+
+## Tópicos MQTT
+
+- `door/{deviceId}/heartbeat`: Publicado a cada X segundos pelo ESP para indicar que está online.
+- `door/{deviceId}/access-attempt`: Publicado pelo ESP quando uma credencial (RFID/Biometria) é lida.
+- `door/{deviceId}/access-result`: Publicado pelo Broker de volta para o ESP informando o resultado da autorização (`GRANTED` ou `DENIED`).
+- `door/{deviceId}/status`: Publicado pelo ESP para relatar o estado do sensor da porta (aberta/fechada).
+
+## Fluxo de Autenticação na Porta
+
+1. **Leitura**: O microcontrolador lê uma digital ou tag NFC.
+2. **Publicação**: Envia o valor (template ou UID) para `door/{id}/access-attempt`.
+3. **Processamento**: O Broker Node.js intercepta a mensagem e faz uma chamada HTTP POST interna para a API do Fastify (`/iot/access`).
+4. **Decisão**: A API verifica no banco de dados se a credencial existe e se o usuário associado tem permissão para a sala atrelada ao `deviceId`.
+5. **Resposta**: O Fastify responde ao Broker, que publica o payload no tópico de `access-result`.
+6. **Ação**: O microcontrolador recebe o resultado, acende o LED correspondente e, se `GRANTED`, aciona o relé que abre a fechadura fail-secure.
